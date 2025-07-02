@@ -103,6 +103,10 @@ local function open_sidebar()
     api.nvim_win_set_buf(new_win_id, buf_id)
     api.nvim_win_set_width(new_win_id, config.width)
 
+    -- Disable line numbers for this specific window
+    api.nvim_win_set_option(new_win_id, 'number', false)
+    api.nvim_win_set_option(new_win_id, 'relativenumber', false)
+
     state.win_id = new_win_id
     state.buf_id = buf_id
     state.is_sidebar_open = true
