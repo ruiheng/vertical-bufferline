@@ -84,7 +84,7 @@ end
 -- 创建新分组
 function M.create_group(name, color)
     local group_id = generate_group_id()
-    local group_name = name or (groups_data.settings.group_name_prefix .. " " .. groups_data.next_group_id)
+    local group_name = name or ""  -- 允许空名字
     
     local new_group = {
         id = group_id,

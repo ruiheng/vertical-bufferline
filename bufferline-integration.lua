@@ -258,7 +258,7 @@ function M.enable()
         desc = "Refresh bufferline when groups change"
     })
     
-    vim.notify("Bufferline group filtering enabled", vim.log.levels.INFO)
+    -- bufferline集成已启用
     
     -- 立即刷新以显示分组信息
     vim.schedule(function()
@@ -303,7 +303,7 @@ function M.disable()
         end
     end)
     
-    vim.notify("Bufferline group filtering disabled", vim.log.levels.INFO)
+    -- bufferline集成已禁用
 end
 
 -- 切换 bufferline 集成

@@ -133,8 +133,9 @@ function M.refresh()
             
             -- 分组标题行
             local group_marker = is_active and "●" or "○"
-            local group_line = string.format("%s %s (%d buffers)", 
-                group_marker, group.name, buffer_count)
+            local group_name_display = group.name == "" and "" or (" " .. group.name)
+            local group_line = string.format("[%d] %s%s (%d buffers)", 
+                i, group_marker, group_name_display, buffer_count)
             table.insert(lines_text, group_line)
             
             -- 如果是当前活跃分组，立即在下面显示其buffers
@@ -186,9 +187,21 @@ function M.refresh()
                         local pick_highlight_group = nil
                         local pick_highlight_end = 0
                         
+                        -- 添加序号显示（1-9对应<leader>1-9，10用0表示）
+                        local number_display = j <= 9 and tostring(j) or "0"
+                        if j > 10 then
+                            number_display = "·"  -- 超过10的用点表示
+                        end
+                        
+                        -- 为当前buffer添加箭头标识
+                        local current_marker = ""
+                        if component.id == current_buffer_id then
+                            current_marker = "► "
+                        end
+                        
                         if letter and is_picking then
                             -- In picking mode: show hint character + buffer name with tree structure
-                            line_text = tree_prefix .. letter .. " " .. modified_indicator .. icon .. " " .. component.name
+                            line_text = tree_prefix .. letter .. " " .. current_marker .. number_display .. " " .. modified_indicator .. icon .. " " .. component.name
                             pick_highlight_end = #tree_prefix + 1  -- Only highlight the letter character
                             
                             -- Choose appropriate pick highlight based on buffer state
@@ -201,8 +214,8 @@ function M.refresh()
                             end
                             
                         else
-                            -- Normal mode: regular display with tree structure
-                            line_text = tree_prefix .. modified_indicator .. icon .. " " .. component.name
+                            -- Normal mode: regular display with tree structure, current marker and number
+                            line_text = tree_prefix .. current_marker .. number_display .. " " .. modified_indicator .. icon .. " " .. component.name
                         end
                         
                         table.insert(lines_text, line_text)
@@ -519,7 +532,6 @@ M.bufferline_integration = bufferline_integration
 M.create_group = function(name) return groups.create_group(name) end
 M.switch_to_next_group = function() commands.next_group() end
 M.switch_to_prev_group = function() commands.prev_group() end
-M.list_groups = function() commands.list_groups() end
 M.add_current_buffer_to_group = function(group_name) 
     commands.add_buffer_to_group({args = group_name}) 
 end
