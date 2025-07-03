@@ -122,25 +122,132 @@ function M.refresh()
     local lines_text = {}
     local new_line_map = {}
 
-    -- 添加分组信息行
+    -- 显示所有分组信息，活跃分组立即展开显示buffers
     if active_group then
         local all_groups = groups.get_all_groups()
-        local group_index = 1
+        
         for i, group in ipairs(all_groups) do
-            if group.id == active_group.id then
-                group_index = i
-                break
+            local is_active = group.id == active_group.id
+            local group_buffers = groups.get_group_buffers(group.id) or {}
+            local buffer_count = #group_buffers
+            
+            -- 分组标题行
+            local group_marker = is_active and "●" or "○"
+            local group_line = string.format("%s %s (%d buffers)", 
+                group_marker, group.name, buffer_count)
+            table.insert(lines_text, group_line)
+            
+            -- 如果是当前活跃分组，立即在下面显示其buffers
+            if is_active and #components > 0 then
+                for j, component in ipairs(components) do
+                    if component.id and component.name then
+                        -- 使用树形结构的前缀
+                        local is_last = (j == #components)
+                        local tree_prefix = is_last and "└─ " or "├─ "
+                        local modified_indicator = ""
+                        
+                        -- Check if buffer is modified
+                        if api.nvim_buf_get_option(component.id, "modified") then
+                            modified_indicator = "● "
+                        end
+                        
+                        local icon = component.icon or ""
+                        if icon == "" then
+                            -- Fallback to basic file type detection
+                            local extension = component.name:match("%.([^%.]+)$")
+                            if extension then
+                                local icon_map = {
+                                    lua = "🌙",
+                                    js = "📄",
+                                    py = "🐍",
+                                    go = "🟢",
+                                    rs = "🦀",
+                                    md = "📝",
+                                    txt = "📄",
+                                    json = "📋",
+                                    yaml = "📋",
+                                    yml = "📋",
+                                }
+                                icon = icon_map[extension] or "📄"
+                            end
+                        end
+                        
+                        -- Get letter for picking mode
+                        local ok, element = pcall(function() return component:as_element() end)
+                        local letter = nil
+                        if ok and element and element.letter then
+                            letter = element.letter
+                        elseif component.letter then
+                            letter = component.letter
+                        end
+                        
+                        -- Build line content
+                        local line_text
+                        local pick_highlight_group = nil
+                        local pick_highlight_end = 0
+                        
+                        if letter and is_picking then
+                            -- In picking mode: show hint character + buffer name with tree structure
+                            line_text = tree_prefix .. letter .. " " .. modified_indicator .. icon .. " " .. component.name
+                            pick_highlight_end = #tree_prefix + 1  -- Only highlight the letter character
+                            
+                            -- Choose appropriate pick highlight based on buffer state
+                            if component.id == current_buffer_id then
+                                pick_highlight_group = "VBufferLinePickSelected"
+                            elseif component.focused then
+                                pick_highlight_group = "VBufferLinePickVisible"
+                            else
+                                pick_highlight_group = "VBufferLinePick"
+                            end
+                            
+                        else
+                            -- Normal mode: regular display with tree structure
+                            line_text = tree_prefix .. modified_indicator .. icon .. " " .. component.name
+                        end
+                        
+                        table.insert(lines_text, line_text)
+                        -- 计算正确的行号，考虑前面的分组信息行
+                        local actual_line_number = #lines_text
+                        new_line_map[actual_line_number] = component.id
+                        
+                        -- Apply highlights
+                        if is_picking and pick_highlight_group then
+                            -- Highlight just the letter character in picking mode (starting after tree prefix)
+                            -- 使用字节长度，因为nvim_buf_add_highlight使用字节位置
+                            local highlight_start = #tree_prefix
+                            local highlight_end = highlight_start + 1
+                            api.nvim_buf_add_highlight(state.buf_id, ns_id, pick_highlight_group, actual_line_number - 1, highlight_start, highlight_end)
+                            
+                            -- Highlight the rest of the line normally, but only if there's content after the pick highlight
+                            if highlight_end < #line_text then
+                                local normal_highlight_group = "VBufferLineInactive"
+                                if component.id == current_buffer_id then
+                                    normal_highlight_group = "VBufferLineCurrent"
+                                elseif component.focused then
+                                    normal_highlight_group = "VBufferLineVisible"
+                                elseif api.nvim_buf_get_option(component.id, "modified") then
+                                    normal_highlight_group = "VBufferLineModified"
+                                end
+                                api.nvim_buf_add_highlight(state.buf_id, ns_id, normal_highlight_group, actual_line_number - 1, highlight_end, -1)
+                            end
+                        else
+                            -- Normal highlighting for non-picking mode
+                            local highlight_group = "VBufferLineInactive"
+                            if component.id == current_buffer_id then
+                                highlight_group = "VBufferLineCurrent"
+                            elseif component.focused then
+                                highlight_group = "VBufferLineVisible"
+                            elseif api.nvim_buf_get_option(component.id, "modified") then
+                                highlight_group = "VBufferLineModified"
+                            end
+                            api.nvim_buf_add_highlight(state.buf_id, ns_id, highlight_group, actual_line_number - 1, 0, -1)
+                        end
+                    end
+                end
+                -- 设置标志，避免下面重复处理
+                components = {}
             end
         end
-        local group_indicator = #all_groups > 1 and string.format(" [%d/%d]", 
-            group_index, #all_groups) or ""
-            
-        local group_line = string.format("┌─ %s%s (%d buffers)", 
-            group_info.group_name, 
-            group_indicator,
-            group_info.visible_buffers)
-        table.insert(lines_text, group_line)
-        table.insert(lines_text, "└─")
     end
 
     -- Clear old highlights
@@ -148,117 +255,7 @@ function M.refresh()
 
     api.nvim_buf_set_option(state.buf_id, "modifiable", true)
 
-    -- 如果当前分组没有 buffer，显示提示信息
-    if #components == 0 then
-        if active_group then
-            table.insert(lines_text, "  📭 No buffers in this group")
-            table.insert(lines_text, "")
-            table.insert(lines_text, "  💡 Run :VBufferLineRefreshBuffers to auto-add")
-            table.insert(lines_text, "  📝 Or use <leader>ga to add current buffer")
-        end
-    end
-
-    for i, component in ipairs(components) do
-        if component.id and component.name then
-            local prefix = "  "
-            local modified_indicator = ""
-            
-            -- Check if buffer is modified
-            if api.nvim_buf_get_option(component.id, "modified") then
-                modified_indicator = "● "
-            end
-            
-            local icon = component.icon or ""
-            if icon == "" then
-                -- Fallback to basic file type detection
-                local extension = component.name:match("%.([^%.]+)$")
-                if extension then
-                    local icon_map = {
-                        lua = "🌙",
-                        js = "📄",
-                        py = "🐍",
-                        go = "🟢",
-                        rs = "🦀",
-                        md = "📝",
-                        txt = "📄",
-                        json = "📋",
-                        yaml = "📋",
-                        yml = "📋",
-                    }
-                    icon = icon_map[extension] or "📄"
-                end
-            end
-            
-            -- Get letter for picking mode
-            local ok, element = pcall(function() return component:as_element() end)
-            local letter = nil
-            if ok and element and element.letter then
-                letter = element.letter
-            elseif component.letter then
-                letter = component.letter
-            end
-            
-            -- Build line content
-            local line_text
-            local pick_highlight_group = nil
-            local pick_highlight_end = 0
-            
-            if letter and is_picking then
-                -- In picking mode: show hint character + buffer name
-                -- Format: "a init.lua" instead of "[a] init.lua"
-                line_text = letter .. " " .. modified_indicator .. icon .. " " .. component.name
-                pick_highlight_end = 1  -- Only highlight the letter character
-                
-                -- Choose appropriate pick highlight based on buffer state
-                if component.id == current_buffer_id then
-                    pick_highlight_group = "VBufferLinePickSelected"
-                elseif component.focused then
-                    pick_highlight_group = "VBufferLinePickVisible"
-                else
-                    pick_highlight_group = "VBufferLinePick"
-                end
-                
-            else
-                -- Normal mode: regular display
-                line_text = prefix .. modified_indicator .. icon .. " " .. component.name
-            end
-            
-            table.insert(lines_text, line_text)
-            -- 计算正确的行号，考虑前面的分组信息行
-            local actual_line_number = #lines_text
-            new_line_map[actual_line_number] = component.id
-            
-            -- Apply highlights
-            if is_picking and pick_highlight_group then
-                -- Highlight just the letter character in picking mode
-                api.nvim_buf_add_highlight(state.buf_id, ns_id, pick_highlight_group, actual_line_number - 1, 0, pick_highlight_end)
-                
-                -- Highlight the rest of the line normally, but only if there's content after the pick highlight
-                if pick_highlight_end < #line_text then
-                    local normal_highlight_group = "VBufferLineInactive"
-                    if component.id == current_buffer_id then
-                        normal_highlight_group = "VBufferLineCurrent"
-                    elseif component.focused then
-                        normal_highlight_group = "VBufferLineVisible"
-                    elseif api.nvim_buf_get_option(component.id, "modified") then
-                        normal_highlight_group = "VBufferLineModified"
-                    end
-                    api.nvim_buf_add_highlight(state.buf_id, ns_id, normal_highlight_group, actual_line_number - 1, pick_highlight_end, -1)
-                end
-            else
-                -- Normal highlighting for non-picking mode
-                local highlight_group = "VBufferLineInactive"
-                if component.id == current_buffer_id then
-                    highlight_group = "VBufferLineCurrent"
-                elseif component.focused then
-                    highlight_group = "VBufferLineVisible"
-                elseif api.nvim_buf_get_option(component.id, "modified") then
-                    highlight_group = "VBufferLineModified"
-                end
-                api.nvim_buf_add_highlight(state.buf_id, ns_id, highlight_group, actual_line_number - 1, 0, -1)
-            end
-        end
-    end
+    -- buffer处理已经在上面的分组循环中完成
 
     api.nvim_buf_set_lines(state.buf_id, 0, -1, false, lines_text)
     api.nvim_buf_set_option(state.buf_id, "modifiable", false)
@@ -317,9 +314,16 @@ function M.apply_picking_highlights()
                         pick_highlight_group = "VBufferLinePick"
                     end
                     
+                    -- 计算正确的高亮位置，跳过树形前缀
+                    -- 确定是最后一个buffer还是中间的buffer
+                    local is_last = (i == #components)
+                    local tree_prefix = is_last and "└─ " or "├─ "
+                    local highlight_start = #tree_prefix
+                    local highlight_end = highlight_start + 1
+                    
                     -- Apply highlight with both namespace and without
-                    api.nvim_buf_add_highlight(state.buf_id, 0, pick_highlight_group, actual_line_number - 1, 0, 1)
-                    api.nvim_buf_add_highlight(state.buf_id, ns_id, pick_highlight_group, actual_line_number - 1, 0, 1)
+                    api.nvim_buf_add_highlight(state.buf_id, 0, pick_highlight_group, actual_line_number - 1, highlight_start, highlight_end)
+                    api.nvim_buf_add_highlight(state.buf_id, ns_id, pick_highlight_group, actual_line_number - 1, highlight_start, highlight_end)
                 end
             end
         end

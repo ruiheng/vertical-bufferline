@@ -36,22 +36,12 @@ local function update_empty_buffer_content()
     
     local lines = {
         "",
-        "┌─────────────────────────────────────┐",
-        "│           Empty Buffer Group        │", 
-        "└─────────────────────────────────────┘",
+        "   📭 Empty Group",
         "",
-        "📭 Current group: " .. (active_group and active_group.name or "Unknown"),
-        "📊 Total groups: " .. #all_groups,
+        "   Group: " .. (active_group and active_group.name or "Unknown"),
+        "   Total groups: " .. #all_groups,
         "",
-        "💡 Tips:",
-        "  • Use <leader>ga to add current buffer to this group",
-        "  • Use <leader>gn/<leader>gp to switch groups", 
-        "  • Open files normally to add them to this group",
-        "",
-        "🚀 Quick actions:",
-        "  • :edit <filename> - Open a file in this group",
-        "  • :VBufferLineListGroups - List all groups",
-        "  • :VBufferLineSwitchGroup - Switch to another group",
+        "   Open any file to add it to this group",
         ""
     }
     
@@ -249,7 +239,13 @@ function M.enable()
     
     -- 监听分组变化事件，自动刷新 bufferline
     vim.api.nvim_create_autocmd("User", {
-        pattern = {"VBufferLineGroupChanged", "VBufferLineBufferAddedToGroup", "VBufferLineBufferRemovedFromGroup"},
+        pattern = {
+            "VBufferLineGroupChanged", 
+            "VBufferLineGroupCreated", 
+            "VBufferLineGroupDeleted",
+            "VBufferLineBufferAddedToGroup", 
+            "VBufferLineBufferRemovedFromGroup"
+        },
         callback = function()
             -- 检查是否需要切换到空buffer
             vim.schedule(function()

@@ -292,6 +292,27 @@ function M.find_buffer_groups(buffer_id)
     return found_groups
 end
 
+-- 获取指定分组的所有buffer
+function M.get_group_buffers(group_id)
+    local group = find_group_by_id(group_id)
+    if not group then
+        return {}
+    end
+    
+    -- 过滤无效的buffer
+    local valid_buffers = {}
+    for _, buffer_id in ipairs(group.buffers) do
+        if api.nvim_buf_is_valid(buffer_id) then
+            table.insert(valid_buffers, buffer_id)
+        end
+    end
+    
+    -- 更新分组的buffer列表，移除无效的buffer
+    group.buffers = valid_buffers
+    
+    return valid_buffers
+end
+
 -- 获取当前分组的所有buffer
 function M.get_active_group_buffers()
     local active_group = M.get_active_group()
@@ -299,18 +320,7 @@ function M.get_active_group_buffers()
         return {}
     end
     
-    -- 过滤无效的buffer
-    local valid_buffers = {}
-    for _, buffer_id in ipairs(active_group.buffers) do
-        if api.nvim_buf_is_valid(buffer_id) then
-            table.insert(valid_buffers, buffer_id)
-        end
-    end
-    
-    -- 更新分组的buffer列表，移除无效的buffer
-    active_group.buffers = valid_buffers
-    
-    return valid_buffers
+    return M.get_group_buffers(active_group.id)
 end
 
 -- 自动添加新buffer到当前分组

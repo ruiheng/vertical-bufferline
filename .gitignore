@@ -1,0 +1,18 @@
+# 调试和临时文件
+debug.log
+dummy.txt
+*.tmp
+*.bak
+
+# 测试文件
+test_*.lua
+*_test.lua
+
+# 临时编辑器文件
+*~
+*.swp
+*.swo
+
+# 系统文件
+.DS_Store
+Thumbs.db
