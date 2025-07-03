@@ -4,6 +4,11 @@ local M = {}
 
 local api = vim.api
 
+-- 分组管理模块
+local groups = require('vertical-bufferline.groups')
+local commands = require('vertical-bufferline.commands')
+local bufferline_integration = require('vertical-bufferline.bufferline-integration')
+
 -- Namespace for our highlights
 local ns_id = api.nvim_create_namespace("VerticalBufferline")
 
@@ -69,6 +74,13 @@ function M.refresh()
     local components = bufferline_state.components
     local current_buffer_id = api.nvim_get_current_buf()
     
+    -- 获取分组信息
+    local group_info = bufferline_integration.get_group_buffer_info()
+    local active_group = groups.get_active_group()
+    
+    -- bufferline集成已经处理了过滤，这里不需要再次过滤
+    -- components 已经是经过分组过滤的结果
+    
     -- Debug: Check bufferline state
     local is_picking = false
     local debug_info = ""
@@ -110,10 +122,41 @@ function M.refresh()
     local lines_text = {}
     local new_line_map = {}
 
+    -- 添加分组信息行
+    if active_group then
+        local all_groups = groups.get_all_groups()
+        local group_index = 1
+        for i, group in ipairs(all_groups) do
+            if group.id == active_group.id then
+                group_index = i
+                break
+            end
+        end
+        local group_indicator = #all_groups > 1 and string.format(" [%d/%d]", 
+            group_index, #all_groups) or ""
+            
+        local group_line = string.format("┌─ %s%s (%d buffers)", 
+            group_info.group_name, 
+            group_indicator,
+            group_info.visible_buffers)
+        table.insert(lines_text, group_line)
+        table.insert(lines_text, "└─")
+    end
+
     -- Clear old highlights
     api.nvim_buf_clear_namespace(state.buf_id, ns_id, 0, -1)
 
     api.nvim_buf_set_option(state.buf_id, "modifiable", true)
+
+    -- 如果当前分组没有 buffer，显示提示信息
+    if #components == 0 then
+        if active_group then
+            table.insert(lines_text, "  📭 No buffers in this group")
+            table.insert(lines_text, "")
+            table.insert(lines_text, "  💡 Run :VBufferLineRefreshBuffers to auto-add")
+            table.insert(lines_text, "  📝 Or use <leader>ga to add current buffer")
+        end
+    end
 
     for i, component in ipairs(components) do
         if component.id and component.name then
@@ -181,12 +224,14 @@ function M.refresh()
             end
             
             table.insert(lines_text, line_text)
-            new_line_map[i] = component.id
+            -- 计算正确的行号，考虑前面的分组信息行
+            local actual_line_number = #lines_text
+            new_line_map[actual_line_number] = component.id
             
             -- Apply highlights
             if is_picking and pick_highlight_group then
                 -- Highlight just the letter character in picking mode
-                api.nvim_buf_add_highlight(state.buf_id, ns_id, pick_highlight_group, i - 1, 0, pick_highlight_end)
+                api.nvim_buf_add_highlight(state.buf_id, ns_id, pick_highlight_group, actual_line_number - 1, 0, pick_highlight_end)
                 
                 -- Highlight the rest of the line normally, but only if there's content after the pick highlight
                 if pick_highlight_end < #line_text then
@@ -198,7 +243,7 @@ function M.refresh()
                     elseif api.nvim_buf_get_option(component.id, "modified") then
                         normal_highlight_group = "VBufferLineModified"
                     end
-                    api.nvim_buf_add_highlight(state.buf_id, ns_id, normal_highlight_group, i - 1, pick_highlight_end, -1)
+                    api.nvim_buf_add_highlight(state.buf_id, ns_id, normal_highlight_group, actual_line_number - 1, pick_highlight_end, -1)
                 end
             else
                 -- Normal highlighting for non-picking mode
@@ -210,7 +255,7 @@ function M.refresh()
                 elseif api.nvim_buf_get_option(component.id, "modified") then
                     highlight_group = "VBufferLineModified"
                 end
-                api.nvim_buf_add_highlight(state.buf_id, ns_id, highlight_group, i - 1, 0, -1)
+                api.nvim_buf_add_highlight(state.buf_id, ns_id, highlight_group, actual_line_number - 1, 0, -1)
             end
         end
     end
@@ -239,6 +284,8 @@ function M.apply_picking_highlights()
     local components = bufferline_state.components
     local current_buffer_id = api.nvim_get_current_buf()
     
+    -- 我们需要找到每个component对应的实际行号
+    -- 通过line_to_buffer_id映射来查找
     for i, component in ipairs(components) do
         if component.id and component.name then
             local ok, element = pcall(function() return component:as_element() end)
@@ -250,19 +297,30 @@ function M.apply_picking_highlights()
             end
             
             if letter then
-                -- Choose appropriate pick highlight based on buffer state
-                local pick_highlight_group
-                if component.id == current_buffer_id then
-                    pick_highlight_group = "VBufferLinePickSelected"
-                elseif component.focused then
-                    pick_highlight_group = "VBufferLinePickVisible"
-                else
-                    pick_highlight_group = "VBufferLinePick"
+                -- 查找这个buffer在sidebar中的实际行号
+                local actual_line_number = nil
+                for line_num, buffer_id in pairs(state.line_to_buffer_id) do
+                    if buffer_id == component.id then
+                        actual_line_number = line_num
+                        break
+                    end
                 end
                 
-                -- Apply highlight with both namespace and without
-                api.nvim_buf_add_highlight(state.buf_id, 0, pick_highlight_group, i - 1, 0, 1)
-                api.nvim_buf_add_highlight(state.buf_id, ns_id, pick_highlight_group, i - 1, 0, 1)
+                if actual_line_number then
+                    -- Choose appropriate pick highlight based on buffer state
+                    local pick_highlight_group
+                    if component.id == current_buffer_id then
+                        pick_highlight_group = "VBufferLinePickSelected"
+                    elseif component.focused then
+                        pick_highlight_group = "VBufferLinePickVisible"
+                    else
+                        pick_highlight_group = "VBufferLinePick"
+                    end
+                    
+                    -- Apply highlight with both namespace and without
+                    api.nvim_buf_add_highlight(state.buf_id, 0, pick_highlight_group, actual_line_number - 1, 0, 1)
+                    api.nvim_buf_add_highlight(state.buf_id, ns_id, pick_highlight_group, actual_line_number - 1, 0, 1)
+                end
             end
         end
     end
@@ -297,7 +355,8 @@ local function open_sidebar()
     api.nvim_win_set_width(new_win_id, config.width)
     api.nvim_win_set_option(new_win_id, 'number', false)
     api.nvim_win_set_option(new_win_id, 'relativenumber', false)
-    api.nvim_win_set_option(new_win_id, 'cursorline', true)
+    api.nvim_win_set_option(new_win_id, 'cursorline', false)
+    api.nvim_win_set_option(new_win_id, 'cursorcolumn', false)
     state.win_id = new_win_id
     state.buf_id = buf_id
     state.is_sidebar_open = true
@@ -397,7 +456,68 @@ function M.toggle()
         
         -- Re-setup highlights to ensure they match bufferline
         setup_pick_highlights()
+        
+        -- 初始化分组功能
+        groups.setup({
+            max_buffers_per_group = 10,
+            auto_create_groups = true,
+            auto_add_new_buffers = true
+        })
+        
+        -- 手动添加当前已经存在的buffer到默认分组
+        -- 使用多个延迟时间点尝试，确保buffer被正确识别
+        for _, delay in ipairs({50, 200, 500}) do
+            vim.defer_fn(function()
+                local all_buffers = vim.api.nvim_list_bufs()
+                local default_group = groups.get_active_group()
+                if default_group then
+                    local added_count = 0
+                    for _, buf in ipairs(all_buffers) do
+                        if vim.api.nvim_buf_is_valid(buf) then
+                            local buf_name = vim.api.nvim_buf_get_name(buf)
+                            local buf_type = vim.api.nvim_buf_get_option(buf, 'buftype')
+                            -- 只添加普通文件buffer，且不已经在分组中
+                            if buf_name ~= "" and not buf_name:match("^%s*$") and 
+                               buf_type == "" and
+                               not vim.tbl_contains(default_group.buffers, buf) then
+                                groups.add_buffer_to_group(buf, default_group.id)
+                                added_count = added_count + 1
+                            end
+                        end
+                    end
+                    if added_count > 0 then
+                        -- 刷新界面
+                        M.refresh()
+                    end
+                end
+            end, delay)
+        end
+        
+        -- 设置命令
+        commands.setup()
+        
+        -- 启用 bufferline 集成
+        bufferline_integration.enable()
+        
+        -- 确保初始状态正确显示
+        vim.schedule(function()
+            M.refresh()
+        end)
     end
+end
+
+-- 导出分组管理函数
+M.groups = groups
+M.commands = commands
+M.bufferline_integration = bufferline_integration
+
+-- 便捷的分组操作函数
+M.create_group = function(name) return groups.create_group(name) end
+M.switch_to_next_group = function() commands.next_group() end
+M.switch_to_prev_group = function() commands.prev_group() end
+M.list_groups = function() commands.list_groups() end
+M.add_current_buffer_to_group = function(group_name) 
+    commands.add_buffer_to_group({args = group_name}) 
 end
 
 return M
