@@ -235,6 +235,12 @@ local function prev_group_command()
     end)
 end
 
+-- 切换展开所有分组模式
+local function toggle_expand_all_command()
+    local vbl = require('vertical-bufferline')
+    vbl.toggle_expand_all()
+end
+
 -- 分组完成函数（用于命令补全）
 local function group_complete(arglead, cmdline, cursorpos)
     local all_groups = groups.get_all_groups()
@@ -304,6 +310,12 @@ function M.setup()
     vim.api.nvim_create_user_command("VBufferLinePrevGroup", prev_group_command, {
         nargs = 0,
         desc = "Switch to previous buffer group"
+    })
+    
+    -- 切换展开所有分组模式
+    vim.api.nvim_create_user_command("VBufferLineToggleExpandAll", toggle_expand_all_command, {
+        nargs = 0,
+        desc = "Toggle expand all groups mode"
     })
     
     -- 调试信息

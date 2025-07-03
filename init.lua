@@ -20,6 +20,13 @@ api.nvim_set_hl(0, "VBufferLineInactive", { link = "TabLine", default = true })
 api.nvim_set_hl(0, "VBufferLineError", { fg = "#e06c75", default = true })
 api.nvim_set_hl(0, "VBufferLineWarning", { fg = "#e5c07b", default = true })
 
+-- Group header highlights
+api.nvim_set_hl(0, "VBufferLineGroupActive", { fg = "#61afef", bold = true, default = true })
+api.nvim_set_hl(0, "VBufferLineGroupInactive", { fg = "#5c6370", bold = true, default = true })
+api.nvim_set_hl(0, "VBufferLineGroupNumber", { fg = "#c678dd", bold = true, default = true })
+api.nvim_set_hl(0, "VBufferLineGroupSeparator", { fg = "#3e4452", default = true })
+api.nvim_set_hl(0, "VBufferLineGroupMarker", { fg = "#98c379", bold = true, default = true })
+
 -- Pick highlights matching bufferline's style
 -- Copy the exact colors from BufferLine groups
 local function setup_pick_highlights()
@@ -62,6 +69,7 @@ local state = {
     line_to_buffer_id = {}, -- Maps a line number in our window to a buffer ID
     hint_to_buffer_id = {}, -- Maps a hint character to a buffer ID
     was_picking = false, -- Track picking mode state to avoid spam
+    expand_all_groups = true, -- Default mode: show all groups expanded
 }
 
 --- Refreshes the sidebar content with the current list of buffers.
@@ -121,8 +129,9 @@ function M.refresh()
 
     local lines_text = {}
     local new_line_map = {}
+    local group_header_lines = {}  -- 记录组标题行的位置和信息
 
-    -- 显示所有分组信息，活跃分组立即展开显示buffers
+    -- 显示所有分组信息，根据expand_all_groups模式决定是否展开所有分组
     if active_group then
         local all_groups = groups.get_all_groups()
         
@@ -131,20 +140,59 @@ function M.refresh()
             local group_buffers = groups.get_group_buffers(group.id) or {}
             local buffer_count = #group_buffers
             
-            -- 分组标题行
+            -- 分组标题行，使用更显眼的格式
             local group_marker = is_active and "●" or "○"
-            local group_name_display = group.name == "" and "" or (" " .. group.name)
-            local group_line = string.format("[%d] %s%s (%d buffers)", 
+            local group_name_display = group.name == "" and "(unnamed)" or group.name
+            
+            -- 添加视觉分隔符（除了第一个分组）
+            if i > 1 then
+                table.insert(lines_text, "")  -- 空行分隔
+                local separator_line_num = #lines_text
+                table.insert(lines_text, "────────────────────────────────────")  -- 分隔线
+                table.insert(group_header_lines, {line = separator_line_num, type = "separator"})
+            end
+            
+            local group_line = string.format("▎[%d] %s %s (%d buffers)", 
                 i, group_marker, group_name_display, buffer_count)
             table.insert(lines_text, group_line)
             
-            -- 如果是当前活跃分组，立即在下面显示其buffers
-            if is_active and #components > 0 then
-                for j, component in ipairs(components) do
+            -- 记录组标题行信息
+            table.insert(group_header_lines, {
+                line = #lines_text - 1,  -- 0-based line number
+                type = "header",
+                is_active = is_active,
+                group_number = i
+            })
+            
+            -- 根据模式决定是否展开分组
+            local should_expand = state.expand_all_groups or is_active
+            if should_expand then
+                -- 获取当前分组的buffers并显示
+                local group_components = is_active and components or {}
+                
+                -- 如果是展开所有分组模式且不是当前活跃分组，需要手动构造components
+                if state.expand_all_groups and not is_active then
+                    group_components = {}
+                    for _, buf_id in ipairs(group_buffers) do
+                        if api.nvim_buf_is_valid(buf_id) then
+                            local buf_name = api.nvim_buf_get_name(buf_id)
+                            if buf_name ~= "" then
+                                table.insert(group_components, {
+                                    id = buf_id,
+                                    name = vim.fn.fnamemodify(buf_name, ":t"),
+                                    icon = "",
+                                    focused = false
+                                })
+                            end
+                        end
+                    end
+                end
+                
+                for j, component in ipairs(group_components) do
                     if component.id and component.name then
-                        -- 使用树形结构的前缀
-                        local is_last = (j == #components)
-                        local tree_prefix = is_last and "└─ " or "├─ "
+                        -- 使用树形结构的前缀，增加缩进以突出层次
+                        local is_last = (j == #group_components)
+                        local tree_prefix = is_last and "  └─ " or "  ├─ "
                         local modified_indicator = ""
                         
                         -- Check if buffer is modified
@@ -257,8 +305,10 @@ function M.refresh()
                         end
                     end
                 end
-                -- 设置标志，避免下面重复处理
-                components = {}
+                -- 如果是当前活跃分组且不是展开所有分组模式，设置标志避免下面重复处理
+                if is_active and not state.expand_all_groups then
+                    components = {}
+                end
             end
         end
     end
@@ -271,6 +321,29 @@ function M.refresh()
     -- buffer处理已经在上面的分组循环中完成
 
     api.nvim_buf_set_lines(state.buf_id, 0, -1, false, lines_text)
+    
+    -- 应用组标题高亮
+    for _, header_info in ipairs(group_header_lines) do
+        if header_info.type == "separator" then
+            -- 分隔线高亮
+            api.nvim_buf_add_highlight(state.buf_id, ns_id, "VBufferLineGroupSeparator", header_info.line, 0, -1)
+        elseif header_info.type == "header" then
+            -- 组标题行整体高亮
+            local group_highlight = header_info.is_active and "VBufferLineGroupActive" or "VBufferLineGroupInactive"
+            api.nvim_buf_add_highlight(state.buf_id, ns_id, group_highlight, header_info.line, 0, -1)
+            
+            -- 高亮组编号 [1]
+            api.nvim_buf_add_highlight(state.buf_id, ns_id, "VBufferLineGroupNumber", header_info.line, 1, 4)
+            
+            -- 高亮组标记 (● 或 ○)
+            local line_text = lines_text[header_info.line + 1] or ""
+            local marker_start = string.find(line_text, "[●○]")
+            if marker_start then
+                api.nvim_buf_add_highlight(state.buf_id, ns_id, "VBufferLineGroupMarker", header_info.line, marker_start - 1, marker_start)
+            end
+        end
+    end
+    
     api.nvim_buf_set_option(state.buf_id, "modifiable", false)
     state.line_to_buffer_id = new_line_map
     
@@ -330,7 +403,7 @@ function M.apply_picking_highlights()
                     -- 计算正确的高亮位置，跳过树形前缀
                     -- 确定是最后一个buffer还是中间的buffer
                     local is_last = (i == #components)
-                    local tree_prefix = is_last and "└─ " or "├─ "
+                    local tree_prefix = is_last and "  └─ " or "  ├─ "
                     local highlight_start = #tree_prefix
                     local highlight_end = highlight_start + 1
                     
@@ -421,6 +494,20 @@ function M.close_buffer()
         else
             vim.notify("Error closing buffer: " .. err, vim.log.levels.ERROR)
         end
+    end
+end
+
+--- Toggle expand all groups mode
+function M.toggle_expand_all()
+    state.expand_all_groups = not state.expand_all_groups
+    local status = state.expand_all_groups and "enabled" or "disabled"
+    vim.notify("Expand all groups mode " .. status, vim.log.levels.INFO)
+    
+    -- Refresh display
+    if state.is_sidebar_open then
+        vim.schedule(function()
+            M.refresh()
+        end)
     end
 end
 
