@@ -9,6 +9,7 @@ local groups = require('vertical-bufferline.groups')
 local commands = require('vertical-bufferline.commands')
 local bufferline_integration = require('vertical-bufferline.bufferline-integration')
 local session = require('vertical-bufferline.session')
+local filename_utils = require('vertical-bufferline.filename_utils')
 
 -- Namespace for our highlights
 local ns_id = api.nvim_create_namespace("VerticalBufferline")
@@ -171,21 +172,53 @@ function M.refresh()
                 -- 获取当前分组的buffers并显示
                 local group_components = is_active and components or {}
                 
+                -- 为当前活跃分组也应用智能文件名（如果需要）
+                if is_active and #components > 0 then
+                    -- 检查是否有重名文件需要智能处理
+                    local buffer_ids = {}
+                    for _, comp in ipairs(components) do
+                        if comp.id then
+                            table.insert(buffer_ids, comp.id)
+                        end
+                    end
+                    
+                    if #buffer_ids > 1 then
+                        local unique_names = filename_utils.generate_unique_names(buffer_ids)
+                        -- 更新components的名称
+                        for i, comp in ipairs(group_components) do
+                            if comp.id and unique_names[i] then
+                                comp.name = unique_names[i]
+                            end
+                        end
+                    end
+                end
+                
                 -- 如果是展开所有分组模式且不是当前活跃分组，需要手动构造components
                 if state.expand_all_groups and not is_active then
                     group_components = {}
+                    
+                    -- 先收集所有有效的buffer信息
+                    local valid_buffers = {}
                     for _, buf_id in ipairs(group_buffers) do
                         if api.nvim_buf_is_valid(buf_id) then
                             local buf_name = api.nvim_buf_get_name(buf_id)
                             if buf_name ~= "" then
-                                table.insert(group_components, {
-                                    id = buf_id,
-                                    name = vim.fn.fnamemodify(buf_name, ":t"),
-                                    icon = "",
-                                    focused = false
-                                })
+                                table.insert(valid_buffers, buf_id)
                             end
                         end
+                    end
+                    
+                    -- 生成智能的唯一文件名
+                    local unique_names = filename_utils.generate_unique_names(valid_buffers)
+                    
+                    -- 构造components
+                    for i, buf_id in ipairs(valid_buffers) do
+                        table.insert(group_components, {
+                            id = buf_id,
+                            name = unique_names[i] or vim.fn.fnamemodify(api.nvim_buf_get_name(buf_id), ":t"),
+                            icon = "",
+                            focused = false
+                        })
                     end
                 end
                 

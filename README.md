@@ -10,6 +10,7 @@ A Neovim plugin that provides a vertical sidebar displaying buffer groups with e
 - **Seamless bufferline integration** - bufferline only shows current group's buffers
 - **Perfect picking mode compatibility** with synchronized highlighting
 - **Two display modes**: Expand all groups (default) or show only active group
+- **Smart filename disambiguation** - automatically resolves duplicate filenames with minimal path context
 
 ### Group Management
 - **Automatic buffer addition** - new buffers auto-join the active group
@@ -111,7 +112,7 @@ Toggle between modes with `<leader>ve` or `:VBufferLineToggleExpandAll`.
 ### Buffer Lines
 - `► 1 🌙 filename.lua` - Current buffer with arrow marker
 - `2 ● 📄 modified.js` - Modified buffer with dot indicator
-- `└─ 3 📋 config.json` - Tree structure with file icons
+- `└─ 3 📋 src/config.json` - Tree structure with smart disambiguation for duplicate names
 
 ### Picking Mode Integration
 When using `<leader>p` (BufferLine picking), the sidebar shows hint characters:
@@ -180,6 +181,21 @@ When using `<leader>p` (BufferLine picking), the sidebar shows hint characters:
 4. **Instant refresh** - UI updates immediately on group operations
 5. **BufferLine synchronization** - BufferLine automatically shows only current group's buffers
 6. **Session persistence** - Automatically save and restore group configurations across sessions
+7. **Smart filename disambiguation** - When multiple files have the same name, automatically shows minimal unique paths
+
+## Smart Filename Disambiguation
+
+When you have multiple files with the same name in different directories, the plugin automatically shows just enough path context to make them distinguishable:
+
+```
+▎[1] ● Frontend (4 buffers)
+  ├─ ► 1 🌙 App.tsx                    # Unique filename
+  ├─ 2 📄 src/Button.tsx               # Disambiguation: src/Button.tsx 
+  ├─ 3 📄 components/Button.tsx        # Disambiguation: components/Button.tsx
+  └─ 4 📝 README.md                    # Unique filename
+```
+
+The algorithm automatically determines the minimal path suffix needed to uniquely identify each file, keeping the display clean while providing clarity.
 
 ## Configuration
 
