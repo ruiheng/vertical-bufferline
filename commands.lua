@@ -475,11 +475,300 @@ function M.setup()
         print("Groups: " .. vim.inspect(debug_info.groups_data.groups))
         print("Active group: " .. (debug_info.groups_data.active_group_id or "none"))
         print("Stats: " .. vim.inspect(debug_info.stats))
+        
+        -- 添加 bufferline 集成调试信息
+        local bufferline_integration = require('vertical-bufferline.bufferline-integration')
+        local integration_status = bufferline_integration.debug_session_sync()
+        
+        print("\n=== Session Sync Status ===")
+        print("Integration working properly:", integration_status.is_hooked and integration_status.filtering_enabled)
     end, {
         nargs = 0,
         desc = "Show debug information"
     })
     
+    -- 专门的session同步调试命令
+    vim.api.nvim_create_user_command("VBufferLineDebugSync", function()
+        local bufferline_integration = require('vertical-bufferline.bufferline-integration')
+        bufferline_integration.debug_session_sync()
+    end, {
+        nargs = 0,
+        desc = "Show detailed session synchronization debug information"
+    })
+    
+    -- 检查buffer分组重复情况
+    vim.api.nvim_create_user_command("VBufferLineCheckDuplicates", function()
+        print("=== Buffer Group Duplicates Check ===")
+        local groups = require('vertical-bufferline.groups')
+        local all_groups = groups.get_all_groups()
+        local buffer_group_map = {}
+        
+        -- 收集所有buffer的分组信息
+        for i, group in ipairs(all_groups) do
+            print(string.format("Group %d: '%s' (%d buffers)", i, group.name, #group.buffers))
+            for _, buf_id in ipairs(group.buffers) do
+                if not buffer_group_map[buf_id] then
+                    buffer_group_map[buf_id] = {}
+                end
+                table.insert(buffer_group_map[buf_id], {group_id = group.id, group_name = group.name, group_index = i})
+            end
+        end
+        
+        -- 检查重复
+        local duplicates_found = false
+        print("\n=== Duplicate Analysis ===")
+        for buf_id, group_list in pairs(buffer_group_map) do
+            if #group_list > 1 then
+                duplicates_found = true
+                local name = vim.api.nvim_buf_get_name(buf_id)
+                print(string.format("Buffer [%d] %s is in %d groups:", 
+                    buf_id, vim.fn.fnamemodify(name, ":t"), #group_list))
+                for _, group_info in ipairs(group_list) do
+                    print(string.format("  - %s (%s)", group_info.group_name, group_info.group_id))
+                end
+            end
+        end
+        
+        if not duplicates_found then
+            print("No duplicate buffer assignments found.")
+        end
+        print("========================")
+        
+        return duplicates_found
+    end, {
+        nargs = 0,
+        desc = "Check for buffer group assignment duplicates"
+    })
+    
+    -- 清理buffer分组重复情况
+    vim.api.nvim_create_user_command("VBufferLineCleanDuplicates", function()
+        print("=== Cleaning Buffer Group Duplicates ===")
+        local groups = require('vertical-bufferline.groups')
+        local all_groups = groups.get_all_groups()
+        local buffer_group_map = {}
+        local cleaned_count = 0
+        
+        -- 收集所有buffer的分组信息
+        for i, group in ipairs(all_groups) do
+            for _, buf_id in ipairs(group.buffers) do
+                if not buffer_group_map[buf_id] then
+                    buffer_group_map[buf_id] = {}
+                end
+                table.insert(buffer_group_map[buf_id], {group_id = group.id, group_name = group.name, group_index = i})
+            end
+        end
+        
+        -- 清理重复：保留第一个分组，从其他分组中移除
+        for buf_id, group_list in pairs(buffer_group_map) do
+            if #group_list > 1 then
+                local name = vim.api.nvim_buf_get_name(buf_id)
+                print(string.format("Cleaning buffer [%d] %s from %d groups:", 
+                    buf_id, vim.fn.fnamemodify(name, ":t"), #group_list))
+                
+                -- 保留第一个分组（通常是活跃分组或主分组）
+                local keep_group = group_list[1]
+                print(string.format("  Keeping in: %s (%s)", keep_group.group_name, keep_group.group_id))
+                
+                -- 从其他分组中移除
+                for i = 2, #group_list do
+                    local remove_group = group_list[i]
+                    groups.remove_buffer_from_group(buf_id, remove_group.group_id)
+                    print(string.format("  Removed from: %s (%s)", remove_group.group_name, remove_group.group_id))
+                    cleaned_count = cleaned_count + 1
+                end
+            end
+        end
+        
+        if cleaned_count > 0 then
+            print(string.format("Cleaned %d duplicate buffer assignments.", cleaned_count))
+            -- 刷新界面
+            local vbl = require('vertical-bufferline')
+            if vbl.state and vbl.state.is_sidebar_open then
+                vbl.refresh()
+            end
+        else
+            print("No duplicate buffer assignments found to clean.")
+        end
+        print("========================")
+    end, {
+        nargs = 0,
+        desc = "Clean buffer group assignment duplicates"
+    })
+    
+    -- 重建分组结构（彻底清理所有问题）
+    vim.api.nvim_create_user_command("VBufferLineRebuildGroups", function()
+        print("=== Rebuilding Group Structure ===")
+        local groups = require('vertical-bufferline.groups')
+        local all_groups = groups.get_all_groups()
+        local active_group_id = groups.get_active_group_id()
+        
+        -- 收集当前所有有效的buffers
+        local all_valid_buffers = {}
+        for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+            if vim.api.nvim_buf_is_valid(buf) and vim.api.nvim_buf_is_loaded(buf) then
+                local name = vim.api.nvim_buf_get_name(buf)
+                local buf_type = vim.api.nvim_buf_get_option(buf, 'buftype')
+                if name ~= "" and buf_type == "" then
+                    table.insert(all_valid_buffers, buf)
+                end
+            end
+        end
+        
+        print(string.format("Found %d valid buffers", #all_valid_buffers))
+        
+        -- 清空所有分组的buffer列表
+        for _, group in ipairs(all_groups) do
+            print(string.format("Clearing group '%s' (%d buffers)", group.name, #group.buffers))
+            group.buffers = {}
+        end
+        
+        -- 重新分配：每个buffer只属于第一个分组
+        if #all_groups > 0 then
+            local target_group = all_groups[1]  -- 默认使用第一个分组
+            for _, buf_id in ipairs(all_valid_buffers) do
+                table.insert(target_group.buffers, buf_id)
+                local name = vim.api.nvim_buf_get_name(buf_id)
+                print(string.format("Added [%d] %s to group '%s'", 
+                    buf_id, vim.fn.fnamemodify(name, ":t"), target_group.name))
+            end
+            
+            -- 确保有一个活跃分组
+            if not active_group_id or not groups.get_active_group() then
+                groups.set_active_group(target_group.id)
+                print(string.format("Set active group to '%s'", target_group.name))
+            end
+        end
+        
+        -- 刷新界面
+        local vbl = require('vertical-bufferline')
+        if vbl.state and vbl.state.is_sidebar_open then
+            vbl.refresh()
+        end
+        
+        print("Group structure rebuilt successfully.")
+        print("===================================")
+    end, {
+        nargs = 0,
+        desc = "Completely rebuild group structure to fix all issues"
+    })
+    
+    -- 控制自动添加buffer功能
+    vim.api.nvim_create_user_command("VBufferLineToggleAutoAdd", function()
+        local groups = require('vertical-bufferline.groups')
+        local current_state = groups.is_auto_add_disabled()
+        groups.set_auto_add_disabled(not current_state)
+        local new_state = groups.is_auto_add_disabled()
+        vim.notify("Auto-add buffers: " .. (new_state and "DISABLED" or "ENABLED"), vim.log.levels.INFO)
+    end, {
+        nargs = 0,
+        desc = "Toggle automatic buffer addition to active group"
+    })
+    
+    -- 手动强制同步session和bufferline
+    vim.api.nvim_create_user_command("VBufferLineForceSync", function()
+        print("=== Force Sync Started ===")
+        local bufferline_integration = require('vertical-bufferline.bufferline-integration')
+        local groups = require('vertical-bufferline.groups')
+        
+        -- 显示当前状态
+        local active_group = groups.get_active_group()
+        if active_group then
+            print(string.format("Active group: %s (%d buffers)", active_group.name, #active_group.buffers))
+        else
+            print("No active group")
+        end
+        
+        -- 强制刷新bufferline
+        bufferline_integration.force_refresh()
+        
+        -- 确保当前缓冲区在活跃分组中（兼容scope.nvim）
+        if active_group and #active_group.buffers > 0 then
+            local current_buf = vim.api.nvim_get_current_buf()
+            local target_buf = nil
+            
+            -- 如果当前buffer不在活跃分组中，找到一个合适的
+            if not vim.tbl_contains(active_group.buffers, current_buf) then
+                for _, buf_id in ipairs(active_group.buffers) do
+                    if vim.api.nvim_buf_is_valid(buf_id) and vim.api.nvim_buf_is_loaded(buf_id) then
+                        target_buf = buf_id
+                        break
+                    end
+                end
+            end
+            
+            if target_buf then
+                -- 确保所有分组中的buffers对scope可见
+                for _, buf_id in ipairs(active_group.buffers) do
+                    if vim.api.nvim_buf_is_valid(buf_id) then
+                        vim.bo[buf_id].buflisted = true
+                        -- 短暂切换让scope识别
+                        local old_buf = vim.api.nvim_get_current_buf()
+                        vim.api.nvim_set_current_buf(buf_id)
+                        vim.api.nvim_set_current_buf(old_buf)
+                    end
+                end
+                
+                vim.api.nvim_set_current_buf(target_buf)
+                vim.api.nvim_exec_autocmds('BufEnter', { buffer = target_buf })
+                print(string.format("Switched to buffer: [%d] %s", target_buf, 
+                    vim.fn.fnamemodify(vim.api.nvim_buf_get_name(target_buf), ":t")))
+            end
+        end
+        
+        -- 刷新sidebar
+        local vbl = require('vertical-bufferline')
+        if vbl.state and vbl.state.is_sidebar_open then
+            vbl.refresh()
+        end
+        
+        -- 再次强制刷新
+        bufferline_integration.force_refresh()
+        print("=== Force Sync Completed ===")
+    end, {
+        nargs = 0,
+        desc = "Manually force sync between session, groups, and bufferline"
+    })
+    
+    -- 从当前分组移除buffer（软删除）
+    vim.api.nvim_create_user_command("VBufferLineRemoveFromGroup", function()
+        local groups = require('vertical-bufferline.groups')
+        local active_group = groups.get_active_group()
+        if not active_group then
+            vim.notify("No active group found", vim.log.levels.ERROR)
+            return
+        end
+        
+        local current_buffer = vim.api.nvim_get_current_buf()
+        local success = groups.remove_buffer_from_group(current_buffer, active_group.id)
+        
+        if success then
+            local buffer_name = vim.api.nvim_buf_get_name(current_buffer)
+            local short_name = vim.fn.fnamemodify(buffer_name, ":t")
+            -- 使用echo显示简洁信息，不需要按Enter
+            local remaining_groups = groups.find_buffer_groups(current_buffer)
+            if #remaining_groups > 0 then
+                local group_names = {}
+                for _, group in ipairs(remaining_groups) do
+                    table.insert(group_names, group.name)
+                end
+                print("Removed '" .. short_name .. "' from '" .. active_group.name .. "' (still in: " .. table.concat(group_names, ", ") .. ")")
+            else
+                print("Removed '" .. short_name .. "' from '" .. active_group.name .. "' (removed from all groups)")
+            end
+            
+            -- 刷新界面
+            local vbl = require('vertical-bufferline')
+            if vbl.state and vbl.state.is_sidebar_open then
+                vbl.refresh()
+            end
+        else
+            vim.notify("Failed to remove buffer from group", vim.log.levels.ERROR)
+        end
+    end, {
+        nargs = 0,
+        desc = "Remove current buffer from current group only (soft delete)"
+    })
+
     -- 手动刷新buffer列表
     vim.api.nvim_create_user_command("VBufferLineRefreshBuffers", function()
         local active_group = groups.get_active_group()

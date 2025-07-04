@@ -72,6 +72,8 @@ local state = {
     hint_to_buffer_id = {}, -- Maps a hint character to a buffer ID
     was_picking = false, -- Track picking mode state to avoid spam
     expand_all_groups = true, -- Default mode: show all groups expanded
+    session_loading = false, -- Flag to prevent interference during session loading
+    highlight_timer = nil, -- Timer for picking highlights
 }
 
 --- Refreshes the sidebar content with the current list of buffers.
@@ -114,19 +116,37 @@ function M.refresh()
     if is_picking and not state.was_picking then
         state.was_picking = true
         
+        -- Stop existing timer if any
+        if state.highlight_timer then
+            if not state.highlight_timer:is_closing() then
+                state.highlight_timer:stop()
+                state.highlight_timer:close()
+            end
+            state.highlight_timer = nil
+        end
+        
         -- Start highlight application timer during picking mode
-        local highlight_timer = vim.loop.new_timer()
-        highlight_timer:start(0, 50, vim.schedule_wrap(function()
+        state.highlight_timer = vim.loop.new_timer()
+        state.highlight_timer:start(0, 50, vim.schedule_wrap(function()
             local current_state = require('bufferline.state')
             if current_state.is_picking and state.is_sidebar_open then
                 M.apply_picking_highlights()
             else
-                highlight_timer:stop()
-                highlight_timer:close()
+                if state.highlight_timer and not state.highlight_timer:is_closing() then
+                    state.highlight_timer:stop()
+                    state.highlight_timer:close()
+                end
+                state.highlight_timer = nil
             end
         end))
     elseif not is_picking and state.was_picking then
         state.was_picking = false
+        -- Clean up timer when exiting picking mode
+        if state.highlight_timer and not state.highlight_timer:is_closing() then
+            state.highlight_timer:stop()
+            state.highlight_timer:close()
+            state.highlight_timer = nil
+        end
     end
 
     local lines_text = {}
@@ -490,6 +510,7 @@ local function open_sidebar()
     api.nvim_buf_set_keymap(buf_id, "n", "k", "k", keymap_opts)
     api.nvim_buf_set_keymap(buf_id, "n", "<CR>", ":lua require('vertical-bufferline').handle_selection()<CR>", keymap_opts)
     api.nvim_buf_set_keymap(buf_id, "n", "d", ":lua require('vertical-bufferline').close_buffer()<CR>", keymap_opts)
+    api.nvim_buf_set_keymap(buf_id, "n", "x", ":lua require('vertical-bufferline').remove_from_group()<CR>", keymap_opts)
     api.nvim_buf_set_keymap(buf_id, "n", "q", ":lua require('vertical-bufferline').close_sidebar()<CR>", keymap_opts)
     api.nvim_buf_set_keymap(buf_id, "n", "<Esc>", ":lua require('vertical-bufferline').close_sidebar()<CR>", keymap_opts)
 
@@ -527,6 +548,43 @@ function M.close_buffer()
             end)
         else
             vim.notify("Error closing buffer: " .. err, vim.log.levels.ERROR)
+        end
+    end
+end
+
+function M.remove_from_group()
+    if not state.is_sidebar_open then return end
+    local line_number = api.nvim_win_get_cursor(state.win_id)[1]
+    local bufnr = state.line_to_buffer_id[line_number]
+    if bufnr and api.nvim_buf_is_valid(bufnr) then
+        local active_group = groups.get_active_group()
+        if not active_group then
+            vim.notify("No active group found", vim.log.levels.ERROR)
+            return
+        end
+        
+        local success = groups.remove_buffer_from_group(bufnr, active_group.id)
+        if success then
+            local buffer_name = api.nvim_buf_get_name(bufnr)
+            local short_name = vim.fn.fnamemodify(buffer_name, ":t")
+            
+            -- 使用echo显示简洁信息，不需要按Enter
+            local remaining_groups = groups.find_buffer_groups(bufnr)
+            if #remaining_groups > 0 then
+                local group_names = {}
+                for _, group in ipairs(remaining_groups) do
+                    table.insert(group_names, group.name)
+                end
+                print("Removed '" .. short_name .. "' from '" .. active_group.name .. "' (still in: " .. table.concat(group_names, ", ") .. ")")
+            else
+                print("Removed '" .. short_name .. "' from '" .. active_group.name .. "' (removed from all groups)")
+            end
+            
+            vim.schedule(function()
+                M.refresh()
+            end)
+        else
+            vim.notify("Failed to remove buffer from group", vim.log.levels.ERROR)
         end
     end
 end
@@ -575,37 +633,63 @@ local function setup_bufferline_hook()
     end
 end
 
+-- 插件初始化函数（在加载时调用）
+local function initialize_plugin()
+    -- 设置命令
+    commands.setup()
+    
+    -- 初始化分组功能
+    groups.setup({
+        max_buffers_per_group = 10,
+        auto_create_groups = true,
+        auto_add_new_buffers = true
+    })
+    
+    -- 启用 bufferline 集成
+    bufferline_integration.enable()
+    
+    -- 初始化 session 模块
+    session.setup({
+        auto_save = true,
+        auto_load = true,
+    })
+    
+    -- 设置全局自动命令（不依赖sidebar状态）
+    api.nvim_command("augroup VerticalBufferlineGlobal")
+    api.nvim_command("autocmd!")
+    api.nvim_command("autocmd BufEnter,BufDelete,BufWipeout * lua require('vertical-bufferline').refresh_if_open()")
+    api.nvim_command("augroup END")
+    
+    -- 设置bufferline钩子
+    setup_bufferline_hook()
+    
+    -- 设置高亮
+    setup_pick_highlights()
+end
+
+-- 只在sidebar打开时刷新的包装函数
+function M.refresh_if_open()
+    if state.is_sidebar_open then
+        M.refresh()
+    end
+end
+
 --- Toggles the visibility of the sidebar.
 function M.toggle()
     if state.is_sidebar_open then
         M.close_sidebar()
-        -- Remove autocommands when closing
-        api.nvim_command("autocmd! VerticalBufferline")
     else
         open_sidebar()
-        -- Set up autocommands to refresh on buffer changes
-        api.nvim_command("augroup VerticalBufferline")
-        api.nvim_command("autocmd!")
-        api.nvim_command("autocmd BufEnter,BufDelete,BufWipeout * lua require('vertical-bufferline').refresh()")
-        api.nvim_command("augroup END")
-        
-        -- Set up the bufferline hook
-        setup_bufferline_hook()
-        
-        -- Re-setup highlights to ensure they match bufferline
-        setup_pick_highlights()
-        
-        -- 初始化分组功能
-        groups.setup({
-            max_buffers_per_group = 10,
-            auto_create_groups = true,
-            auto_add_new_buffers = true
-        })
         
         -- 手动添加当前已经存在的buffer到默认分组
         -- 使用多个延迟时间点尝试，确保buffer被正确识别
         for _, delay in ipairs({50, 200, 500}) do
             vim.defer_fn(function()
+                -- 如果正在加载session，跳过自动添加以避免冲突
+                if state.session_loading then
+                    return
+                end
+                
                 local all_buffers = vim.api.nvim_list_bufs()
                 local default_group = groups.get_active_group()
                 if default_group then
@@ -631,18 +715,6 @@ function M.toggle()
             end, delay)
         end
         
-        -- 设置命令
-        commands.setup()
-        
-        -- 启用 bufferline 集成
-        bufferline_integration.enable()
-        
-        -- 初始化 session 模块
-        session.setup({
-            auto_save = true,
-            auto_load = true,
-        })
-        
         -- 确保初始状态正确显示
         vim.schedule(function()
             M.refresh()
@@ -666,5 +738,8 @@ M.add_current_buffer_to_group = function(group_name)
 end
 M.move_group_up = function() commands.move_group_up() end
 M.move_group_down = function() commands.move_group_down() end
+
+-- 插件加载时立即初始化
+initialize_plugin()
 
 return M

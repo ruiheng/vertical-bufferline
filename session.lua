@@ -175,6 +175,14 @@ function M.load_session(filename)
     local debug_info = groups.debug_info()
     local groups_data = debug_info.groups_data
     
+    -- 调试：显示加载前的状态
+    print("=== Before Session Load ===")
+    for i, group in ipairs(groups_data.groups) do
+        print(string.format("Existing Group %d: '%s' (%d buffers)", 
+            i, group.name, #group.buffers))
+    end
+    print("===========================")
+    
     -- Clear existing groups (except we'll recreate them)
     groups_data.groups = {}
     groups_data.active_group_id = nil
@@ -182,6 +190,7 @@ function M.load_session(filename)
     -- Track buffers that need to be opened
     local buffers_to_open = {}
     local buffer_to_group_map = {}
+    local unique_buffers = {} -- 防止重复添加相同的buffer路径
     
     -- Recreate groups from session data
     for _, group_data in ipairs(session_data.groups) do
@@ -196,7 +205,12 @@ function M.load_session(filename)
         -- Process buffer paths and prepare to open them
         for _, buffer_info in ipairs(group_data.buffers or {}) do
             local buffer_path = expand_buffer_path(buffer_info.path)
-            table.insert(buffers_to_open, buffer_path)
+            
+            -- 只添加唯一的buffer路径到待打开列表
+            if not unique_buffers[buffer_path] then
+                unique_buffers[buffer_path] = true
+                table.insert(buffers_to_open, buffer_path)
+            end
             
             -- Map buffer path to group for later assignment
             if not buffer_to_group_map[buffer_path] then
@@ -219,30 +233,176 @@ function M.load_session(filename)
         end
     end
     
-    -- Open buffers and assign them to groups
+    -- Set session loading flag to prevent interference
+    local vbl = require('vertical-bufferline')
+    if vbl.state then
+        vbl.state.session_loading = true
+    end
+    
+    -- Open buffers and assign them to groups with multiple stages
     vim.schedule(function()
+        local buffers_opened = 0
+        local total_buffers = #buffers_to_open
+        
+        -- 调试：显示即将加载的分组结构
+        print("=== Session Loading Debug ===")
+        for _, group_data in ipairs(session_data.groups) do
+            print(string.format("Group '%s' (ID: %s) should have %d buffers:", 
+                group_data.name, group_data.id, #(group_data.buffers or {})))
+            for i, buffer_info in ipairs(group_data.buffers or {}) do
+                print(string.format("  %d. %s", i, buffer_info.path))
+            end
+        end
+        print("==========================")
+        
+        -- Stage 1: Open all buffers first
         for _, buffer_path in ipairs(buffers_to_open) do
             if vim.fn.filereadable(buffer_path) == 1 then
                 -- Open buffer silently
                 local buf_id = vim.fn.bufnr(buffer_path, true)
                 
-                -- Add buffer to appropriate groups
-                local group_ids = buffer_to_group_map[buffer_path]
-                if group_ids then
-                    for _, group_id in ipairs(group_ids) do
-                        groups.add_buffer_to_group(buf_id, group_id)
-                    end
+                -- Force buffer to be loaded
+                if not vim.api.nvim_buf_is_loaded(buf_id) then
+                    vim.fn.bufload(buf_id)
                 end
+                
+                -- 确保buffer被列出（这对bufferline很重要）
+                vim.bo[buf_id].buflisted = true
+                
+                -- 设置buffer类型为空（正常文件）
+                if vim.bo[buf_id].buftype ~= "" then
+                    vim.bo[buf_id].buftype = ""
+                end
+                
+                -- 如果使用了 scope.nvim，确保buffer被添加到当前tab
+                -- 通过短暂切换到buffer来让scope识别它属于当前tab
+                local current_buf = vim.api.nvim_get_current_buf()
+                vim.api.nvim_set_current_buf(buf_id)
+                vim.api.nvim_set_current_buf(current_buf)
+                
+                print(string.format("Session: Loaded buffer [%d] %s (listed: %s)", 
+                    buf_id, vim.fn.fnamemodify(buffer_path, ":t"), vim.bo[buf_id].buflisted))
+                
+                buffers_opened = buffers_opened + 1
             end
         end
         
-        -- Refresh the sidebar if it's open
-        local vbl = require('vertical-bufferline')
-        if vbl.state and vbl.state.is_sidebar_open then
-            vbl.refresh()
-        end
-        
-        vim.notify("Session loaded: " .. vim.fn.fnamemodify(filename, ":t"), vim.log.levels.INFO)
+        -- Stage 2: Wait a bit, then assign buffers to groups
+        vim.defer_fn(function()
+            local assigned_count = 0
+            print("=== Stage 2: Buffer Assignment ===")
+            
+            for _, buffer_path in ipairs(buffers_to_open) do
+                if vim.fn.filereadable(buffer_path) == 1 then
+                    local buf_id = vim.fn.bufnr(buffer_path, false)
+                    if buf_id > 0 and vim.api.nvim_buf_is_valid(buf_id) then
+                        -- Add buffer to appropriate groups
+                        local group_ids = buffer_to_group_map[buffer_path]
+                        if group_ids then
+                            print(string.format("Assigning buffer [%d] %s to groups: %s", 
+                                buf_id, vim.fn.fnamemodify(buffer_path, ":t"), 
+                                table.concat(group_ids, ", ")))
+                            
+                            -- 对于session加载，恢复buffer到所有原属分组（支持多分组）
+                            for _, group_id in ipairs(group_ids) do
+                                local success = groups.add_buffer_to_group(buf_id, group_id)
+                                print(string.format("  -> Group %s: %s", group_id, success and "SUCCESS" or "FAILED"))
+                                if success then
+                                    assigned_count = assigned_count + 1
+                                end
+                            end
+                            
+                            if #group_ids > 1 then
+                                print(string.format("  INFO: Buffer %s restored to %d groups (multi-group design)", 
+                                    vim.fn.fnamemodify(buffer_path, ":t"), #group_ids))
+                            end
+                        else
+                            print(string.format("WARNING: No group mapping for buffer %s", buffer_path))
+                        end
+                    else
+                        print(string.format("WARNING: Invalid buffer for path %s (buf_id: %s)", buffer_path, buf_id))
+                    end
+                else
+                    print(string.format("WARNING: File not readable: %s", buffer_path))
+                end
+            end
+            
+            print("=============================")
+            
+            -- Stage 3: Force bufferline refresh and sidebar update
+            vim.defer_fn(function()
+                -- 调试信息：检查buffer和分组状态
+                local active_group = groups.get_active_group()
+                local all_buffers = vim.api.nvim_list_bufs()
+                local valid_buffers = {}
+                for _, buf in ipairs(all_buffers) do
+                    if vim.api.nvim_buf_is_valid(buf) and vim.api.nvim_buf_is_loaded(buf) then
+                        local name = vim.api.nvim_buf_get_name(buf)
+                        if name ~= "" then
+                            table.insert(valid_buffers, {id = buf, name = vim.fn.fnamemodify(name, ":t")})
+                        end
+                    end
+                end
+                
+                print(string.format("Session Stage 3: Active group: %s, Valid buffers: %d", 
+                    active_group and active_group.name or "none", #valid_buffers))
+                
+                if active_group then
+                    print(string.format("  Group buffers: %d", #active_group.buffers))
+                    for i, buf_id in ipairs(active_group.buffers) do
+                        if i <= 3 then -- 只显示前3个
+                            local name = vim.api.nvim_buf_get_name(buf_id)
+                            print(string.format("    [%d] %s", buf_id, vim.fn.fnamemodify(name, ":t")))
+                        end
+                    end
+                end
+                
+                -- Force bufferline integration refresh
+                local bufferline_integration = require('vertical-bufferline.bufferline-integration')
+                bufferline_integration.force_refresh()
+                
+                -- 确保当前缓冲区在活跃分组中，这对scope.nvim很重要
+                if active_group and #active_group.buffers > 0 then
+                    local current_buf = vim.api.nvim_get_current_buf()
+                    local target_buf = nil
+                    
+                    -- 找到分组中第一个有效的缓冲区
+                    for _, buf_id in ipairs(active_group.buffers) do
+                        if vim.api.nvim_buf_is_valid(buf_id) and vim.api.nvim_buf_is_loaded(buf_id) then
+                            target_buf = buf_id
+                            break
+                        end
+                    end
+                    
+                    if target_buf then
+                        -- 切换到目标缓冲区，确保scope和bufferline都能看到它
+                        vim.api.nvim_set_current_buf(target_buf)
+                        print(string.format("  Set current buffer to: [%d] %s", 
+                            target_buf, vim.fn.fnamemodify(vim.api.nvim_buf_get_name(target_buf), ":t")))
+                        
+                        -- 强制触发BufEnter事件，确保scope正确处理
+                        vim.api.nvim_exec_autocmds('BufEnter', { buffer = target_buf })
+                    end
+                end
+                
+                -- 再次强制刷新
+                bufferline_integration.force_refresh()
+                
+                -- Refresh the sidebar if it's open
+                local vbl = require('vertical-bufferline')
+                if vbl.state and vbl.state.is_sidebar_open then
+                    vbl.refresh()
+                end
+                
+                vim.notify(string.format("Session loaded: %s (%d buffers, %d assignments)", 
+                    vim.fn.fnamemodify(filename, ":t"), buffers_opened, assigned_count), vim.log.levels.INFO)
+                
+                -- Clear session loading flag
+                if vbl.state then
+                    vbl.state.session_loading = false
+                end
+            end, 100)
+        end, 150)
     end)
     
     return true
@@ -331,12 +491,46 @@ function M.setup(opts)
     end
     
     if config.auto_load then
-        -- Auto-load on startup (delayed to allow other plugins to initialize)
+        -- Auto-load on startup with more delay to ensure bufferline is ready
         vim.defer_fn(function()
             if M.has_session() then
-                M.load_session()
+                -- 确保bufferline集成已启用
+                local bufferline_integration = require('vertical-bufferline.bufferline-integration')
+                if not bufferline_integration.status().is_hooked then
+                    bufferline_integration.enable()
+                end
+                
+                -- Add additional delay to ensure all plugins are ready
+                vim.defer_fn(function()
+                    print("Auto-loading session...")
+                    M.load_session()
+                    
+                    -- 在session加载完成后额外等待，然后强制同步
+                    vim.defer_fn(function()
+                        print("Post-session sync...")
+                        bufferline_integration.force_refresh()
+                        
+                        -- 再次确保当前缓冲区正确
+                        local groups = require('vertical-bufferline.groups')
+                        local active_group = groups.get_active_group()
+                        if active_group and #active_group.buffers > 0 then
+                            local current_buf = vim.api.nvim_get_current_buf()
+                            if not vim.tbl_contains(active_group.buffers, current_buf) then
+                                for _, buf_id in ipairs(active_group.buffers) do
+                                    if vim.api.nvim_buf_is_valid(buf_id) and vim.api.nvim_buf_is_loaded(buf_id) then
+                                        vim.api.nvim_set_current_buf(buf_id)
+                                        print(string.format("Post-session: switched to buffer %d", buf_id))
+                                        break
+                                    end
+                                end
+                            end
+                        end
+                        
+                        bufferline_integration.force_refresh()
+                    end, 300)
+                end, 200)
             end
-        end, 100)
+        end, 500)
     end
 end
 

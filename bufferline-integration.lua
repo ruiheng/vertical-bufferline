@@ -110,8 +110,51 @@ local function hook_get_components()
             
             -- 应用分组过滤到buffer numbers
             local active_group_buffers = groups.get_active_group_buffers()
+            
+            -- 调试信息
+            local debug_msg = string.format("BufferLine integration: %d valid buffers, %d group buffers", 
+                #buf_nums, #active_group_buffers)
+            
+            -- 详细调试：显示具体的buffer信息
+            if os.getenv("NVIM_VBL_DEBUG") == "1" then
+                print("=== Buffer Mismatch Debug ===")
+                print("Valid buffers from bufferline:")
+                for i, buf_id in ipairs(buf_nums) do
+                    local name = vim.api.nvim_buf_get_name(buf_id)
+                    local loaded = vim.api.nvim_buf_is_loaded(buf_id)
+                    local listed = vim.bo[buf_id].buflisted
+                    print(string.format("  [%d] %s (loaded:%s, listed:%s)", 
+                        buf_id, vim.fn.fnamemodify(name, ":t"), loaded, listed))
+                end
+                
+                print("Group buffers:")
+                for i, buf_id in ipairs(active_group_buffers) do
+                    if vim.api.nvim_buf_is_valid(buf_id) then
+                        local name = vim.api.nvim_buf_get_name(buf_id)
+                        local loaded = vim.api.nvim_buf_is_loaded(buf_id)
+                        local listed = vim.bo[buf_id].buflisted
+                        local exists = vim.fn.filereadable(name)
+                        print(string.format("  [%d] %s (loaded:%s, listed:%s, exists:%d)", 
+                            buf_id, vim.fn.fnamemodify(name, ":t"), loaded, listed, exists))
+                    else
+                        print(string.format("  [%d] INVALID", buf_id))
+                    end
+                end
+                print("========================")
+            end
+            
             if #active_group_buffers == 0 then
-                buf_nums = {}
+                -- 在session加载期间，如果分组缓冲区为空，但有有效缓冲区，暂时显示所有缓冲区
+                -- 这避免了在session加载过程中出现空的tabline
+                local all_groups = groups.get_all_groups()
+                if #all_groups > 0 and #buf_nums > 0 then
+                    -- 有分组存在但分组为空，可能是session加载中的临时状态
+                    -- 暂时不过滤，让bufferline显示所有缓冲区
+                    debug_msg = debug_msg .. " (session loading, showing all buffers temporarily)"
+                else
+                    buf_nums = {}
+                    debug_msg = debug_msg .. " (no group buffers, empty result)"
+                end
             else
                 local group_buffer_set = {}
                 for _, buffer_id in ipairs(active_group_buffers) do
@@ -125,6 +168,12 @@ local function hook_get_components()
                     end
                 end
                 buf_nums = filtered_buf_nums
+                debug_msg = debug_msg .. string.format(" (filtered to %d)", #buf_nums)
+            end
+            
+            -- 仅在开发模式下打印调试信息
+            if os.getenv("NVIM_VBL_DEBUG") == "1" then
+                print(debug_msg)
             end
             
             -- 现在使用过滤后的buffer list重新构建components
@@ -344,6 +393,11 @@ function M.handle_empty_group_display()
         end
         
         if should_switch then
+            -- 临时禁用自动添加以防止unwanted migration
+            local groups = require('vertical-bufferline.groups')
+            local was_disabled = groups.is_auto_add_disabled()
+            groups.set_auto_add_disabled(true)
+            
             -- 找到第一个有效的buffer
             for _, buffer_id in ipairs(active_group_buffers) do
                 if vim.api.nvim_buf_is_valid(buffer_id) then
@@ -351,41 +405,99 @@ function M.handle_empty_group_display()
                     break
                 end
             end
+            
+            -- 延迟恢复自动添加状态，避免立即触发的BufEnter事件
+            vim.defer_fn(function()
+                groups.set_auto_add_disabled(was_disabled)
+            end, 100)
         end
     end
 end
 
--- 强制刷新 bufferline
+-- 强制刷新 bufferline（增强版本）
 function M.force_refresh()
+    -- 立即同步刷新
+    local bufferline_ui = require('bufferline.ui')
+    if bufferline_ui.refresh then
+        bufferline_ui.refresh()
+    end
+    
+    -- 使用多个调度时间点来确保完全同步
     vim.schedule(function()
-        local bufferline_ui = require('bufferline.ui')
+        -- 第一轮：基础刷新
         if bufferline_ui.refresh then
             bufferline_ui.refresh()
         end
         
-        -- 额外强制重绘
+        -- 刷新我们的侧边栏
+        local vbl = require('vertical-bufferline')
+        if vbl.state and vbl.state.is_sidebar_open and vbl.refresh then
+            vbl.refresh()
+        end
+        
+        -- 强制重绘
         vim.cmd('redraw!')
+        
+        -- 第二轮：延迟确保同步（用于session加载等场景）
+        vim.defer_fn(function()
+            if bufferline_ui.refresh then
+                bufferline_ui.refresh()
+            end
+            
+            if vbl.state and vbl.state.is_sidebar_open and vbl.refresh then
+                vbl.refresh()
+            end
+            
+            vim.cmd('redraw!')
+        end, 50)
     end)
 end
 
--- 获取当前分组的 buffer 统计信息
+-- 获取当前分组的 buffer 统计信息（增强调试版本）
 function M.get_group_buffer_info()
     local active_group = groups.get_active_group()
     if not active_group then
         return {
             group_name = "No group",
             total_buffers = 0,
-            visible_buffers = 0
+            visible_buffers = 0,
+            debug_info = "No active group found"
         }
     end
     
     local active_buffers = groups.get_active_group_buffers()
+    local valid_buffers = 0
+    local buffer_details = {}
+    
+    -- 收集调试信息
+    for _, buf_id in ipairs(active_buffers) do
+        if vim.api.nvim_buf_is_valid(buf_id) then
+            valid_buffers = valid_buffers + 1
+            local name = vim.api.nvim_buf_get_name(buf_id)
+            table.insert(buffer_details, {
+                id = buf_id,
+                name = name ~= "" and vim.fn.fnamemodify(name, ":t") or "[No Name]",
+                valid = true
+            })
+        else
+            table.insert(buffer_details, {
+                id = buf_id,
+                name = "[Invalid]",
+                valid = false
+            })
+        end
+    end
     
     return {
         group_name = active_group.name,
+        group_id = active_group.id,
         total_buffers = #active_buffers,
-        visible_buffers = #active_buffers,  -- 使用相同的数量，简化显示
-        max_buffers = 10  -- 对应用户的快捷键数量
+        valid_buffers = valid_buffers,
+        visible_buffers = valid_buffers,  -- 使用有效缓冲区数量
+        max_buffers = 10,  -- 对应用户的快捷键数量
+        buffer_details = buffer_details,
+        debug_info = string.format("Group '%s' (ID: %s) has %d/%d valid buffers", 
+            active_group.name, active_group.id, valid_buffers, #active_buffers)
     }
 end
 
@@ -405,13 +517,66 @@ function M.auto_manage_new_buffer(buffer_id)
     groups.auto_add_buffer(buffer_id)
 end
 
--- 检查集成状态
+-- 检查集成状态（增强调试版本）
 function M.status()
+    local all_groups = groups.get_all_groups()
+    local group_info = M.get_group_buffer_info()
+    
     return {
         is_hooked = is_hooked,
         filtering_enabled = M.is_group_filtering_enabled(),
-        group_info = M.get_group_buffer_info()
+        group_info = group_info,
+        total_groups = #all_groups,
+        bufferline_state = {
+            has_ui = pcall(require, 'bufferline.ui'),
+            has_state = pcall(require, 'bufferline.state'),
+            has_buffers = pcall(require, 'bufferline.buffers')
+        },
+        integration_health = {
+            original_functions_preserved = {
+                get_components = original_functions.get_components ~= nil,
+                state_set = original_functions.state_set ~= nil
+            }
+        }
     }
+end
+
+-- 调试函数：打印详细状态信息
+function M.debug_session_sync()
+    local status = M.status()
+    local active_group = groups.get_active_group()
+    
+    print("=== BufferLine Integration Debug ===")
+    print("Hooked:", status.is_hooked)
+    print("Filtering enabled:", status.filtering_enabled)
+    print("Total groups:", status.total_groups)
+    
+    if active_group then
+        print("\nActive Group:")
+        print("  Name:", active_group.name)
+        print("  ID:", active_group.id)
+        print("  Buffers count:", #active_group.buffers)
+        
+        local group_info = status.group_info
+        print("\nBuffer Details:")
+        for i, detail in ipairs(group_info.buffer_details) do
+            print(string.format("  %d. [%d] %s (valid: %s)", 
+                i, detail.id, detail.name, detail.valid))
+        end
+    else
+        print("\nNo active group")
+    end
+    
+    print("\nBufferLine Health:")
+    print("  UI module:", status.bufferline_state.has_ui)
+    print("  State module:", status.bufferline_state.has_state)
+    print("  Buffers module:", status.bufferline_state.has_buffers)
+    
+    print("\nIntegration Health:")
+    print("  get_components preserved:", status.integration_health.original_functions_preserved.get_components)
+    print("  state_set preserved:", status.integration_health.original_functions_preserved.state_set)
+    
+    return status
 end
 
 return M

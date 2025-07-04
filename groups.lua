@@ -34,7 +34,10 @@ local groups_data = {
         auto_create_groups = true,
         auto_add_new_buffers = true,
         group_name_prefix = "Group",
-    }
+    },
+    
+    -- 临时禁用自动添加的标志
+    auto_add_disabled = false,
 }
 
 -- 初始化默认分组
@@ -396,10 +399,40 @@ function M.move_group_to_position(group_id, target_position)
     return true
 end
 
+-- 强制单一分组策略：确保buffer只属于一个分组
+function M.enforce_single_group_policy(buffer_id, target_group_id)
+    -- 先从所有分组中移除
+    M.remove_buffer_from_all_groups(buffer_id)
+    -- 然后只添加到目标分组
+    return M.add_buffer_to_group(buffer_id, target_group_id)
+end
+
+-- 临时禁用/启用自动添加
+function M.set_auto_add_disabled(disabled)
+    groups_data.auto_add_disabled = disabled
+end
+
+function M.is_auto_add_disabled()
+    return groups_data.auto_add_disabled
+end
+
 -- 自动添加新buffer到当前分组
 function M.auto_add_buffer(buffer_id)
-    if not groups_data.settings.auto_add_new_buffers then
+    if not groups_data.settings.auto_add_new_buffers or groups_data.auto_add_disabled then
         return
+    end
+    
+    -- 检查是否正在加载session，如果是则跳过自动添加
+    local vbl = require('vertical-bufferline')
+    if vbl.state and vbl.state.session_loading then
+        return
+    end
+    
+    -- 调试信息
+    if os.getenv("NVIM_VBL_DEBUG") == "1" then
+        local buf_name = vim.api.nvim_buf_get_name(buffer_id)
+        print(string.format("[AUTO_ADD] Considering buffer [%d] %s", 
+            buffer_id, vim.fn.fnamemodify(buf_name, ":t")))
     end
     
     if not api.nvim_buf_is_valid(buffer_id) then
@@ -412,10 +445,19 @@ function M.auto_add_buffer(buffer_id)
         return
     end
     
-    -- 检查buffer是否已经在当前分组中
-    local active_group = M.get_active_group()
-    if active_group and vim.tbl_contains(active_group.buffers, buffer_id) then
-        return  -- 已经在当前分组中了
+    -- 检查buffer是否已经存在于任何分组中（支持多分组设计）
+    local existing_groups = M.find_buffer_groups(buffer_id)
+    if #existing_groups > 0 then
+        -- Buffer已经属于其他分组，不自动添加到避免unwanted migration
+        if os.getenv("NVIM_VBL_DEBUG") == "1" then
+            local group_names = {}
+            for _, group in ipairs(existing_groups) do
+                table.insert(group_names, group.name)
+            end
+            print(string.format("[AUTO_ADD] Buffer [%d] already exists in groups: %s (skipping auto-add)", 
+                buffer_id, table.concat(group_names, ", ")))
+        end
+        return
     end
     
     -- 检查是否是特殊buffer（如侧边栏本身、empty group buffer等）
@@ -425,7 +467,7 @@ function M.auto_add_buffer(buffer_id)
         return  -- 跳过特殊buffer
     end
     
-    -- 添加到当前活跃分组
+    -- 添加到当前活跃分组（允许多分组）
     M.add_buffer_to_group(buffer_id, active_group_id)
 end
 
