@@ -30,6 +30,8 @@ A Neovim plugin that provides a vertical sidebar displaying buffer groups with e
 - `<leader>gn` - Switch to next group
 - `<leader>gp` - Switch to previous group
 - `<leader>g1` to `<leader>g9` - Switch directly to group 1-9
+- `<leader>gU` - Move current group up in the list
+- `<leader>gD` - Move current group down in the list
 
 ### Buffer Navigation (within sidebar)
 - `<CR>` - Switch to selected buffer
@@ -55,6 +57,11 @@ A Neovim plugin that provides a vertical sidebar displaying buffer groups with e
 - `:VBufferLineNextGroup` - Switch to next group
 - `:VBufferLinePrevGroup` - Switch to previous group
 - `:VBufferLineToggleExpandAll` - Toggle expand all groups mode
+
+### Group Reordering
+- `:VBufferLineMoveGroupUp` - Move current group up in the list
+- `:VBufferLineMoveGroupDown` - Move current group down in the list
+- `:VBufferLineMoveGroupToPosition <position>` - Move current group to specified position
 
 ### Utilities
 - `:VBufferLineDebug` - Show debug information
@@ -116,6 +123,10 @@ When using `<leader>p` (BufferLine picking), the sidebar shows hint characters:
 <leader>gc  # Create "Frontend" group (rename with <leader>gr)
 <leader>gc  # Create "Backend" group
 <leader>gc  # Create "Tests" group
+
+# Organize group order
+<leader>gU  # Move current group up
+<leader>gD  # Move current group down
 
 # Switch between project areas
 <leader>g1  # Frontend
@@ -223,6 +234,15 @@ vim.api.nvim_create_autocmd("VimEnter", {
     vim.keymap.set('n', '<leader>gp', function()
       vbl.switch_to_prev_group()
     end, { noremap = true, silent = true, desc = "Switch to previous buffer group" })
+    
+    -- Group reordering keymaps
+    vim.keymap.set('n', '<leader>gU', function()
+      vbl.move_group_up()
+    end, { noremap = true, silent = true, desc = "Move current group up" })
+    
+    vim.keymap.set('n', '<leader>gD', function()
+      vbl.move_group_down()
+    end, { noremap = true, silent = true, desc = "Move current group down" })
     
     -- Quick group switching
     for i = 1, 9 do

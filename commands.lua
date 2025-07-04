@@ -241,6 +241,78 @@ local function toggle_expand_all_command()
     vbl.toggle_expand_all()
 end
 
+-- 向上移动当前分组
+local function move_group_up_command()
+    local active_group = groups.get_active_group()
+    if not active_group then
+        vim.notify("No active group to move", vim.log.levels.ERROR)
+        return
+    end
+    
+    if groups.move_group_up(active_group.id) then
+        vim.notify("Moved group '" .. active_group.name .. "' up", vim.log.levels.INFO)
+        
+        -- 立即刷新界面
+        vim.schedule(function()
+            if require('vertical-bufferline').refresh then
+                require('vertical-bufferline').refresh()
+            end
+        end)
+    else
+        vim.notify("Cannot move group up (already at top)", vim.log.levels.WARN)
+    end
+end
+
+-- 向下移动当前分组
+local function move_group_down_command()
+    local active_group = groups.get_active_group()
+    if not active_group then
+        vim.notify("No active group to move", vim.log.levels.ERROR)
+        return
+    end
+    
+    if groups.move_group_down(active_group.id) then
+        vim.notify("Moved group '" .. active_group.name .. "' down", vim.log.levels.INFO)
+        
+        -- 立即刷新界面
+        vim.schedule(function()
+            if require('vertical-bufferline').refresh then
+                require('vertical-bufferline').refresh()
+            end
+        end)
+    else
+        vim.notify("Cannot move group down (already at bottom)", vim.log.levels.WARN)
+    end
+end
+
+-- 移动当前分组到指定位置
+local function move_group_to_position_command(args)
+    local position = tonumber(args.args)
+    if not position then
+        vim.notify("Usage: VBufferLineMoveGroupToPosition <position>", vim.log.levels.ERROR)
+        return
+    end
+    
+    local active_group = groups.get_active_group()
+    if not active_group then
+        vim.notify("No active group to move", vim.log.levels.ERROR)
+        return
+    end
+    
+    if groups.move_group_to_position(active_group.id, position) then
+        vim.notify("Moved group '" .. active_group.name .. "' to position " .. position, vim.log.levels.INFO)
+        
+        -- 立即刷新界面
+        vim.schedule(function()
+            if require('vertical-bufferline').refresh then
+                require('vertical-bufferline').refresh()
+            end
+        end)
+    else
+        vim.notify("Cannot move group to position " .. position .. " (invalid position)", vim.log.levels.ERROR)
+    end
+end
+
 -- 分组完成函数（用于命令补全）
 local function group_complete(arglead, cmdline, cursorpos)
     local all_groups = groups.get_all_groups()
@@ -318,6 +390,22 @@ function M.setup()
         desc = "Toggle expand all groups mode"
     })
     
+    -- 分组重排序命令
+    vim.api.nvim_create_user_command("VBufferLineMoveGroupUp", move_group_up_command, {
+        nargs = 0,
+        desc = "Move current group up"
+    })
+    
+    vim.api.nvim_create_user_command("VBufferLineMoveGroupDown", move_group_down_command, {
+        nargs = 0,
+        desc = "Move current group down"
+    })
+    
+    vim.api.nvim_create_user_command("VBufferLineMoveGroupToPosition", move_group_to_position_command, {
+        nargs = 1,
+        desc = "Move current group to specified position"
+    })
+    
     -- 调试信息
     vim.api.nvim_create_user_command("VBufferLineDebug", function()
         local debug_info = groups.debug_info()
@@ -385,5 +473,8 @@ M.switch_group = switch_group_command
 M.add_buffer_to_group = add_buffer_to_group_command
 M.next_group = next_group_command
 M.prev_group = prev_group_command
+M.move_group_up = move_group_up_command
+M.move_group_down = move_group_down_command
+M.move_group_to_position = move_group_to_position_command
 
 return M

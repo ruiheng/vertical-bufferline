@@ -622,5 +622,7 @@ M.switch_to_prev_group = function() commands.prev_group() end
 M.add_current_buffer_to_group = function(group_name) 
     commands.add_buffer_to_group({args = group_name}) 
 end
+M.move_group_up = function() commands.move_group_up() end
+M.move_group_down = function() commands.move_group_down() end
 
 return M

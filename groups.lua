@@ -323,6 +323,79 @@ function M.get_active_group_buffers()
     return M.get_group_buffers(active_group.id)
 end
 
+-- 向上移动分组
+function M.move_group_up(group_id)
+    local group_index = find_group_index_by_id(group_id)
+    if not group_index or group_index == 1 then
+        return false -- 已经是第一个分组或分组不存在
+    end
+    
+    -- 交换当前分组和上一个分组的位置
+    local temp = groups_data.groups[group_index]
+    groups_data.groups[group_index] = groups_data.groups[group_index - 1]
+    groups_data.groups[group_index - 1] = temp
+    
+    -- 触发事件
+    vim.api.nvim_exec_autocmds("User", {
+        pattern = "VBufferLineGroupReordered",
+        data = { group_id = group_id, direction = "up", from_index = group_index, to_index = group_index - 1 }
+    })
+    
+    return true
+end
+
+-- 向下移动分组
+function M.move_group_down(group_id)
+    local group_index = find_group_index_by_id(group_id)
+    if not group_index or group_index == #groups_data.groups then
+        return false -- 已经是最后一个分组或分组不存在
+    end
+    
+    -- 交换当前分组和下一个分组的位置
+    local temp = groups_data.groups[group_index]
+    groups_data.groups[group_index] = groups_data.groups[group_index + 1]
+    groups_data.groups[group_index + 1] = temp
+    
+    -- 触发事件
+    vim.api.nvim_exec_autocmds("User", {
+        pattern = "VBufferLineGroupReordered",
+        data = { group_id = group_id, direction = "down", from_index = group_index, to_index = group_index + 1 }
+    })
+    
+    return true
+end
+
+-- 移动分组到指定位置
+function M.move_group_to_position(group_id, target_position)
+    local group_index = find_group_index_by_id(group_id)
+    if not group_index then
+        return false -- 分组不存在
+    end
+    
+    -- 验证目标位置
+    if target_position < 1 or target_position > #groups_data.groups then
+        return false -- 目标位置无效
+    end
+    
+    if group_index == target_position then
+        return true -- 已经在目标位置
+    end
+    
+    -- 移除分组
+    local group = table.remove(groups_data.groups, group_index)
+    
+    -- 插入到目标位置
+    table.insert(groups_data.groups, target_position, group)
+    
+    -- 触发事件
+    vim.api.nvim_exec_autocmds("User", {
+        pattern = "VBufferLineGroupReordered",
+        data = { group_id = group_id, direction = "position", from_index = group_index, to_index = target_position }
+    })
+    
+    return true
+end
+
 -- 自动添加新buffer到当前分组
 function M.auto_add_buffer(buffer_id)
     if not groups_data.settings.auto_add_new_buffers then
