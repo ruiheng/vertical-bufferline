@@ -8,6 +8,7 @@ local api = vim.api
 local groups = require('vertical-bufferline.groups')
 local commands = require('vertical-bufferline.commands')
 local bufferline_integration = require('vertical-bufferline.bufferline-integration')
+local session = require('vertical-bufferline.session')
 
 -- Namespace for our highlights
 local ns_id = api.nvim_create_namespace("VerticalBufferline")
@@ -603,6 +604,12 @@ function M.toggle()
         -- 启用 bufferline 集成
         bufferline_integration.enable()
         
+        -- 初始化 session 模块
+        session.setup({
+            auto_save = true,
+            auto_load = true,
+        })
+        
         -- 确保初始状态正确显示
         vim.schedule(function()
             M.refresh()
@@ -614,6 +621,8 @@ end
 M.groups = groups
 M.commands = commands
 M.bufferline_integration = bufferline_integration
+M.session = session
+M.state = state  -- 导出state供session模块使用
 
 -- 便捷的分组操作函数
 M.create_group = function(name) return groups.create_group(name) end

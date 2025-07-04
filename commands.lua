@@ -313,6 +313,47 @@ local function move_group_to_position_command(args)
     end
 end
 
+-- Session管理命令
+local function save_session_command(args)
+    local session = require('vertical-bufferline.session')
+    local filename = args.args ~= "" and args.args or nil
+    session.save_session(filename)
+end
+
+local function load_session_command(args)
+    local session = require('vertical-bufferline.session')
+    local filename = args.args ~= "" and args.args or nil
+    session.load_session(filename)
+end
+
+local function delete_session_command(args)
+    local session = require('vertical-bufferline.session')
+    local filename = args.args ~= "" and args.args or nil
+    session.delete_session(filename)
+end
+
+local function list_sessions_command()
+    local session = require('vertical-bufferline.session')
+    local sessions = session.list_sessions()
+    
+    if #sessions == 0 then
+        vim.notify("No sessions found", vim.log.levels.INFO)
+        return
+    end
+    
+    local lines = {"Available sessions:"}
+    for i, sess in ipairs(sessions) do
+        local time_str = os.date("%Y-%m-%d %H:%M:%S", sess.timestamp or sess.modified)
+        local group_info = sess.group_count and (" (" .. sess.group_count .. " groups)") or ""
+        local cwd_info = sess.working_directory and (" - " .. sess.working_directory) or ""
+        local line = string.format("  %d. %s%s%s [%s]", 
+            i, sess.name, group_info, cwd_info, time_str)
+        table.insert(lines, line)
+    end
+    
+    vim.notify(table.concat(lines, "\n"), vim.log.levels.INFO)
+end
+
 -- 分组完成函数（用于命令补全）
 local function group_complete(arglead, cmdline, cursorpos)
     local all_groups = groups.get_all_groups()
@@ -404,6 +445,27 @@ function M.setup()
     vim.api.nvim_create_user_command("VBufferLineMoveGroupToPosition", move_group_to_position_command, {
         nargs = 1,
         desc = "Move current group to specified position"
+    })
+    
+    -- Session管理命令
+    vim.api.nvim_create_user_command("VBufferLineSaveSession", save_session_command, {
+        nargs = "?",
+        desc = "Save current groups configuration to session"
+    })
+    
+    vim.api.nvim_create_user_command("VBufferLineLoadSession", load_session_command, {
+        nargs = "?",
+        desc = "Load groups configuration from session"
+    })
+    
+    vim.api.nvim_create_user_command("VBufferLineDeleteSession", delete_session_command, {
+        nargs = "?",
+        desc = "Delete a session file"
+    })
+    
+    vim.api.nvim_create_user_command("VBufferLineListSessions", list_sessions_command, {
+        nargs = 0,
+        desc = "List all available sessions"
     })
     
     -- 调试信息

@@ -63,6 +63,12 @@ A Neovim plugin that provides a vertical sidebar displaying buffer groups with e
 - `:VBufferLineMoveGroupDown` - Move current group down in the list
 - `:VBufferLineMoveGroupToPosition <position>` - Move current group to specified position
 
+### Session Management
+- `:VBufferLineSaveSession [filename]` - Save current groups configuration
+- `:VBufferLineLoadSession [filename]` - Load groups configuration from session
+- `:VBufferLineDeleteSession [filename]` - Delete a session file
+- `:VBufferLineListSessions` - List all available sessions
+
 ### Utilities
 - `:VBufferLineDebug` - Show debug information
 - `:VBufferLineRefreshBuffers` - Manually refresh and add current buffers to active group
@@ -154,6 +160,18 @@ When using `<leader>p` (BufferLine picking), the sidebar shows hint characters:
 <leader>gp  # Previous group
 ```
 
+### Session Persistence
+```bash
+# Sessions are automatically saved on exit and loaded on startup
+# Manual session management:
+:VBufferLineSaveSession          # Save current configuration
+:VBufferLineLoadSession          # Load saved configuration
+:VBufferLineListSessions         # View all available sessions
+
+# Each working directory gets its own session file automatically
+# Sessions include: group structure, buffer assignments, active group, display mode
+```
+
 ## Automatic Features
 
 1. **Auto-add new buffers** - Files opened are automatically added to the active group
@@ -161,6 +179,7 @@ When using `<leader>p` (BufferLine picking), the sidebar shows hint characters:
 3. **Smart buffer filtering** - Only normal file buffers are managed (excludes terminals, quickfix, etc.)
 4. **Instant refresh** - UI updates immediately on group operations
 5. **BufferLine synchronization** - BufferLine automatically shows only current group's buffers
+6. **Session persistence** - Automatically save and restore group configurations across sessions
 
 ## Configuration
 
@@ -172,6 +191,13 @@ The plugin initializes automatically when the sidebar is first opened. Default s
     auto_create_groups = true,      -- Enable automatic group creation
     auto_add_new_buffers = true,    -- Auto-add new buffers to active group
     expand_all_groups = true,       -- Default to expand all groups mode
+    
+    -- Session persistence settings
+    session = {
+        auto_save = true,           -- Auto-save session on Neovim exit
+        auto_load = true,           -- Auto-load session on startup
+        session_dir = vim.fn.stdpath("data") .. "/vertical-bufferline-sessions"
+    }
 }
 ```
 
