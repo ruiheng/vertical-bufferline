@@ -215,17 +215,14 @@ function M.set_active_group(group_id)
     -- 恢复同步指针到新分组（原子操作的第3步）
     -- 先更新活跃分组ID
     groups_data.active_group_id = group_id
+
+    -- 同步指针到新分组
+    bufferline_integration.set_sync_target(group_id)
     
     -- 立即刷新UI
     vim.schedule(function()
         if require('vertical-bufferline').refresh then
             require('vertical-bufferline').refresh()
-
-            -- 延迟恢复同步，等待bufferline完全更新
-            vim.defer_fn(function()
-                bufferline_integration.set_sync_target(group_id)
-            end, 1000)
-
         end
     end)
     
