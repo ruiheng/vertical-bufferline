@@ -10,6 +10,8 @@ local sync_timer = nil
 local is_enabled = false
 -- 指针：指向当前从bufferline copy数据的目标分组ID
 local sync_target_group_id = nil
+-- 缓存上次的buffer状态，用于检测buffer内容变化
+local last_buffer_state = {}
 
 -- 防重载保护
 if _G._vertical_bufferline_integration_loaded then
@@ -69,8 +71,22 @@ local function sync_bufferline_to_group()
     local target_group = groups.find_group_by_id(sync_target_group_id)
     
     if target_group then
-        -- 只有当列表发生变化时才同步
-        if not vim.deep_equal(target_group.buffers, filtered_buffer_ids) then
+        -- 构建当前buffer状态快照（包含ID和名称）
+        local current_buffer_state = {}
+        for _, buf_id in ipairs(filtered_buffer_ids) do
+            if vim.api.nvim_buf_is_valid(buf_id) then
+                current_buffer_state[buf_id] = vim.api.nvim_buf_get_name(buf_id)
+            end
+        end
+        
+        -- 检查是否有变化：buffer列表变化或buffer名称变化
+        local buffers_changed = not vim.deep_equal(target_group.buffers, filtered_buffer_ids)
+        local names_changed = not vim.deep_equal(last_buffer_state, current_buffer_state)
+        
+        if buffers_changed or names_changed then
+            -- 更新缓存的状态
+            last_buffer_state = current_buffer_state
+            
             -- 直接更新目标分组的buffer列表
             target_group.buffers = filtered_buffer_ids
             
