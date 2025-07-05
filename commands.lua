@@ -21,13 +21,8 @@ local function create_group_command(args)
             break
         end
     end
-    
-    -- 立即刷新界面
-    vim.schedule(function()
-        if require('vertical-bufferline').refresh then
-            require('vertical-bufferline').refresh()
-        end
-    end)
+
+    groups.set_active_group(group_id) -- this will refresh UI
     
     return group_id
 end
