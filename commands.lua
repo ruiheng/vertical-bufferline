@@ -283,9 +283,19 @@ end
 -- 移动当前分组到指定位置
 local function move_group_to_position_command(args)
     local position = tonumber(args.args)
+    
+    -- 如果没有提供位置参数，交互式获取
     if not position then
-        vim.notify("Usage: VBufferLineMoveGroupToPosition <position>", vim.log.levels.ERROR)
-        return
+        local all_groups = groups.get_all_groups()
+        local input = vim.fn.input("Move to position (1-" .. #all_groups .. "): ")
+        if input == "" then
+            return
+        end
+        position = tonumber(input)
+        if not position then
+            vim.notify("Invalid position: " .. input, vim.log.levels.ERROR)
+            return
+        end
     end
     
     local active_group = groups.get_active_group()
@@ -438,8 +448,8 @@ function M.setup()
     })
     
     vim.api.nvim_create_user_command("VBufferLineMoveGroupToPosition", move_group_to_position_command, {
-        nargs = 1,
-        desc = "Move current group to specified position"
+        nargs = "?",
+        desc = "Move current group to specified position (interactive if no position given)"
     })
     
     -- Session管理命令
