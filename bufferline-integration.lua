@@ -24,6 +24,15 @@ _G._vertical_bufferline_integration_loaded = true
 -- 添加调试标志
 local debug = false
 
+-- 检查是否为特殊buffer（基于buftype）
+local function is_special_buffer(buf_id)
+    if not vim.api.nvim_buf_is_valid(buf_id) then
+        return true -- 无效buffer也算特殊
+    end
+    local buftype = vim.api.nvim_buf_get_option(buf_id, 'buftype')
+    return buftype ~= '' -- 非空表示特殊buffer（nofile, quickfix, help, terminal等）
+end
+
 -- 方向1：bufferline → 当前分组（定时器，99%的时间）
 local function sync_bufferline_to_group()
     if not is_enabled then
@@ -50,16 +59,23 @@ local function sync_bufferline_to_group()
         print("sync_target_group_id:", sync_target_group_id)
     end
     
-    -- 过滤掉empty group buffer
+    -- 过滤掉特殊buffer（基于buftype）
     local filtered_buffer_ids = {}
     for _, buf_id in ipairs(all_valid_buffers) do
-        local buf_name = vim.api.nvim_buf_get_name(buf_id)
-        local should_include = not buf_name:match('%[Empty Group%]')
+        local should_include = not is_special_buffer(buf_id)
+        
+        -- 确保特殊buffer保持unlisted状态
+        if is_special_buffer(buf_id) then
+            pcall(vim.api.nvim_buf_set_option, buf_id, 'buflisted', false)
+        end
         
         if debug then
-            print(string.format("Buffer %d: '%s' -> %s", 
+            local buf_name = vim.api.nvim_buf_get_name(buf_id)
+            local buftype = vim.api.nvim_buf_get_option(buf_id, 'buftype')
+            print(string.format("Buffer %d: '%s' (type: '%s') -> %s", 
                 buf_id, 
-                vim.fn.fnamemodify(buf_name, ":t") or "[No Name]", 
+                vim.fn.fnamemodify(buf_name, ":t") or "[No Name]",
+                buftype,
                 should_include and "included" or "filtered"))
         end
         

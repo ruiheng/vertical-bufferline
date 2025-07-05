@@ -70,6 +70,15 @@ local config = {
     width = 40,
 }
 
+-- 检查是否为特殊buffer（基于buftype）
+local function is_special_buffer(buf_id)
+    if not api.nvim_buf_is_valid(buf_id) then
+        return true -- 无效buffer也算特殊
+    end
+    local buftype = api.nvim_buf_get_option(buf_id, 'buftype')
+    return buftype ~= '' -- 非空表示特殊buffer（nofile, quickfix, help, terminal等）
+end
+
 local state = {
     win_id = nil,
     buf_id = nil,
@@ -95,15 +104,11 @@ function M.refresh()
     local components = bufferline_state.components
     local current_buffer_id = api.nvim_get_current_buf()
     
-    -- 过滤掉无效的components，防止使用已删除的buffer
+    -- 过滤掉无效的components和特殊buffer
     local valid_components = {}
     for _, comp in ipairs(components) do
-        if comp.id and api.nvim_buf_is_valid(comp.id) then
-            -- 排除empty group buffer
-            local buf_name = api.nvim_buf_get_name(comp.id)
-            if not buf_name:match("%[Empty Group%]") then
-                table.insert(valid_components, comp)
-            end
+        if comp.id and api.nvim_buf_is_valid(comp.id) and not is_special_buffer(comp.id) then
+            table.insert(valid_components, comp)
         end
     end
     components = valid_components
@@ -183,12 +188,12 @@ function M.refresh()
             local is_active = group.id == active_group.id
             local group_buffers = groups.get_group_buffers(group.id) or {}
             
-            -- 计算有效的buffer数量（过滤掉无名buffer和[Empty Group]buffer）
+            -- 计算有效的buffer数量（过滤掉无名buffer和特殊buffer）
             local valid_buffer_count = 0
             for _, buf_id in ipairs(group_buffers) do
-                if vim.api.nvim_buf_is_valid(buf_id) then
+                if vim.api.nvim_buf_is_valid(buf_id) and not is_special_buffer(buf_id) then
                     local buf_name = vim.api.nvim_buf_get_name(buf_id)
-                    if buf_name ~= "" and not buf_name:match('%[Empty Group%]') then
+                    if buf_name ~= "" then
                         valid_buffer_count = valid_buffer_count + 1
                     end
                 end
@@ -225,12 +230,12 @@ function M.refresh()
                 -- 获取当前分组的buffers并显示
                 local group_components = {}
                 if is_active then
-                    -- 对于活跃分组，过滤掉无名buffer以保持一致性
+                    -- 对于活跃分组，过滤掉无名buffer和特殊buffer以保持一致性
                     for _, comp in ipairs(components) do
                         if comp.id and comp.name then
                             local buf_name = api.nvim_buf_get_name(comp.id)
-                            -- 过滤掉无名buffer和[Empty Group]buffer
-                            if buf_name ~= "" and not buf_name:match('%[Empty Group%]') then
+                            -- 过滤掉无名buffer和特殊buffer
+                            if buf_name ~= "" and not is_special_buffer(comp.id) then
                                 table.insert(group_components, comp)
                             end
                         end
