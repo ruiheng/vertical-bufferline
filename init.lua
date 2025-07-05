@@ -538,24 +538,8 @@ function M.close_sidebar()
     
     -- 检查是否只有一个窗口（即侧边栏是最后一个窗口）
     if #all_windows == 1 then
-        -- 如果只有侧边栏窗口，先创建一个主窗口
-        local bufferline_integration = require('vertical-bufferline.bufferline-integration')
-        
-        -- 创建一个新的主窗口显示empty buffer
-        vim.cmd('new')
-        local new_main_win = api.nvim_get_current_win()
-        
-        -- 显示empty buffer
-        bufferline_integration.handle_empty_group_display()
-        
-        -- 现在安全地关闭侧边栏
-        api.nvim_set_current_win(state.win_id)
-        vim.cmd("close")
-        
-        -- 切换到主窗口
-        if api.nvim_win_is_valid(new_main_win) then
-            api.nvim_set_current_win(new_main_win)
-        end
+        -- 如果只有侧边栏窗口，完全退出nvim
+        vim.cmd("qall")
     else
         -- 正常情况：有多个窗口，可以安全关闭侧边栏
         api.nvim_set_current_win(state.win_id)
@@ -745,6 +729,7 @@ local function initialize_plugin()
     api.nvim_command("augroup VerticalBufferlineGlobal")
     api.nvim_command("autocmd!")
     api.nvim_command("autocmd BufEnter,BufDelete,BufWipeout * lua require('vertical-bufferline').refresh_if_open()")
+    api.nvim_command("autocmd WinClosed * lua require('vertical-bufferline').check_quit_condition()")
     api.nvim_command("augroup END")
     
     -- 设置bufferline钩子
@@ -759,6 +744,31 @@ function M.refresh_if_open()
     if state.is_sidebar_open then
         M.refresh()
     end
+end
+
+-- 检查是否应该退出nvim（当只剩下侧边栏窗口时）
+function M.check_quit_condition()
+    if not state.is_sidebar_open then
+        return
+    end
+    
+    -- 延迟检查，确保窗口关闭事件处理完成
+    vim.schedule(function()
+        local all_windows = api.nvim_list_wins()
+        local non_sidebar_windows = 0
+        
+        -- 计算非侧边栏窗口数量
+        for _, win_id in ipairs(all_windows) do
+            if api.nvim_win_is_valid(win_id) and win_id ~= state.win_id then
+                non_sidebar_windows = non_sidebar_windows + 1
+            end
+        end
+        
+        -- 如果只剩下侧边栏窗口，自动退出nvim
+        if non_sidebar_windows == 0 and #all_windows == 1 then
+            vim.cmd("qall")
+        end
+    end)
 end
 
 --- Toggles the visibility of the sidebar.
