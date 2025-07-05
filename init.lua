@@ -1,5 +1,11 @@
 -- /home/ruiheng/config_files/nvim/lua/vertical-bufferline/init.lua
 
+-- 防重载保护
+if _G._vertical_bufferline_init_loaded then
+    print("init.lua already loaded globally, returning existing instance")
+    return _G._vertical_bufferline_init_instance
+end
+
 local M = {}
 
 local api = vim.api
@@ -82,9 +88,25 @@ function M.refresh()
 
     local bufferline_state = require('bufferline.state')
     if not bufferline_state or not bufferline_state.components then return end
+    
+    -- 确保state.buf_id是有效的
+    if not state.buf_id or not api.nvim_buf_is_valid(state.buf_id) then return end
 
     local components = bufferline_state.components
     local current_buffer_id = api.nvim_get_current_buf()
+    
+    -- 过滤掉无效的components，防止使用已删除的buffer
+    local valid_components = {}
+    for _, comp in ipairs(components) do
+        if comp.id and api.nvim_buf_is_valid(comp.id) then
+            -- 排除empty group buffer
+            local buf_name = api.nvim_buf_get_name(comp.id)
+            if not buf_name:match("%[Empty Group%]") then
+                table.insert(valid_components, comp)
+            end
+        end
+    end
+    components = valid_components
     
     -- 获取分组信息
     local group_info = bufferline_integration.get_group_buffer_info()
@@ -242,15 +264,20 @@ function M.refresh()
                     end
                 end
                 
+                -- 如果分组为空，显示空分组提示
+                if #group_components == 0 then
+                    table.insert(lines_text, "  └─ (empty group - open files or use :VBufferLineAddCurrentToGroup)")
+                end
+                
                 for j, component in ipairs(group_components) do
-                    if component.id and component.name then
+                    if component.id and component.name and api.nvim_buf_is_valid(component.id) then
                         -- 使用树形结构的前缀，增加缩进以突出层次
                         local is_last = (j == #group_components)
                         local tree_prefix = is_last and "  └─ " or "  ├─ "
                         local modified_indicator = ""
                         
                         -- Check if buffer is modified
-                        if api.nvim_buf_get_option(component.id, "modified") then
+                        if api.nvim_buf_is_valid(component.id) and api.nvim_buf_get_option(component.id, "modified") then
                             modified_indicator = "● "
                         end
                         
@@ -340,7 +367,7 @@ function M.refresh()
                                     normal_highlight_group = "VBufferLineCurrent"
                                 elseif component.focused then
                                     normal_highlight_group = "VBufferLineVisible"
-                                elseif api.nvim_buf_get_option(component.id, "modified") then
+                                elseif api.nvim_buf_is_valid(component.id) and api.nvim_buf_get_option(component.id, "modified") then
                                     normal_highlight_group = "VBufferLineModified"
                                 end
                                 api.nvim_buf_add_highlight(state.buf_id, ns_id, normal_highlight_group, actual_line_number - 1, highlight_end, -1)
@@ -352,7 +379,7 @@ function M.refresh()
                                 highlight_group = "VBufferLineCurrent"
                             elseif component.focused then
                                 highlight_group = "VBufferLineVisible"
-                            elseif api.nvim_buf_get_option(component.id, "modified") then
+                            elseif api.nvim_buf_is_valid(component.id) and api.nvim_buf_get_option(component.id, "modified") then
                                 highlight_group = "VBufferLineModified"
                             end
                             api.nvim_buf_add_highlight(state.buf_id, ns_id, highlight_group, actual_line_number - 1, 0, -1)
@@ -477,12 +504,49 @@ end
 --- Closes the sidebar window.
 function M.close_sidebar()
     if not state.is_sidebar_open or not api.nvim_win_is_valid(state.win_id) then return end
+    
     local current_win = api.nvim_get_current_win()
-    api.nvim_set_current_win(state.win_id)
-    vim.cmd("close")
-    if api.nvim_win_is_valid(current_win) then
-        api.nvim_set_current_win(current_win)
+    local all_windows = api.nvim_list_wins()
+    
+    -- 检查是否只有一个窗口（即侧边栏是最后一个窗口）
+    if #all_windows == 1 then
+        -- 如果只有侧边栏窗口，先创建一个主窗口
+        local bufferline_integration = require('vertical-bufferline.bufferline-integration')
+        
+        -- 创建一个新的主窗口显示empty buffer
+        vim.cmd('new')
+        local new_main_win = api.nvim_get_current_win()
+        
+        -- 显示empty buffer
+        bufferline_integration.handle_empty_group_display()
+        
+        -- 现在安全地关闭侧边栏
+        api.nvim_set_current_win(state.win_id)
+        vim.cmd("close")
+        
+        -- 切换到主窗口
+        if api.nvim_win_is_valid(new_main_win) then
+            api.nvim_set_current_win(new_main_win)
+        end
+    else
+        -- 正常情况：有多个窗口，可以安全关闭侧边栏
+        api.nvim_set_current_win(state.win_id)
+        vim.cmd("close")
+        
+        -- 回到之前的窗口
+        if api.nvim_win_is_valid(current_win) and current_win ~= state.win_id then
+            api.nvim_set_current_win(current_win)
+        else
+            -- 如果之前的窗口无效，找到第一个有效的非侧边栏窗口
+            for _, win_id in ipairs(api.nvim_list_wins()) do
+                if win_id ~= state.win_id and api.nvim_win_is_valid(win_id) then
+                    api.nvim_set_current_win(win_id)
+                    break
+                end
+            end
+        end
     end
+    
     state.is_sidebar_open = false
     state.win_id = nil
 end
@@ -509,8 +573,9 @@ local function open_sidebar()
     api.nvim_buf_set_keymap(buf_id, "n", "j", "j", keymap_opts)
     api.nvim_buf_set_keymap(buf_id, "n", "k", "k", keymap_opts)
     api.nvim_buf_set_keymap(buf_id, "n", "<CR>", ":lua require('vertical-bufferline').handle_selection()<CR>", keymap_opts)
-    api.nvim_buf_set_keymap(buf_id, "n", "d", ":lua require('vertical-bufferline').close_buffer()<CR>", keymap_opts)
+    api.nvim_buf_set_keymap(buf_id, "n", "d", ":lua require('vertical-bufferline').smart_close_buffer()<CR>", keymap_opts)
     api.nvim_buf_set_keymap(buf_id, "n", "x", ":lua require('vertical-bufferline').remove_from_group()<CR>", keymap_opts)
+    api.nvim_buf_set_keymap(buf_id, "n", "D", ":lua require('vertical-bufferline').close_buffer()<CR>", keymap_opts)
     api.nvim_buf_set_keymap(buf_id, "n", "q", ":lua require('vertical-bufferline').close_sidebar()<CR>", keymap_opts)
     api.nvim_buf_set_keymap(buf_id, "n", "<Esc>", ":lua require('vertical-bufferline').close_sidebar()<CR>", keymap_opts)
 
@@ -557,35 +622,28 @@ function M.remove_from_group()
     local line_number = api.nvim_win_get_cursor(state.win_id)[1]
     local bufnr = state.line_to_buffer_id[line_number]
     if bufnr and api.nvim_buf_is_valid(bufnr) then
-        local active_group = groups.get_active_group()
-        if not active_group then
-            vim.notify("No active group found", vim.log.levels.ERROR)
-            return
-        end
-        
-        local success = groups.remove_buffer_from_group(bufnr, active_group.id)
+        -- 直接调用bufferline的关闭命令，让bufferline处理buffer移除
+        -- 这会自动触发我们的同步逻辑
+        local success, err = pcall(vim.cmd, "bd " .. bufnr)
         if success then
-            local buffer_name = api.nvim_buf_get_name(bufnr)
-            local short_name = vim.fn.fnamemodify(buffer_name, ":t")
-            
-            -- 使用echo显示简洁信息，不需要按Enter
-            local remaining_groups = groups.find_buffer_groups(bufnr)
-            if #remaining_groups > 0 then
-                local group_names = {}
-                for _, group in ipairs(remaining_groups) do
-                    table.insert(group_names, group.name)
-                end
-                print("Removed '" .. short_name .. "' from '" .. active_group.name .. "' (still in: " .. table.concat(group_names, ", ") .. ")")
-            else
-                print("Removed '" .. short_name .. "' from '" .. active_group.name .. "' (removed from all groups)")
-            end
-            
-            vim.schedule(function()
-                M.refresh()
-            end)
+            print("Buffer closed")
         else
-            vim.notify("Failed to remove buffer from group", vim.log.levels.ERROR)
+            vim.notify("Error closing buffer: " .. (err or "unknown"), vim.log.levels.ERROR)
         end
+    end
+end
+
+function M.smart_close_buffer()
+    if not state.is_sidebar_open then return end
+    local line_number = api.nvim_win_get_cursor(state.win_id)[1]
+    local bufnr = state.line_to_buffer_id[line_number]
+    if bufnr and api.nvim_buf_is_valid(bufnr) then
+        bufferline_integration.smart_close_buffer(bufnr)
+        -- 添加延迟清理和刷新
+        vim.schedule(function()
+            groups.cleanup_invalid_buffers()
+            M.refresh()
+        end)
     end
 end
 
@@ -649,10 +707,10 @@ local function initialize_plugin()
     bufferline_integration.enable()
     
     -- 初始化 session 模块
-    session.setup({
-        auto_save = true,
-        auto_load = true,
-    })
+    -- session.setup({
+    --     auto_save = true,
+    --     auto_load = true,
+    -- })
     
     -- 设置全局自动命令（不依赖sidebar状态）
     api.nvim_command("augroup VerticalBufferlineGlobal")
@@ -730,7 +788,9 @@ M.session = session
 M.state = state  -- 导出state供session模块使用
 
 -- 便捷的分组操作函数
-M.create_group = function(name) return groups.create_group(name) end
+M.create_group = function(name) 
+    return commands.create_group({args = name or ""})
+end
 M.switch_to_next_group = function() commands.next_group() end
 M.switch_to_prev_group = function() commands.prev_group() end
 M.add_current_buffer_to_group = function(group_name) 
@@ -741,5 +801,9 @@ M.move_group_down = function() commands.move_group_down() end
 
 -- 插件加载时立即初始化
 initialize_plugin()
+
+-- 保存全局实例和设置标记
+_G._vertical_bufferline_init_loaded = true
+_G._vertical_bufferline_init_instance = M
 
 return M

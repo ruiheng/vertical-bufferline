@@ -1,6 +1,12 @@
 -- /home/ruiheng/config_files/nvim/lua/vertical-bufferline/groups.lua
 -- 动态分组管理模块
 
+-- 防重载保护
+if _G._vertical_bufferline_groups_loaded then
+    print("groups.lua already loaded globally, returning existing instance")
+    return _G._vertical_bufferline_groups_instance
+end
+
 local M = {}
 
 local api = vim.api
@@ -193,8 +199,35 @@ function M.set_active_group(group_id)
         return false
     end
     
+    if group_id == groups_data.active_group_id then
+        return false
+    end
+
     local old_group_id = groups_data.active_group_id
+
+    -- disable copying bufferline buffer list to group
+    local bufferline_integration = require('vertical-bufferline.bufferline-integration')
+    bufferline_integration.set_sync_target(nil)
+    
+    -- 反向控制：将新分组的buffer列表设置到bufferline中
+    bufferline_integration.set_bufferline_buffers(group.buffers)
+    
+    -- 恢复同步指针到新分组（原子操作的第3步）
+    -- 先更新活跃分组ID
     groups_data.active_group_id = group_id
+    
+    -- 立即刷新UI
+    vim.schedule(function()
+        if require('vertical-bufferline').refresh then
+            require('vertical-bufferline').refresh()
+
+            -- 延迟恢复同步，等待bufferline完全更新
+            vim.defer_fn(function()
+                bufferline_integration.set_sync_target(group_id)
+            end, 1000)
+
+        end
+    end)
     
     -- 触发事件
     vim.api.nvim_exec_autocmds("User", {
@@ -302,18 +335,23 @@ function M.get_group_buffers(group_id)
         return {}
     end
     
-    -- 过滤无效的buffer
+    -- 只过滤无效的buffer，不修改原始列表
     local valid_buffers = {}
+    local found_invalid = false
     for _, buffer_id in ipairs(group.buffers) do
         if api.nvim_buf_is_valid(buffer_id) then
             table.insert(valid_buffers, buffer_id)
+        else
+            found_invalid = true
         end
     end
     
-    -- 更新分组的buffer列表，移除无效的buffer
-    group.buffers = valid_buffers
+    -- 只有发现无效buffer时才更新分组的buffer列表
+    if found_invalid then
+        group.buffers = valid_buffers
+    end
     
-    return valid_buffers
+    return group.buffers
 end
 
 -- 获取当前分组的所有buffer
@@ -416,59 +454,32 @@ function M.is_auto_add_disabled()
     return groups_data.auto_add_disabled
 end
 
--- 自动添加新buffer到当前分组
-function M.auto_add_buffer(buffer_id)
-    if not groups_data.settings.auto_add_new_buffers or groups_data.auto_add_disabled then
-        return
-    end
-    
-    -- 检查是否正在加载session，如果是则跳过自动添加
-    local vbl = require('vertical-bufferline')
-    if vbl.state and vbl.state.session_loading then
-        return
-    end
-    
-    -- 调试信息
-    if os.getenv("NVIM_VBL_DEBUG") == "1" then
-        local buf_name = vim.api.nvim_buf_get_name(buffer_id)
-        print(string.format("[AUTO_ADD] Considering buffer [%d] %s", 
-            buffer_id, vim.fn.fnamemodify(buf_name, ":t")))
-    end
-    
-    if not api.nvim_buf_is_valid(buffer_id) then
-        return
-    end
-    
-    -- 获取当前活跃分组
+-- 通过bufferline同步更新当前分组的buffer列表
+function M.sync_active_group_with_bufferline(buffer_list)
     local active_group_id = M.get_active_group_id()
     if not active_group_id then
         return
     end
     
-    -- 检查buffer是否已经存在于任何分组中（支持多分组设计）
-    local existing_groups = M.find_buffer_groups(buffer_id)
-    if #existing_groups > 0 then
-        -- Buffer已经属于其他分组，不自动添加到避免unwanted migration
-        if os.getenv("NVIM_VBL_DEBUG") == "1" then
-            local group_names = {}
-            for _, group in ipairs(existing_groups) do
-                table.insert(group_names, group.name)
-            end
-            print(string.format("[AUTO_ADD] Buffer [%d] already exists in groups: %s (skipping auto-add)", 
-                buffer_id, table.concat(group_names, ", ")))
-        end
+    local active_group = find_group_by_id(active_group_id)
+    if not active_group then
         return
     end
     
-    -- 检查是否是特殊buffer（如侧边栏本身、empty group buffer等）
-    local buf_name = vim.api.nvim_buf_get_name(buffer_id)
-    local buf_type = vim.api.nvim_buf_get_option(buffer_id, 'buftype')
-    if buf_type ~= "" or buf_name == "" or buf_name:match("^%s*$") or buf_name:match("%[Empty Group%]") then
-        return  -- 跳过特殊buffer
-    end
+    -- 直接更新当前活跃分组的buffer列表为bufferline的结果
+    active_group.buffers = buffer_list or {}
     
-    -- 添加到当前活跃分组（允许多分组）
-    M.add_buffer_to_group(buffer_id, active_group_id)
+    vim.schedule(function()
+        if require('vertical-bufferline').refresh then
+            require('vertical-bufferline').refresh()
+        end
+    end)
+
+    -- 触发事件通知分组内容已更新
+    vim.api.nvim_exec_autocmds("User", {
+        pattern = "VBufferLineGroupBuffersUpdated",
+        data = { group_id = active_group_id, buffers = active_group.buffers }
+    })
 end
 
 -- 清理无效的buffer
@@ -503,6 +514,9 @@ function M.setup(opts)
     
     -- 初始化默认分组
     init_default_group()
+
+    local bufferline_integration = require('vertical-bufferline.bufferline-integration')
+    bufferline_integration.set_sync_target(groups_data.active_group_id)
     
     -- 强制刷新以确保初始状态正确显示
     vim.schedule(function()
@@ -513,29 +527,8 @@ function M.setup(opts)
         })
     end)
     
-    -- 设置自动命令
-    if groups_data.settings.auto_add_new_buffers then
-        api.nvim_create_autocmd("BufEnter", {
-            pattern = "*",
-            callback = function(args)
-                vim.schedule(function()
-                    M.auto_add_buffer(args.buf)
-                end)
-            end,
-            desc = "Auto add new buffers to current group"
-        })
-    end
-    
-    -- 清理无效buffer的自动命令
-    api.nvim_create_autocmd("BufDelete", {
-        pattern = "*",
-        callback = function(args)
-            vim.schedule(function()
-                M.remove_buffer_from_all_groups(args.buf)
-            end)
-        end,
-        desc = "Remove deleted buffers from groups"
-    })
+    -- 不再需要BufEnter自动命令，改为通过bufferline同步
+    -- 清理无效buffer的自动命令也不再需要，由bufferline状态同步处理
     
     -- 定期清理无效buffer
     vim.defer_fn(function()
@@ -550,5 +543,11 @@ function M.debug_info()
         stats = M.get_group_stats()
     }
 end
+
+M.find_group_by_id = find_group_by_id
+
+-- 保存全局实例和设置标记
+_G._vertical_bufferline_groups_loaded = true
+_G._vertical_bufferline_groups_instance = M
 
 return M
