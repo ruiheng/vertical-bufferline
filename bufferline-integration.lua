@@ -341,6 +341,63 @@ function M.force_refresh()
     end)
 end
 
+-- 安全的buffer关闭函数，避免E85错误
+function M.smart_close_buffer(target_buf)
+    target_buf = target_buf or vim.api.nvim_get_current_buf()
+    
+    -- 检查是否有修改未保存
+    if vim.api.nvim_buf_get_option(target_buf, "modified") then
+        local choice = vim.fn.confirm("Buffer has unsaved changes. Close anyway?", "&Yes\n&No", 2)
+        if choice ~= 1 then
+            return false
+        end
+    end
+    
+    -- 获取所有listed buffers
+    local all_buffers = vim.api.nvim_list_bufs()
+    local listed_buffers = {}
+    for _, buf_id in ipairs(all_buffers) do
+        if vim.api.nvim_buf_is_valid(buf_id) and vim.api.nvim_buf_get_option(buf_id, 'buflisted') then
+            table.insert(listed_buffers, buf_id)
+        end
+    end
+    
+    -- 如果这是最后一个listed buffer，创建一个新的empty buffer
+    if #listed_buffers <= 1 then
+        -- 创建新的empty buffer
+        local new_buf = vim.api.nvim_create_buf(true, false)
+        vim.api.nvim_set_current_buf(new_buf)
+        
+        -- 然后安全地删除目标buffer
+        if vim.api.nvim_buf_is_valid(target_buf) then
+            pcall(vim.api.nvim_buf_delete, target_buf, { force = true })
+        end
+        
+        -- 处理空分组显示
+        M.handle_empty_group_display()
+    else
+        -- 如果还有其他buffer，先切换到下一个
+        local next_buf = nil
+        for _, buf_id in ipairs(listed_buffers) do
+            if buf_id ~= target_buf then
+                next_buf = buf_id
+                break
+            end
+        end
+        
+        if next_buf then
+            vim.api.nvim_set_current_buf(next_buf)
+        end
+        
+        -- 然后删除目标buffer
+        if vim.api.nvim_buf_is_valid(target_buf) then
+            pcall(vim.api.nvim_buf_delete, target_buf, { force = true })
+        end
+    end
+    
+    return true
+end
+
 -- 保存全局实例
 _G._vertical_bufferline_integration_instance = M
 
