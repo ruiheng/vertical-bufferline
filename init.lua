@@ -182,7 +182,18 @@ function M.refresh()
         for i, group in ipairs(all_groups) do
             local is_active = group.id == active_group.id
             local group_buffers = groups.get_group_buffers(group.id) or {}
-            local buffer_count = #group_buffers
+            
+            -- 计算有效的buffer数量（过滤掉无名buffer和[Empty Group]buffer）
+            local valid_buffer_count = 0
+            for _, buf_id in ipairs(group_buffers) do
+                if vim.api.nvim_buf_is_valid(buf_id) then
+                    local buf_name = vim.api.nvim_buf_get_name(buf_id)
+                    if buf_name ~= "" and not buf_name:match('%[Empty Group%]') then
+                        valid_buffer_count = valid_buffer_count + 1
+                    end
+                end
+            end
+            local buffer_count = valid_buffer_count
             
             -- 分组标题行，使用更显眼的格式
             local group_marker = is_active and "●" or "○"
