@@ -584,6 +584,7 @@ local function open_sidebar()
     local new_win_id = api.nvim_get_current_win()
     api.nvim_win_set_buf(new_win_id, buf_id)
     api.nvim_win_set_width(new_win_id, config.width)
+    api.nvim_win_set_option(new_win_id, 'winfixwidth', true)  -- 防止窗口在resize时自动调整宽度
     api.nvim_win_set_option(new_win_id, 'number', false)
     api.nvim_win_set_option(new_win_id, 'relativenumber', false)
     api.nvim_win_set_option(new_win_id, 'cursorline', false)
