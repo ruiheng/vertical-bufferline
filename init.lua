@@ -212,13 +212,25 @@ function M.refresh()
             local should_expand = state.expand_all_groups or is_active
             if should_expand then
                 -- 获取当前分组的buffers并显示
-                local group_components = is_active and components or {}
+                local group_components = {}
+                if is_active then
+                    -- 对于活跃分组，过滤掉无名buffer以保持一致性
+                    for _, comp in ipairs(components) do
+                        if comp.id and comp.name then
+                            local buf_name = api.nvim_buf_get_name(comp.id)
+                            -- 过滤掉无名buffer和[Empty Group]buffer
+                            if buf_name ~= "" and not buf_name:match('%[Empty Group%]') then
+                                table.insert(group_components, comp)
+                            end
+                        end
+                    end
+                end
                 
                 -- 为当前活跃分组也应用智能文件名（如果需要）
-                if is_active and #components > 0 then
+                if is_active and #group_components > 0 then
                     -- 检查是否有重名文件需要智能处理
                     local buffer_ids = {}
-                    for _, comp in ipairs(components) do
+                    for _, comp in ipairs(group_components) do
                         if comp.id then
                             table.insert(buffer_ids, comp.id)
                         end
@@ -264,9 +276,9 @@ function M.refresh()
                     end
                 end
                 
-                -- 如果分组为空，显示空分组提示
+                -- 如果分组为空，显示简洁的空分组提示
                 if #group_components == 0 then
-                    table.insert(lines_text, "  └─ (empty group - open files or use :VBufferLineAddCurrentToGroup)")
+                    table.insert(lines_text, "  └─ (empty)")
                 end
                 
                 for j, component in ipairs(group_components) do
