@@ -187,15 +187,30 @@ end
 
 -- 处理空分组显示：创建或切换到一个空的临时buffer
 function M.handle_empty_group_display()
-    -- 查找或创建一个专用的空分组buffer
-    local empty_group_buffer = nil
+    -- 首先隐藏所有当前listed的普通buffer（保留特殊buffer）
     local all_buffers = vim.api.nvim_list_bufs()
-    
-    -- 查找现有的空分组buffer
     for _, buf_id in ipairs(all_buffers) do
         if vim.api.nvim_buf_is_valid(buf_id) then
+            local buftype = vim.api.nvim_buf_get_option(buf_id, 'buftype')
+            local buflisted = vim.api.nvim_buf_get_option(buf_id, 'buflisted')
             local buf_name = vim.api.nvim_buf_get_name(buf_id)
-            if buf_name:match('%[Empty Group%]') then
+            
+            -- 如果是普通的空buffer（no name），隐藏它
+            if buftype == '' and buflisted and (buf_name == '' or buf_name:match('^%s*$')) then
+                pcall(vim.api.nvim_buf_set_option, buf_id, 'buflisted', false)
+            end
+        end
+    end
+    
+    -- 查找或创建一个专用的空分组buffer
+    local empty_group_buffer = nil
+    
+    -- 查找现有的空分组buffer（使用buftype检查）
+    for _, buf_id in ipairs(all_buffers) do
+        if vim.api.nvim_buf_is_valid(buf_id) then
+            local buftype = vim.api.nvim_buf_get_option(buf_id, 'buftype')
+            local buf_name = vim.api.nvim_buf_get_name(buf_id)
+            if buftype == 'nofile' and buf_name:match('%[Empty Group%]') then
                 empty_group_buffer = buf_id
                 break
             end
@@ -378,18 +393,14 @@ function M.smart_close_buffer(target_buf)
         end
     end
     
-    -- 如果这是最后一个listed buffer，创建一个新的empty buffer
+    -- 如果这是最后一个listed buffer，直接使用空分组显示
     if #listed_buffers <= 1 then
-        -- 创建新的empty buffer
-        local new_buf = vim.api.nvim_create_buf(true, false)
-        vim.api.nvim_set_current_buf(new_buf)
-        
-        -- 然后安全地删除目标buffer
+        -- 先删除目标buffer
         if vim.api.nvim_buf_is_valid(target_buf) then
             pcall(vim.api.nvim_buf_delete, target_buf, { force = true })
         end
         
-        -- 处理空分组显示
+        -- 直接处理空分组显示（这会创建[Empty Group] buffer并切换到它）
         M.handle_empty_group_display()
     else
         -- 如果还有其他buffer，先切换到下一个
