@@ -29,28 +29,87 @@ end
 
 -- 删除分组命令
 local function delete_group_command(args)
-    local group_name_or_id = args.args
-    if group_name_or_id == "" then
-        vim.notify("Usage: VBufferLineDeleteGroup <group_name_or_id>", vim.log.levels.ERROR)
+    local input = args.args
+    if input == "" then
+        vim.notify("Usage: VBufferLineDeleteGroup <group_number>", vim.log.levels.ERROR)
         return
     end
     
-    -- 查找分组（按名称或ID）
+    local all_groups = groups.get_all_groups()
     local target_group = nil
-    for _, group in ipairs(groups.get_all_groups()) do
-        if group.id == group_name_or_id or (group.name ~= "" and group.name == group_name_or_id) then
-            target_group = group
-            break
+    
+    -- 首先尝试按序号查找
+    local group_number = tonumber(input)
+    if group_number then
+        if group_number >= 1 and group_number <= #all_groups then
+            target_group = all_groups[group_number]
+        end
+    else
+        -- 如果不是数字，按名称或ID查找（向后兼容）
+        for _, group in ipairs(all_groups) do
+            if group.id == input or (group.name ~= "" and group.name == input) then
+                target_group = group
+                break
+            end
         end
     end
     
     if not target_group then
-        vim.notify("Group not found: " .. group_name_or_id, vim.log.levels.ERROR)
+        if group_number then
+            vim.notify("Invalid group number: " .. input .. " (valid range: 1-" .. #all_groups .. ")", vim.log.levels.ERROR)
+        else
+            vim.notify("Group not found: " .. input, vim.log.levels.ERROR)
+        end
+        return
+    end
+    
+    -- 防止删除默认分组
+    if target_group.id == "default" then
+        vim.notify("Cannot delete the default group", vim.log.levels.WARN)
         return
     end
     
     if groups.delete_group(target_group.id) then
         vim.notify("Deleted group: " .. target_group.name, vim.log.levels.INFO)
+        
+        -- 刷新界面
+        vim.schedule(function()
+            if require('vertical-bufferline').refresh then
+                require('vertical-bufferline').refresh()
+            end
+        end)
+    end
+end
+
+-- 删除当前分组命令
+local function delete_current_group_command()
+    local active_group = groups.get_active_group()
+    if not active_group then
+        vim.notify("No active group to delete", vim.log.levels.ERROR)
+        return
+    end
+    
+    -- 防止删除默认分组
+    if active_group.id == "default" then
+        vim.notify("Cannot delete the default group", vim.log.levels.WARN)
+        return
+    end
+    
+    -- 确认删除
+    local choice = vim.fn.confirm("Delete group '" .. active_group.name .. "'?", "&Yes\n&No", 2)
+    if choice ~= 1 then
+        return
+    end
+    
+    if groups.delete_group(active_group.id) then
+        vim.notify("Deleted group: " .. active_group.name, vim.log.levels.INFO)
+        
+        -- 刷新界面
+        vim.schedule(function()
+            if require('vertical-bufferline').refresh then
+                require('vertical-bufferline').refresh()
+            end
+        end)
     end
 end
 
@@ -392,8 +451,13 @@ function M.setup()
     -- 删除分组
     vim.api.nvim_create_user_command("VBufferLineDeleteGroup", delete_group_command, {
         nargs = 1,
-        complete = group_complete,
-        desc = "Delete a buffer group"
+        desc = "Delete a buffer group by number (e.g. :VBufferLineDeleteGroup 2)"
+    })
+    
+    -- 删除当前分组
+    vim.api.nvim_create_user_command("VBufferLineDeleteCurrentGroup", delete_current_group_command, {
+        nargs = 0,
+        desc = "Delete the current active group"
     })
     
     -- 重命名分组
@@ -883,6 +947,7 @@ end
 -- 导出函数供其他模块使用
 M.create_group = create_group_command
 M.delete_group = delete_group_command
+M.delete_current_group = delete_current_group_command
 M.rename_group = rename_group_command
 M.switch_group = switch_group_command
 M.add_buffer_to_group = add_buffer_to_group_command

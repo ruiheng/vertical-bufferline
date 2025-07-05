@@ -830,6 +830,7 @@ M.state = state  -- 导出state供session模块使用
 M.create_group = function(name) 
     return commands.create_group({args = name or ""})
 end
+M.delete_current_group = function() commands.delete_current_group() end
 M.switch_to_next_group = function() commands.next_group() end
 M.switch_to_prev_group = function() commands.prev_group() end
 M.add_current_buffer_to_group = function(group_name) 
