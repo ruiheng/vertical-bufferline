@@ -137,6 +137,185 @@ function M.save_session(filename)
     end
 end
 
+-- Check if a buffer path is in session data
+local function is_buffer_in_session(buffer_path, session_data)
+    for _, group_data in ipairs(session_data.groups) do
+        for _, buffer_info in ipairs(group_data.buffers or {}) do
+            local session_path = expand_buffer_path(buffer_info.path)
+            if session_path == buffer_path then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+-- Handle existing buffers before session loading
+local function handle_existing_buffers(session_data)
+    local groups = require('vertical-bufferline.groups')
+    local existing_buffers = vim.api.nvim_list_bufs()
+    local handled_buffers = {}
+    
+    for _, buf_id in ipairs(existing_buffers) do
+        if vim.api.nvim_buf_is_valid(buf_id) and vim.api.nvim_buf_get_option(buf_id, 'buflisted') then
+            local buf_name = vim.api.nvim_buf_get_name(buf_id)
+            local buftype = vim.api.nvim_buf_get_option(buf_id, 'buftype')
+            
+            -- Only process normal file buffers (skip special buffers like plugin buffers, etc.)
+            if buftype == '' then
+                if buf_name == "" then
+                    -- [No Name] buffer
+                    if vim.api.nvim_buf_get_option(buf_id, 'modified') then
+                        -- Has modifications, keep in Default group
+                        groups.add_buffer_to_group(buf_id, "default")
+                        table.insert(handled_buffers, buf_id)
+                    else
+                        -- Empty [No Name], close it
+                        pcall(vim.api.nvim_buf_delete, buf_id, {})
+                    end
+                else
+                    -- Named buffer
+                    if is_buffer_in_session(buf_name, session_data) then
+                        -- Buffer is in session, keep it and mark as handled
+                        table.insert(handled_buffers, buf_id)
+                    else
+                        -- Buffer not in session
+                        if vim.api.nvim_buf_get_option(buf_id, 'modified') then
+                            -- Has modifications, keep in Default group
+                            groups.add_buffer_to_group(buf_id, "default")
+                            table.insert(handled_buffers, buf_id)
+                        else
+                            -- No modifications, close it
+                            pcall(vim.api.nvim_buf_delete, buf_id, {})
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    return handled_buffers
+end
+
+-- Collect all unique file paths from session data
+local function collect_session_files(session_data)
+    local all_files = {}
+    local unique_files = {}
+    
+    for _, group_data in ipairs(session_data.groups) do
+        for _, buffer_info in ipairs(group_data.buffers or {}) do
+            local file_path = expand_buffer_path(buffer_info.path)
+            if not unique_files[file_path] then
+                unique_files[file_path] = true
+                table.insert(all_files, file_path)
+            end
+        end
+    end
+    
+    return all_files
+end
+
+-- Open all session files and return buffer mappings
+local function open_session_files(session_files)
+    local buffer_mappings = {} -- file_path -> buffer_id
+    local opened_count = 0
+    
+    for _, file_path in ipairs(session_files) do
+        if vim.fn.filereadable(file_path) == 1 then
+            -- Check if buffer already exists
+            local existing_buf = vim.fn.bufnr(file_path, false)
+            if existing_buf > 0 and vim.api.nvim_buf_is_valid(existing_buf) then
+                -- Buffer already exists, reuse it
+                buffer_mappings[file_path] = existing_buf
+            else
+                -- Create new buffer
+                local buf_id = vim.fn.bufnr(file_path, true)
+                if not vim.api.nvim_buf_is_loaded(buf_id) then
+                    vim.fn.bufload(buf_id)
+                end
+                
+                -- Configure buffer
+                vim.bo[buf_id].buflisted = true
+                vim.bo[buf_id].buftype = ""
+                
+                buffer_mappings[file_path] = buf_id
+                opened_count = opened_count + 1
+            end
+        else
+            vim.notify("Cannot read file: " .. file_path, vim.log.levels.WARN)
+        end
+    end
+    
+    return buffer_mappings, opened_count
+end
+
+-- Rebuild group structure from session data using proper APIs
+local function rebuild_groups(session_data, buffer_mappings)
+    local groups = require('vertical-bufferline.groups')
+    
+    -- Step 1: Clear existing groups using proper API
+    local existing_groups = groups.get_all_groups()
+    for _, group in ipairs(existing_groups) do
+        if group.id ~= "default" then  -- Don't delete default group
+            groups.delete_group(group.id)
+        end
+    end
+    
+    -- Step 2: Clear default group buffers
+    local default_group = groups.find_group_by_id("default")
+    if default_group then
+        -- Remove all buffers from default group
+        for _, buf_id in ipairs(vim.deepcopy(default_group.buffers)) do
+            groups.remove_buffer_from_group(buf_id, "default")
+        end
+    end
+    
+    -- Step 3: Recreate groups from session data using proper API
+    local group_id_mapping = {} -- old_id -> new_id mapping for non-default groups
+    
+    for _, group_data in ipairs(session_data.groups) do
+        local new_group_id
+        
+        if group_data.id == "default" then
+            -- Use existing default group
+            new_group_id = "default"
+            -- Update default group name if needed
+            if group_data.name and group_data.name ~= "" then
+                groups.rename_group("default", group_data.name)
+            end
+        else
+            -- Create new group
+            new_group_id = groups.create_group(group_data.name, group_data.color)
+            group_id_mapping[group_data.id] = new_group_id
+        end
+        
+        -- Assign buffers to this group
+        for _, buffer_info in ipairs(group_data.buffers or {}) do
+            local file_path = expand_buffer_path(buffer_info.path)
+            local buf_id = buffer_mappings[file_path]
+            
+            if buf_id and vim.api.nvim_buf_is_valid(buf_id) then
+                groups.add_buffer_to_group(buf_id, new_group_id)
+            end
+        end
+    end
+    
+    -- Step 4: Set active group using proper API
+    local target_active_group_id = session_data.active_group_id
+    if target_active_group_id ~= "default" and group_id_mapping[target_active_group_id] then
+        target_active_group_id = group_id_mapping[target_active_group_id]
+    end
+    
+    -- Verify the target group exists before setting it active
+    local target_group = groups.find_group_by_id(target_active_group_id)
+    if target_group then
+        groups.set_active_group(target_active_group_id)
+    else
+        -- Fallback to default group if target doesn't exist
+        groups.set_active_group("default")
+    end
+end
+
 -- Load groups configuration from session file
 function M.load_session(filename)
     filename = filename or get_session_filename()
@@ -173,57 +352,23 @@ function M.load_session(filename)
         return false
     end
     
-    -- Clear existing groups and load from session
-    local groups = require('vertical-bufferline.groups')
+    -- Temporarily disable bufferline sync during loading
+    local bufferline_integration = require('vertical-bufferline.bufferline-integration')
+    bufferline_integration.set_sync_target(nil)
     
-    -- Get current groups data to reset
-    local debug_info = groups.debug_info()
-    local groups_data = debug_info.groups_data
+    -- Step 1: Handle existing buffers
+    local handled_buffers = handle_existing_buffers(session_data)
     
+    -- Step 2: Collect all session files
+    local session_files = collect_session_files(session_data)
     
-    -- Clear existing groups (except we'll recreate them)
-    groups_data.groups = {}
-    groups_data.active_group_id = nil
+    -- Step 3: Open all session files
+    local buffer_mappings, opened_count = open_session_files(session_files)
     
-    -- Track buffers that need to be opened
-    local buffers_to_open = {}
-    local buffer_to_group_map = {}
-    local unique_buffers = {} -- 防止重复添加相同的buffer路径
+    -- Step 4: Rebuild group structure
+    rebuild_groups(session_data, buffer_mappings)
     
-    -- Recreate groups from session data
-    for _, group_data in ipairs(session_data.groups) do
-        local new_group = {
-            id = group_data.id,
-            name = group_data.name or "",
-            created_at = group_data.created_at or os.time(),
-            color = group_data.color or "#98c379",
-            buffers = {}
-        }
-        
-        -- Process buffer paths and prepare to open them
-        for _, buffer_info in ipairs(group_data.buffers or {}) do
-            local buffer_path = expand_buffer_path(buffer_info.path)
-            
-            -- 只添加唯一的buffer路径到待打开列表
-            if not unique_buffers[buffer_path] then
-                unique_buffers[buffer_path] = true
-                table.insert(buffers_to_open, buffer_path)
-            end
-            
-            -- Map buffer path to group for later assignment
-            if not buffer_to_group_map[buffer_path] then
-                buffer_to_group_map[buffer_path] = {}
-            end
-            table.insert(buffer_to_group_map[buffer_path], group_data.id)
-        end
-        
-        table.insert(groups_data.groups, new_group)
-    end
-    
-    -- Restore active group
-    groups_data.active_group_id = session_data.active_group_id
-    
-    -- Restore expand mode if available
+    -- Step 5: Restore expand mode if available
     if session_data.expand_all_groups ~= nil then
         local vbl = require('vertical-bufferline')
         if vbl.state then
@@ -231,119 +376,39 @@ function M.load_session(filename)
         end
     end
     
-    -- Set session loading flag to prevent interference
-    local vbl = require('vertical-bufferline')
-    if vbl.state then
-        vbl.state.session_loading = true
-    end
+    -- Step 6: Final sync to bufferline (rebuild_groups already set active group)
+    local groups = require('vertical-bufferline.groups')
+    local active_group = groups.get_active_group()
     
-    -- Open buffers and assign them to groups with multiple stages
-    vim.schedule(function()
-        local buffers_opened = 0
-        local total_buffers = #buffers_to_open
+    if active_group then
+        -- Ensure bufferline is synced with the restored active group
+        bufferline_integration.set_bufferline_buffers(active_group.buffers)
+        bufferline_integration.set_sync_target(active_group.id)
         
-        
-        -- Stage 1: Open all buffers first
-        for _, buffer_path in ipairs(buffers_to_open) do
-            if vim.fn.filereadable(buffer_path) == 1 then
-                -- Open buffer silently
-                local buf_id = vim.fn.bufnr(buffer_path, true)
-                
-                -- Force buffer to be loaded
-                if not vim.api.nvim_buf_is_loaded(buf_id) then
-                    vim.fn.bufload(buf_id)
+        -- Switch to first buffer in active group if available
+        if #active_group.buffers > 0 then
+            for _, buf_id in ipairs(active_group.buffers) do
+                if vim.api.nvim_buf_is_valid(buf_id) and vim.api.nvim_buf_is_loaded(buf_id) then
+                    vim.api.nvim_set_current_buf(buf_id)
+                    break
                 end
-                
-                -- 确保buffer被列出（这对bufferline很重要）
-                vim.bo[buf_id].buflisted = true
-                
-                -- 设置buffer类型为空（正常文件）
-                if vim.bo[buf_id].buftype ~= "" then
-                    vim.bo[buf_id].buftype = ""
-                end
-                
-                -- 如果使用了 scope.nvim，确保buffer被添加到当前tab
-                -- 通过短暂切换到buffer来让scope识别它属于当前tab
-                local current_buf = vim.api.nvim_get_current_buf()
-                vim.api.nvim_set_current_buf(buf_id)
-                vim.api.nvim_set_current_buf(current_buf)
-                
-                buffers_opened = buffers_opened + 1
             end
         end
-        
-        -- Stage 2: Wait a bit, then assign buffers to groups
-        vim.defer_fn(function()
-            local assigned_count = 0
-            
-            for _, buffer_path in ipairs(buffers_to_open) do
-                if vim.fn.filereadable(buffer_path) == 1 then
-                    local buf_id = vim.fn.bufnr(buffer_path, false)
-                    if buf_id > 0 and vim.api.nvim_buf_is_valid(buf_id) then
-                        -- Add buffer to appropriate groups
-                        local group_ids = buffer_to_group_map[buffer_path]
-                        if group_ids then
-                            -- 对于session加载，恢复buffer到所有原属分组（支持多分组）
-                            for _, group_id in ipairs(group_ids) do
-                                local success = groups.add_buffer_to_group(buf_id, group_id)
-                                if success then
-                                    assigned_count = assigned_count + 1
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-            
-            -- Stage 3: Force bufferline refresh and sidebar update
-            vim.defer_fn(function()
-                local active_group = groups.get_active_group()
-                
-                -- Force bufferline integration refresh
-                local bufferline_integration = require('vertical-bufferline.bufferline-integration')
-                bufferline_integration.force_refresh()
-                
-                -- 确保当前缓冲区在活跃分组中，这对scope.nvim很重要
-                if active_group and #active_group.buffers > 0 then
-                    local current_buf = vim.api.nvim_get_current_buf()
-                    local target_buf = nil
-                    
-                    -- 找到分组中第一个有效的缓冲区
-                    for _, buf_id in ipairs(active_group.buffers) do
-                        if vim.api.nvim_buf_is_valid(buf_id) and vim.api.nvim_buf_is_loaded(buf_id) then
-                            target_buf = buf_id
-                            break
-                        end
-                    end
-                    
-                    if target_buf then
-                        -- 切换到目标缓冲区，确保scope和bufferline都能看到它
-                        vim.api.nvim_set_current_buf(target_buf)
-                        
-                        -- 强制触发BufEnter事件，确保scope正确处理
-                        vim.api.nvim_exec_autocmds('BufEnter', { buffer = target_buf })
-                    end
-                end
-                
-                -- 再次强制刷新
-                bufferline_integration.force_refresh()
-                
-                -- Refresh the sidebar if it's open
-                local vbl = require('vertical-bufferline')
-                if vbl.state and vbl.state.is_sidebar_open then
-                    vbl.refresh()
-                end
-                
-                vim.notify(string.format("Session loaded: %s (%d buffers, %d assignments)", 
-                    vim.fn.fnamemodify(filename, ":t"), buffers_opened, assigned_count), vim.log.levels.INFO)
-                
-                -- Clear session loading flag
-                if vbl.state then
-                    vbl.state.session_loading = false
-                end
-            end, 100)
-        end, 150)
+    else
+        -- Fallback: ensure sync is enabled even if no active group
+        bufferline_integration.set_sync_target("default")
+    end
+    
+    -- Step 7: Refresh UI
+    vim.schedule(function()
+        local vbl = require('vertical-bufferline')
+        if vbl.state and vbl.state.is_sidebar_open then
+            vbl.refresh()
+        end
     end)
+    
+    vim.notify(string.format("Session loaded: %s (%d buffers, %d groups)", 
+        vim.fn.fnamemodify(filename, ":t"), opened_count, #session_data.groups), vim.log.levels.INFO)
     
     return true
 end

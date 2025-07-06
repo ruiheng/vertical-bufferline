@@ -212,6 +212,17 @@ function M.set_active_group(group_id)
     -- 反向控制：将新分组的buffer列表设置到bufferline中
     bufferline_integration.set_bufferline_buffers(group.buffers)
     
+    -- 切换当前buffer到分组中的第一个有效buffer
+    if #group.buffers > 0 then
+        for _, buf_id in ipairs(group.buffers) do
+            if vim.api.nvim_buf_is_valid(buf_id) then
+                vim.api.nvim_set_current_buf(buf_id)
+                break
+            end
+        end
+    end
+    -- 如果分组为空，保持当前buffer不变，让bufferline显示空列表即可
+    
     -- 恢复同步指针到新分组（原子操作的第3步）
     -- 先更新活跃分组ID
     groups_data.active_group_id = group_id
