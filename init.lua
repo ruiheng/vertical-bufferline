@@ -110,18 +110,23 @@ local function get_main_window_current_buffer()
     return api.nvim_get_current_buf()
 end
 
---- Refreshes the sidebar content with the current list of buffers.
-function M.refresh()
-    if not state.is_sidebar_open or not api.nvim_win_is_valid(state.win_id) then return end
+-- Validate and initialize refresh state
+local function validate_and_initialize_refresh()
+    if not state.is_sidebar_open or not api.nvim_win_is_valid(state.win_id) then 
+        return nil 
+    end
 
     local bufferline_state = require('bufferline.state')
-    if not bufferline_state or not bufferline_state.components then return end
+    if not bufferline_state or not bufferline_state.components then 
+        return nil 
+    end
     
     -- Ensure state.buf_id is valid
-    if not state.buf_id or not api.nvim_buf_is_valid(state.buf_id) then return end
+    if not state.buf_id or not api.nvim_buf_is_valid(state.buf_id) then 
+        return nil 
+    end
 
     local components = bufferline_state.components
-    
     local current_buffer_id = get_main_window_current_buffer()
     
     -- Filter out invalid components and special buffers
@@ -131,16 +136,22 @@ function M.refresh()
             table.insert(valid_components, comp)
         end
     end
-    components = valid_components
     
     -- Get group information
     local group_info = bufferline_integration.get_group_buffer_info()
     local active_group = groups.get_active_group()
     
-    -- Bufferline integration has already handled filtering, no need to filter again here
-    -- Components are already the result of group filtering
-    
-    -- Debug: Check bufferline state
+    return {
+        bufferline_state = bufferline_state,
+        components = valid_components,
+        current_buffer_id = current_buffer_id,
+        group_info = group_info,
+        active_group = active_group
+    }
+end
+
+-- Detect picking mode and manage picking state and timers
+local function detect_and_manage_picking_mode(bufferline_state, components)
     local is_picking = false
     local debug_info = ""
     
@@ -195,251 +206,273 @@ function M.refresh()
             state.highlight_timer = nil
         end
     end
+    
+    return is_picking
+end
 
-    local lines_text = {}
-    local new_line_map = {}
-    local group_header_lines = {}  -- Record group header line positions and info
-
-    -- Display all group information, expand groups based on expand_all_groups mode
-    if active_group then
-        local all_groups = groups.get_all_groups()
+-- Create individual buffer line with proper formatting and highlights
+local function create_buffer_line(component, j, total_components, current_buffer_id, is_picking)
+    local is_last = (j == total_components)
+    local tree_prefix = is_last and ("  " .. config_module.UI.TREE_LAST) or ("  " .. config_module.UI.TREE_BRANCH)
+    local modified_indicator = ""
+    
+    -- Check if buffer is modified
+    if api.nvim_buf_is_valid(component.id) and api.nvim_buf_get_option(component.id, "modified") then
+        modified_indicator = "● "
+    end
+    
+    local icon = component.icon or ""
+    if icon == "" then
+        -- Fallback to basic file type detection
+        local extension = component.name:match("%.([^%.]+)$")
+        if extension then
+            icon = config_module.ICONS[extension] or config_module.ICONS.default
+        end
+    end
+    
+    -- Get letter for picking mode
+    local ok, element = pcall(function() return component:as_element() end)
+    local letter = nil
+    if ok and element and element.letter then
+        letter = element.letter
+    elseif component.letter then
+        letter = component.letter
+    end
+    
+    -- Add number display (1-9 correspond to <leader>1-9, 10 uses 0)
+    local number_display = j <= 9 and tostring(j) or "0"
+    if j > config_module.UI.MAX_DISPLAY_NUMBER then
+        number_display = config_module.UI.NUMBER_OVERFLOW_CHAR
+    end
+    
+    -- Add arrow marker for current buffer
+    local current_marker = ""
+    if component.id == current_buffer_id then
+        current_marker = config_module.UI.CURRENT_BUFFER_MARKER
+    end
+    
+    local line_text
+    local pick_highlight_group = nil
+    local pick_highlight_end = 0
+    
+    if letter and is_picking then
+        -- In picking mode: show hint character + buffer name with tree structure
+        line_text = tree_prefix .. letter .. " " .. current_marker .. number_display .. " " .. modified_indicator .. icon .. " " .. component.name
+        pick_highlight_end = #tree_prefix + 1  -- Only highlight the letter character
         
-        for i, group in ipairs(all_groups) do
-            local is_active = group.id == active_group.id
-            local group_buffers = groups.get_group_buffers(group.id) or {}
-            
-            -- Calculate valid buffer count (filter out unnamed and special buffers)
-            local valid_buffer_count = 0
-            for _, buf_id in ipairs(group_buffers) do
-                if vim.api.nvim_buf_is_valid(buf_id) and not is_special_buffer(buf_id) then
-                    local buf_name = vim.api.nvim_buf_get_name(buf_id)
-                    if buf_name ~= "" then
-                        valid_buffer_count = valid_buffer_count + 1
-                    end
-                end
+        -- Choose appropriate pick highlight based on buffer state
+        if component.id == current_buffer_id then
+            pick_highlight_group = config_module.HIGHLIGHTS.PICK_SELECTED
+        elseif component.focused then
+            pick_highlight_group = config_module.HIGHLIGHTS.PICK_VISIBLE
+        else
+            pick_highlight_group = config_module.HIGHLIGHTS.PICK
+        end
+    else
+        -- Normal mode: regular display with tree structure, current marker and number
+        line_text = tree_prefix .. current_marker .. number_display .. " " .. modified_indicator .. icon .. " " .. component.name
+    end
+    
+    return {
+        text = line_text,
+        tree_prefix = tree_prefix,
+        pick_highlight_group = pick_highlight_group,
+        pick_highlight_end = pick_highlight_end
+    }
+end
+
+-- Apply buffer highlighting for a single buffer line
+local function apply_buffer_highlighting(line_info, component, actual_line_number, current_buffer_id, is_picking)
+    if is_picking and line_info.pick_highlight_group then
+        -- Highlight just the letter character in picking mode (starting after tree prefix)
+        local highlight_start = #line_info.tree_prefix
+        local highlight_end = highlight_start + 1
+        api.nvim_buf_add_highlight(state.buf_id, ns_id, line_info.pick_highlight_group, actual_line_number - 1, highlight_start, highlight_end)
+        
+        -- Highlight the rest of the line normally, but only if there's content after the pick highlight
+        if highlight_end < #line_info.text then
+            local normal_highlight_group = config_module.HIGHLIGHTS.INACTIVE
+            if component.id == current_buffer_id then
+                normal_highlight_group = config_module.HIGHLIGHTS.CURRENT
+            elseif component.focused then
+                normal_highlight_group = config_module.HIGHLIGHTS.VISIBLE
+            elseif api.nvim_buf_is_valid(component.id) and api.nvim_buf_get_option(component.id, "modified") then
+                normal_highlight_group = config_module.HIGHLIGHTS.MODIFIED
             end
-            local buffer_count = valid_buffer_count
+            api.nvim_buf_add_highlight(state.buf_id, ns_id, normal_highlight_group, actual_line_number - 1, highlight_end, -1)
+        end
+    else
+        -- Normal highlighting for non-picking mode
+        local highlight_group = config_module.HIGHLIGHTS.INACTIVE
+        if component.id == current_buffer_id then
+            highlight_group = config_module.HIGHLIGHTS.CURRENT
+        elseif component.focused then
+            highlight_group = config_module.HIGHLIGHTS.VISIBLE
+        elseif api.nvim_buf_is_valid(component.id) and api.nvim_buf_get_option(component.id, "modified") then
+            highlight_group = config_module.HIGHLIGHTS.MODIFIED
+        end
+        api.nvim_buf_add_highlight(state.buf_id, ns_id, highlight_group, actual_line_number - 1, 0, -1)
+    end
+end
+
+-- Render buffers within a single group
+local function render_group_buffers(group_components, current_buffer_id, is_picking, lines_text, new_line_map)
+    for j, component in ipairs(group_components) do
+        if component.id and component.name and api.nvim_buf_is_valid(component.id) then
+            local line_info = create_buffer_line(component, j, #group_components, current_buffer_id, is_picking)
             
-            -- Group header line with more visible format
-            local group_marker = is_active and config_module.UI.ACTIVE_GROUP_MARKER or config_module.UI.INACTIVE_GROUP_MARKER
-            local group_name_display = group.name == "" and config_module.UI.UNNAMED_GROUP_DISPLAY or group.name
+            table.insert(lines_text, line_info.text)
+            local actual_line_number = #lines_text
+            new_line_map[actual_line_number] = component.id
             
-            -- Add visual separator (except for first group)
-            if i > config_module.SYSTEM.FIRST_INDEX then
-                table.insert(lines_text, "")  -- Empty line separator
-                local separator_line_num = #lines_text
-                table.insert(lines_text, config_module.UI.GROUP_SEPARATOR)  -- Separator line
-                table.insert(group_header_lines, {line = separator_line_num, type = "separator"})
-            end
-            
-            local group_line = string.format("▎[%d] %s %s (%d buffers)", 
-                i, group_marker, group_name_display, buffer_count)
-            table.insert(lines_text, group_line)
-            
-            -- Record group header line info
-            table.insert(group_header_lines, {
-                line = #lines_text - config_module.SYSTEM.ZERO_BASED_OFFSET,  -- 0-based line number
-                type = "header",
-                is_active = is_active,
-                group_number = i
-            })
-            
-            -- Decide whether to expand group based on mode
-            local should_expand = state.expand_all_groups or is_active
-            if should_expand then
-                -- Get current group buffers and display them
-                local group_components = {}
-                if is_active then
-                    -- For active group, filter out unnamed and special buffers for consistency
-                    for _, comp in ipairs(components) do
-                        if comp.id and comp.name then
-                            local buf_name = api.nvim_buf_get_name(comp.id)
-                            -- Filter out unnamed and special buffers
-                            if buf_name ~= "" and not is_special_buffer(comp.id) then
-                                table.insert(group_components, comp)
-                            end
-                        end
-                    end
-                end
-                
-                -- Apply smart filenames for current active group too (if needed)
-                if is_active and #group_components > 0 then
-                    -- Check if there are duplicate filenames that need smart handling
-                    local buffer_ids = {}
-                    for _, comp in ipairs(group_components) do
-                        if comp.id then
-                            table.insert(buffer_ids, comp.id)
-                        end
-                    end
-                    
-                    if #buffer_ids > 1 then
-                        local unique_names = filename_utils.generate_unique_names(buffer_ids)
-                        -- Update component names
-                        for i, comp in ipairs(group_components) do
-                            if comp.id and unique_names[i] then
-                                comp.name = unique_names[i]
-                            end
-                        end
-                    end
-                end
-                
-                -- For expand-all mode and non-active groups, manually construct components
-                if state.expand_all_groups and not is_active then
-                    group_components = {}
-                    
-                    -- First collect all valid buffer information
-                    local valid_buffers = {}
-                    for _, buf_id in ipairs(group_buffers) do
-                        if api.nvim_buf_is_valid(buf_id) then
-                            local buf_name = api.nvim_buf_get_name(buf_id)
-                            if buf_name ~= "" then
-                                table.insert(valid_buffers, buf_id)
-                            end
-                        end
-                    end
-                    
-                    -- Generate smart unique filenames
-                    local unique_names = filename_utils.generate_unique_names(valid_buffers)
-                    
-                    -- Construct components
-                    for i, buf_id in ipairs(valid_buffers) do
-                        table.insert(group_components, {
-                            id = buf_id,
-                            name = unique_names[i] or vim.fn.fnamemodify(api.nvim_buf_get_name(buf_id), ":t"),
-                            icon = "",
-                            focused = false
-                        })
-                    end
-                end
-                
-                -- If group is empty, show clean empty group hint
-                if #group_components == 0 then
-                    table.insert(lines_text, "  " .. config_module.UI.TREE_LAST .. config_module.UI.TREE_EMPTY)
-                end
-                
-                for j, component in ipairs(group_components) do
-                    if component.id and component.name and api.nvim_buf_is_valid(component.id) then
-                        -- Use tree structure prefix, add indentation to highlight hierarchy
-                        local is_last = (j == #group_components)
-                        local tree_prefix = is_last and ("  " .. config_module.UI.TREE_LAST) or ("  " .. config_module.UI.TREE_BRANCH)
-                        local modified_indicator = ""
-                        
-                        -- Check if buffer is modified
-                        if api.nvim_buf_is_valid(component.id) and api.nvim_buf_get_option(component.id, "modified") then
-                            modified_indicator = "● "
-                        end
-                        
-                        local icon = component.icon or ""
-                        if icon == "" then
-                            -- Fallback to basic file type detection
-                            local extension = component.name:match("%.([^%.]+)$")
-                            if extension then
-                                icon = config_module.ICONS[extension] or config_module.ICONS.default
-                            end
-                        end
-                        
-                        -- Get letter for picking mode
-                        local ok, element = pcall(function() return component:as_element() end)
-                        local letter = nil
-                        if ok and element and element.letter then
-                            letter = element.letter
-                        elseif component.letter then
-                            letter = component.letter
-                        end
-                        
-                        -- Build line content
-                        local line_text
-                        local pick_highlight_group = nil
-                        local pick_highlight_end = 0
-                        
-                        -- Add number display (1-9 correspond to <leader>1-9, 10 uses 0)
-                        local number_display = j <= 9 and tostring(j) or "0"
-                        if j > config_module.UI.MAX_DISPLAY_NUMBER then
-                            number_display = config_module.UI.NUMBER_OVERFLOW_CHAR
-                        end
-                        
-                        -- Add arrow marker for current buffer
-                        local current_marker = ""
-                        if component.id == current_buffer_id then
-                            current_marker = config_module.UI.CURRENT_BUFFER_MARKER
-                        end
-                        
-                        if letter and is_picking then
-                            -- In picking mode: show hint character + buffer name with tree structure
-                            line_text = tree_prefix .. letter .. " " .. current_marker .. number_display .. " " .. modified_indicator .. icon .. " " .. component.name
-                            pick_highlight_end = #tree_prefix + 1  -- Only highlight the letter character
-                            
-                            -- Choose appropriate pick highlight based on buffer state
-                            if component.id == current_buffer_id then
-                                pick_highlight_group = config_module.HIGHLIGHTS.PICK_SELECTED
-                            elseif component.focused then
-                                pick_highlight_group = config_module.HIGHLIGHTS.PICK_VISIBLE
-                            else
-                                pick_highlight_group = config_module.HIGHLIGHTS.PICK
-                            end
-                            
-                        else
-                            -- Normal mode: regular display with tree structure, current marker and number
-                            line_text = tree_prefix .. current_marker .. number_display .. " " .. modified_indicator .. icon .. " " .. component.name
-                        end
-                        
-                        table.insert(lines_text, line_text)
-                        -- Calculate correct line number, considering group info lines above
-                        local actual_line_number = #lines_text
-                        new_line_map[actual_line_number] = component.id
-                        
-                        -- Apply highlights
-                        if is_picking and pick_highlight_group then
-                            -- Highlight just the letter character in picking mode (starting after tree prefix)
-                            -- Use byte length as nvim_buf_add_highlight uses byte positions
-                            local highlight_start = #tree_prefix
-                            local highlight_end = highlight_start + 1
-                            api.nvim_buf_add_highlight(state.buf_id, ns_id, pick_highlight_group, actual_line_number - 1, highlight_start, highlight_end)
-                            
-                            -- Highlight the rest of the line normally, but only if there's content after the pick highlight
-                            if highlight_end < #line_text then
-                                local normal_highlight_group = config_module.HIGHLIGHTS.INACTIVE
-                                if component.id == current_buffer_id then
-                                    normal_highlight_group = config_module.HIGHLIGHTS.CURRENT
-                                elseif component.focused then
-                                    normal_highlight_group = config_module.HIGHLIGHTS.VISIBLE
-                                elseif api.nvim_buf_is_valid(component.id) and api.nvim_buf_get_option(component.id, "modified") then
-                                    normal_highlight_group = config_module.HIGHLIGHTS.MODIFIED
-                                end
-                                api.nvim_buf_add_highlight(state.buf_id, ns_id, normal_highlight_group, actual_line_number - 1, highlight_end, -1)
-                            end
-                        else
-                            -- Normal highlighting for non-picking mode
-                            local highlight_group = config_module.HIGHLIGHTS.INACTIVE
-                            if component.id == current_buffer_id then
-                                highlight_group = config_module.HIGHLIGHTS.CURRENT
-                            elseif component.focused then
-                                highlight_group = config_module.HIGHLIGHTS.VISIBLE
-                            elseif api.nvim_buf_is_valid(component.id) and api.nvim_buf_get_option(component.id, "modified") then
-                                highlight_group = config_module.HIGHLIGHTS.MODIFIED
-                            end
-                            api.nvim_buf_add_highlight(state.buf_id, ns_id, highlight_group, actual_line_number - 1, 0, -1)
-                        end
-                    end
-                end
-                -- If current active group and not expand-all mode, set flag to avoid duplicate processing below
-                if is_active and not state.expand_all_groups then
-                    components = {}
+            -- Apply highlights
+            apply_buffer_highlighting(line_info, component, actual_line_number, current_buffer_id, is_picking)
+        end
+    end
+end
+
+-- Render header for a single group
+local function render_group_header(group, i, is_active, buffer_count, lines_text, group_header_lines)
+    local group_marker = is_active and config_module.UI.ACTIVE_GROUP_MARKER or config_module.UI.INACTIVE_GROUP_MARKER
+    local group_name_display = group.name == "" and config_module.UI.UNNAMED_GROUP_DISPLAY or group.name
+    
+    -- Add visual separator (except for first group)
+    if i > config_module.SYSTEM.FIRST_INDEX then
+        table.insert(lines_text, "")  -- Empty line separator
+        local separator_line_num = #lines_text
+        table.insert(lines_text, config_module.UI.GROUP_SEPARATOR)  -- Separator line
+        table.insert(group_header_lines, {line = separator_line_num, type = "separator"})
+    end
+    
+    local group_line = string.format("▎[%d] %s %s (%d buffers)", 
+        i, group_marker, group_name_display, buffer_count)
+    table.insert(lines_text, group_line)
+    
+    -- Record group header line info
+    table.insert(group_header_lines, {
+        line = #lines_text - config_module.SYSTEM.ZERO_BASED_OFFSET,  -- 0-based line number
+        type = "header",
+        is_active = is_active,
+        group_number = i
+    })
+end
+
+-- Render all groups with their buffers
+local function render_all_groups(active_group, components, current_buffer_id, is_picking, lines_text, new_line_map, group_header_lines)
+    if not active_group then
+        return components
+    end
+    
+    local all_groups = groups.get_all_groups()
+    local remaining_components = components
+    
+    for i, group in ipairs(all_groups) do
+        local is_active = group.id == active_group.id
+        local group_buffers = groups.get_group_buffers(group.id) or {}
+        
+        -- Calculate valid buffer count (filter out unnamed and special buffers)
+        local valid_buffer_count = 0
+        for _, buf_id in ipairs(group_buffers) do
+            if vim.api.nvim_buf_is_valid(buf_id) and not is_special_buffer(buf_id) then
+                local buf_name = vim.api.nvim_buf_get_name(buf_id)
+                if buf_name ~= "" then
+                    valid_buffer_count = valid_buffer_count + 1
                 end
             end
         end
+        local buffer_count = valid_buffer_count
+        
+        -- Render group header
+        render_group_header(group, i, is_active, buffer_count, lines_text, group_header_lines)
+        
+        -- Decide whether to expand group based on mode
+        local should_expand = state.expand_all_groups or is_active
+        if should_expand then
+            -- Get current group buffers and display them
+            local group_components = {}
+            if is_active then
+                -- For active group, filter out unnamed and special buffers for consistency
+                for _, comp in ipairs(components) do
+                    if comp.id and comp.name then
+                        local buf_name = api.nvim_buf_get_name(comp.id)
+                        -- Filter out unnamed and special buffers
+                        if buf_name ~= "" and not is_special_buffer(comp.id) then
+                            table.insert(group_components, comp)
+                        end
+                    end
+                end
+            end
+            
+            -- Apply smart filenames for current active group too (if needed)
+            if is_active and #group_components > 0 then
+                -- Check if there are duplicate filenames that need smart handling
+                local buffer_ids = {}
+                for _, comp in ipairs(group_components) do
+                    if comp.id then
+                        table.insert(buffer_ids, comp.id)
+                    end
+                end
+                
+                if #buffer_ids > 1 then
+                    local unique_names = filename_utils.generate_unique_names(buffer_ids)
+                    -- Update component names
+                    for j, comp in ipairs(group_components) do
+                        if comp.id and unique_names[j] then
+                            comp.name = unique_names[j]
+                        end
+                    end
+                end
+            end
+            
+            -- For expand-all mode and non-active groups, manually construct components
+            if state.expand_all_groups and not is_active then
+                group_components = {}
+                
+                -- First collect all valid buffer information
+                local valid_buffers = {}
+                for _, buf_id in ipairs(group_buffers) do
+                    if api.nvim_buf_is_valid(buf_id) then
+                        local buf_name = api.nvim_buf_get_name(buf_id)
+                        if buf_name ~= "" then
+                            table.insert(valid_buffers, buf_id)
+                        end
+                    end
+                end
+                
+                -- Generate smart unique filenames
+                local unique_names = filename_utils.generate_unique_names(valid_buffers)
+                
+                -- Construct components
+                for j, buf_id in ipairs(valid_buffers) do
+                    table.insert(group_components, {
+                        id = buf_id,
+                        name = unique_names[j] or vim.fn.fnamemodify(api.nvim_buf_get_name(buf_id), ":t"),
+                        icon = "",
+                        focused = false
+                    })
+                end
+            end
+            
+            -- If group is empty, show clean empty group hint
+            if #group_components == 0 then
+                table.insert(lines_text, "  " .. config_module.UI.TREE_LAST .. config_module.UI.TREE_EMPTY)
+            end
+            
+            -- Render group buffers
+            render_group_buffers(group_components, current_buffer_id, is_picking, lines_text, new_line_map)
+            
+            -- If current active group and not expand-all mode, clear remaining components
+            if is_active and not state.expand_all_groups then
+                remaining_components = {}
+            end
+        end
     end
-
-    -- Clear old highlights
-    api.nvim_buf_clear_namespace(state.buf_id, ns_id, 0, -1)
-
-    api.nvim_buf_set_option(state.buf_id, "modifiable", true)
-
-    -- Buffer processing already completed in the group loop above
-
-    api.nvim_buf_set_lines(state.buf_id, 0, -1, false, lines_text)
     
-    -- Apply group title highlights
+    return remaining_components
+end
+
+-- Apply group header highlights
+local function apply_group_highlights(group_header_lines, lines_text)
     for _, header_info in ipairs(group_header_lines) do
         if header_info.type == "separator" then
             -- Separator line highlight
@@ -460,10 +493,43 @@ function M.refresh()
             end
         end
     end
-    
+end
+
+-- Finalize buffer display with lines and mapping
+local function finalize_buffer_display(lines_text, new_line_map)
+    api.nvim_buf_set_option(state.buf_id, "modifiable", true)
+    api.nvim_buf_set_lines(state.buf_id, 0, -1, false, lines_text)
     api.nvim_buf_set_option(state.buf_id, "modifiable", false)
     state.line_to_buffer_id = new_line_map
+end
+
+--- Refreshes the sidebar content with the current list of buffers.
+function M.refresh()
+    local refresh_data = validate_and_initialize_refresh()
+    if not refresh_data then return end
     
+    local components = refresh_data.components
+    local current_buffer_id = refresh_data.current_buffer_id
+    local active_group = refresh_data.active_group
+    
+    -- Handle picking mode detection and timer management
+    local is_picking = detect_and_manage_picking_mode(refresh_data.bufferline_state, components)
+
+    local lines_text = {}
+    local new_line_map = {}
+    local group_header_lines = {}  -- Record group header line positions and info
+
+    -- Clear old highlights
+    api.nvim_buf_clear_namespace(state.buf_id, ns_id, 0, -1)
+
+    -- Render all groups with their buffers
+    local remaining_components = render_all_groups(active_group, components, current_buffer_id, is_picking, lines_text, new_line_map, group_header_lines)
+    
+    -- Apply group header highlights
+    apply_group_highlights(group_header_lines, lines_text)
+    
+    -- Finalize buffer display
+    finalize_buffer_display(lines_text, new_line_map)
 end
 
 
