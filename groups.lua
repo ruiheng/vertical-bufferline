@@ -54,6 +54,7 @@ local function init_default_group()
             id = groups_data.default_group_id,
             name = "Default",
             buffers = {},
+            current_buffer = nil,  -- Track current buffer within this group
             created_at = os.time(),
             color = config_module.COLORS.BLUE
         }
@@ -91,6 +92,7 @@ local function generate_group_id()
     return id
 end
 
+
 --- Create new group
 --- @param name string Optional group name
 --- @param color string Optional color identifier
@@ -103,6 +105,7 @@ function M.create_group(name, color)
         id = group_id,
         name = group_name,
         buffers = {},
+        current_buffer = nil,  -- Track current buffer within this group
         created_at = os.time(),
         color = color or config_module.COLORS.GREEN
     }
@@ -217,6 +220,15 @@ function M.set_active_group(group_id)
     end
 
     local old_group_id = groups_data.active_group_id
+    
+    -- Save current buffer state for the old group before switching
+    local old_group = M.get_active_group()
+    if old_group then
+        local current_buf = vim.api.nvim_get_current_buf()
+        if vim.tbl_contains(old_group.buffers, current_buf) then
+            old_group.current_buffer = current_buf
+        end
+    end
 
     -- disable copying bufferline buffer list to group
     local bufferline_integration = require('vertical-bufferline.bufferline-integration')
@@ -225,13 +237,35 @@ function M.set_active_group(group_id)
     -- Reverse control: set new group's buffer list to bufferline
     bufferline_integration.set_bufferline_buffers(group.buffers)
 
-    -- Switch current buffer to first valid buffer in group
+    -- Switch to group's remembered current buffer or fallback intelligently
     if #group.buffers > 0 then
-        for _, buf_id in ipairs(group.buffers) do
-            if vim.api.nvim_buf_is_valid(buf_id) then
-                vim.api.nvim_set_current_buf(buf_id)
-                break
+        local target_buffer = nil
+        
+        -- First priority: use group's remembered current buffer if valid
+        if group.current_buffer and vim.api.nvim_buf_is_valid(group.current_buffer) 
+           and vim.tbl_contains(group.buffers, group.current_buffer) then
+            target_buffer = group.current_buffer
+        else
+            -- Second priority: keep current buffer if it's in the group
+            local current_buf = vim.api.nvim_get_current_buf()
+            if vim.api.nvim_buf_is_valid(current_buf) and vim.tbl_contains(group.buffers, current_buf) then
+                target_buffer = current_buf
+            else
+                -- Fallback: use first valid buffer in group
+                for _, buf_id in ipairs(group.buffers) do
+                    if vim.api.nvim_buf_is_valid(buf_id) then
+                        target_buffer = buf_id
+                        break
+                    end
+                end
             end
+        end
+        
+        -- Switch to the determined buffer
+        if target_buffer then
+            vim.api.nvim_set_current_buf(target_buffer)
+            -- Update group's current buffer record
+            group.current_buffer = target_buffer
         end
     end
     -- If group is empty, keep current buffer unchanged, let bufferline show empty list
@@ -590,7 +624,7 @@ function M.setup(opts)
         })
     end)
 
-    -- No longer need BufEnter autocmd, changed to sync through bufferline
+    -- No longer need BufEnter autocmd for buffer management, changed to sync through bufferline
     -- Cleanup invalid buffer autocmd also no longer needed, handled by bufferline state sync
 
     -- Periodically clean up invalid buffers

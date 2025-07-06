@@ -94,7 +94,8 @@ function M.save_session(filename)
             name = group.name,
             created_at = group.created_at,
             color = group.color,
-            buffers = {}
+            buffers = {},
+            current_buffer_path = nil  -- Will be set below if valid
         }
 
         -- Save buffer information using the cleaned group buffers
@@ -112,6 +113,14 @@ function M.save_session(filename)
                         modified = api.nvim_buf_get_option(buffer_id, "modified")
                     })
                 end
+            end
+        end
+
+        -- Save current buffer for this group if available
+        if group.current_buffer and api.nvim_buf_is_valid(group.current_buffer) then
+            local current_buffer_path = api.nvim_buf_get_name(group.current_buffer)
+            if current_buffer_path ~= "" then
+                group_data.current_buffer_path = normalize_buffer_path(current_buffer_path)
             end
         end
 
@@ -300,6 +309,18 @@ local function rebuild_groups(session_data, buffer_mappings)
                 groups.add_buffer_to_group(buf_id, new_group_id)
             end
         end
+        
+        -- Restore current buffer for this group if available
+        if group_data.current_buffer_path then
+            local current_buffer_file_path = expand_buffer_path(group_data.current_buffer_path)
+            local current_buf_id = buffer_mappings[current_buffer_file_path]
+            if current_buf_id and vim.api.nvim_buf_is_valid(current_buf_id) then
+                local restored_group = groups.find_group_by_id(new_group_id)
+                if restored_group then
+                    restored_group.current_buffer = current_buf_id
+                end
+            end
+        end
     end
 
     -- Step 4: Set active group using proper API
@@ -308,10 +329,18 @@ local function rebuild_groups(session_data, buffer_mappings)
         target_active_group_id = group_id_mapping[target_active_group_id]
     end
 
-    -- Verify the target group exists before setting it active
+    -- Verify the target group exists and set it active
     local target_group = groups.find_group_by_id(target_active_group_id)
     if target_group then
         groups.set_active_group(target_active_group_id)
+        
+        -- Ensure the correct current buffer is set after group switch
+        if target_group.current_buffer and vim.api.nvim_buf_is_valid(target_group.current_buffer) 
+           and vim.tbl_contains(target_group.buffers, target_group.current_buffer) then
+            vim.schedule(function()
+                vim.api.nvim_set_current_buf(target_group.current_buffer)
+            end)
+        end
     else
         -- Fallback to default group if target doesn't exist
         groups.set_active_group("default")
@@ -602,7 +631,8 @@ local function collect_current_state()
             name = group.name,
             created_at = group.created_at,
             color = group.color,
-            buffers = {}
+            buffers = {},
+            current_buffer_path = nil  -- Will be set below if valid
         }
         
         -- Save buffer information using current group buffers
@@ -618,6 +648,14 @@ local function collect_current_state()
                         modified = api.nvim_buf_get_option(buffer_id, "modified")
                     })
                 end
+            end
+        end
+        
+        -- Save current buffer for this group if available
+        if group.current_buffer and api.nvim_buf_is_valid(group.current_buffer) then
+            local current_buffer_path = api.nvim_buf_get_name(group.current_buffer)
+            if current_buffer_path ~= "" then
+                group_data.current_buffer_path = normalize_buffer_path(current_buffer_path)
             end
         end
         
@@ -678,13 +716,26 @@ local function restore_state_from_global()
             bufferline_integration.set_bufferline_buffers(active_group.buffers)
             bufferline_integration.set_sync_target(active_group.id)
             
-            -- Switch to first buffer in active group if available (optional)
+            -- Switch to group's remembered current buffer or fallback intelligently
             if #active_group.buffers > 0 then
-                for _, buf_id in ipairs(active_group.buffers) do
-                    if vim.api.nvim_buf_is_valid(buf_id) and vim.api.nvim_buf_is_loaded(buf_id) then
-                        vim.api.nvim_set_current_buf(buf_id)
-                        break
+                local target_buffer = nil
+                
+                -- First priority: use group's remembered current buffer if valid
+                if active_group.current_buffer and vim.api.nvim_buf_is_valid(active_group.current_buffer) 
+                   and vim.tbl_contains(active_group.buffers, active_group.current_buffer) then
+                    target_buffer = active_group.current_buffer
+                else
+                    -- Fallback: use first valid buffer in group
+                    for _, buf_id in ipairs(active_group.buffers) do
+                        if vim.api.nvim_buf_is_valid(buf_id) and vim.api.nvim_buf_is_loaded(buf_id) then
+                            target_buffer = buf_id
+                            break
+                        end
                     end
+                end
+                
+                if target_buffer then
+                    vim.api.nvim_set_current_buf(target_buffer)
                 end
             end
         else
