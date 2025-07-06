@@ -30,6 +30,46 @@ local function is_special_buffer(buf_id)
     return buftype ~= '' -- Non-empty indicates special buffer (nofile, quickfix, help, terminal, etc.)
 end
 
+-- Get bufferline's custom sort order for proper buffer ordering
+local function get_bufferline_sorted_buffers()
+    local bufferline_utils = require('bufferline.utils')
+    local bufferline_state = require('bufferline.state')
+    
+    -- Get all valid buffers from bufferline
+    local all_valid_buffers = {}
+    if bufferline_utils and bufferline_utils.get_valid_buffers then
+        all_valid_buffers = bufferline_utils.get_valid_buffers()
+    end
+    
+    -- If bufferline has a custom sort order, use it
+    if bufferline_state and bufferline_state.custom_sort then
+        local custom_sort = bufferline_state.custom_sort
+        local reverse_lookup = {}
+        for i, buf_id in ipairs(custom_sort) do
+            reverse_lookup[buf_id] = i
+        end
+        
+        -- Sort valid buffers according to custom_sort order
+        local sorted_buffers = {}
+        for _, buf_id in ipairs(all_valid_buffers) do
+            table.insert(sorted_buffers, buf_id)
+        end
+        
+        table.sort(sorted_buffers, function(a, b)
+            local a_rank = reverse_lookup[a]
+            local b_rank = reverse_lookup[b]
+            if not a_rank then return false end
+            if not b_rank then return true end
+            return a_rank < b_rank
+        end)
+        
+        return sorted_buffers
+    end
+    
+    -- Fallback to default order
+    return all_valid_buffers
+end
+
 -- Direction 1: bufferline → current group (timer, 99% of the time)
 local function sync_bufferline_to_group()
     if not is_enabled then
@@ -41,13 +81,8 @@ local function sync_bufferline_to_group()
         return
     end
 
-    -- Get all valid buffer list from bufferline (not just visible ones)
-    local bufferline_utils = require('bufferline.utils')
-    local all_valid_buffers = {}
-
-    if bufferline_utils and bufferline_utils.get_valid_buffers then
-        all_valid_buffers = bufferline_utils.get_valid_buffers()
-    end
+    -- Get all valid buffer list from bufferline with proper ordering
+    local all_valid_buffers = get_bufferline_sorted_buffers()
 
 
     -- Filter out special buffers (based on buftype)
@@ -330,6 +365,12 @@ function M.get_group_buffer_info()
         total_buffers = #active_buffers,
         visible_buffers = valid_buffers
     }
+end
+
+--- Get bufferline's sorted buffer list (public API)
+--- @return number[] List of buffer IDs in bufferline's display order
+function M.get_sorted_buffers()
+    return get_bufferline_sorted_buffers()
 end
 
 --- Force refresh (for compatibility with session.lua)

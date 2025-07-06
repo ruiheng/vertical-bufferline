@@ -288,8 +288,43 @@ function M.add_buffer_to_group(buffer_id, group_id)
     -- Allow buffer to exist in multiple groups (commented out original restriction)
     -- M.remove_buffer_from_all_groups(buffer_id)
 
-    -- Add to specified group
-    table.insert(group.buffers, buffer_id)
+    -- Add to specified group in correct order based on bufferline's sorting
+    local bufferline_integration = require('vertical-bufferline.bufferline-integration')
+    local sorted_buffers = bufferline_integration.get_sorted_buffers()
+    
+    -- Find the correct position to insert the buffer
+    local insert_position = #group.buffers + 1
+    
+    -- Get buffer's position in bufferline's sorted order
+    local buffer_position_in_sorted = nil
+    for i, buf_id in ipairs(sorted_buffers) do
+        if buf_id == buffer_id then
+            buffer_position_in_sorted = i
+            break
+        end
+    end
+    
+    if buffer_position_in_sorted then
+        -- Find the correct insertion point by comparing with existing buffers
+        for i, existing_buf_id in ipairs(group.buffers) do
+            local existing_position_in_sorted = nil
+            for j, buf_id in ipairs(sorted_buffers) do
+                if buf_id == existing_buf_id then
+                    existing_position_in_sorted = j
+                    break
+                end
+            end
+            
+            -- If we found the position and the new buffer should come before this one
+            if existing_position_in_sorted and buffer_position_in_sorted < existing_position_in_sorted then
+                insert_position = i
+                break
+            end
+        end
+    end
+    
+    -- Insert at the calculated position
+    table.insert(group.buffers, insert_position, buffer_id)
 
     -- Trigger event
     vim.api.nvim_exec_autocmds("User", {
