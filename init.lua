@@ -33,12 +33,22 @@ api.nvim_set_hl(0, config_module.HIGHLIGHTS.INACTIVE, { link = "TabLine", defaul
 api.nvim_set_hl(0, config_module.HIGHLIGHTS.ERROR, { fg = config_module.COLORS.RED, default = true })
 api.nvim_set_hl(0, config_module.HIGHLIGHTS.WARNING, { fg = config_module.COLORS.YELLOW, default = true })
 
--- Group header highlights
-api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_ACTIVE, { fg = config_module.COLORS.BLUE, bold = true, default = true })
-api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_INACTIVE, { fg = config_module.COLORS.GRAY, bold = true, default = true })
-api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_NUMBER, { fg = config_module.COLORS.PURPLE, bold = true, default = true })
-api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_SEPARATOR, { fg = config_module.COLORS.DARK_GRAY, default = true })
-api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_MARKER, { fg = config_module.COLORS.GREEN, bold = true, default = true })
+-- Group header highlights - linked to semantic highlight groups for color scheme compatibility
+api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_ACTIVE, { link = "Function", bold = true, default = true })
+api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_INACTIVE, { link = "Comment", bold = true, default = true })
+api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_NUMBER, { link = "Number", bold = true, default = true })
+api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_SEPARATOR, { link = "Comment", default = true })
+api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_MARKER, { link = "Special", bold = true, default = true })
+
+-- Path highlights - linked to semantic highlight groups for color scheme compatibility
+api.nvim_set_hl(0, config_module.HIGHLIGHTS.PATH, { link = "Comment", italic = true, default = true })
+api.nvim_set_hl(0, config_module.HIGHLIGHTS.PATH_CURRENT, { link = "NonText", italic = true, default = true })
+api.nvim_set_hl(0, config_module.HIGHLIGHTS.PATH_VISIBLE, { link = "Comment", italic = true, default = true })
+
+-- Filename highlights - linked to semantic highlight groups for color scheme compatibility
+api.nvim_set_hl(0, config_module.HIGHLIGHTS.FILENAME, { link = "Normal", default = true })  -- No special highlighting for normal files
+api.nvim_set_hl(0, config_module.HIGHLIGHTS.FILENAME_CURRENT, { link = "Title", bold = true, underline = true, default = true })
+api.nvim_set_hl(0, config_module.HIGHLIGHTS.FILENAME_VISIBLE, { link = "String", bold = true, default = true })
 
 -- Pick highlights matching bufferline's style
 -- Copy the exact colors from BufferLine groups
@@ -186,10 +196,47 @@ local function detect_and_manage_picking_mode(bufferline_state, components)
     return is_picking
 end
 
+-- Extract and format path information for buffer display
+local function get_buffer_path_info(component)
+    if not api.nvim_buf_is_valid(component.id) then
+        return nil, component.name
+    end
+    
+    local full_path = api.nvim_buf_get_name(component.id)
+    if full_path == "" then
+        return nil, component.name
+    end
+    
+    local filename = vim.fn.fnamemodify(full_path, ":t")
+    local directory = vim.fn.fnamemodify(full_path, ":h")
+    
+    -- Convert to relative path if possible
+    local cwd = vim.fn.getcwd()
+    local relative_dir = directory
+    if directory:sub(1, #cwd) == cwd then
+        relative_dir = directory:sub(#cwd + 2) -- +2 to skip the trailing slash
+        if relative_dir == "" then
+            relative_dir = "."
+        end
+    elseif directory:sub(1, #vim.fn.expand("~")) == vim.fn.expand("~") then
+        relative_dir = "~" .. directory:sub(#vim.fn.expand("~") + 1)
+    end
+    
+    -- Limit path length if too long
+    if #relative_dir > config_module.DEFAULTS.path_max_length then
+        local parts = vim.split(relative_dir, "/")
+        if #parts > 2 then
+            relative_dir = ".../" .. table.concat({parts[#parts-1], parts[#parts]}, "/")
+        end
+    end
+    
+    return relative_dir, filename
+end
+
 -- Create individual buffer line with proper formatting and highlights
 local function create_buffer_line(component, j, total_components, current_buffer_id, is_picking)
     local is_last = (j == total_components)
-    local tree_prefix = is_last and ("  " .. config_module.UI.TREE_LAST) or ("  " .. config_module.UI.TREE_BRANCH)
+    local tree_prefix = is_last and (" " .. config_module.UI.TREE_LAST) or (" " .. config_module.UI.TREE_BRANCH)
     local modified_indicator = ""
 
     -- Check if buffer is modified
@@ -249,45 +296,84 @@ local function create_buffer_line(component, j, total_components, current_buffer
         line_text = tree_prefix .. current_marker .. number_display .. " " .. modified_indicator .. icon .. " " .. component.name
     end
 
+    -- Extract path information for multi-line display
+    local path_dir, display_name = get_buffer_path_info(component)
+    
+    -- Use extracted filename or fallback to original name
+    local final_name = display_name or component.name
+    
+    -- Replace component.name with filename in the line text
+    local name_in_line = final_name
+    if letter and is_picking then
+        line_text = tree_prefix .. letter .. " " .. current_marker .. number_display .. " " .. modified_indicator .. icon .. " " .. name_in_line
+    else
+        line_text = tree_prefix .. current_marker .. number_display .. " " .. modified_indicator .. icon .. " " .. name_in_line
+    end
+    
+    -- Create path line if path exists and path display is enabled
+    local path_line = nil
+    if path_dir and config_module.DEFAULTS.show_path and path_dir ~= "." then
+        -- Tree continuation should match the tree structure: use spaces for last item, vertical line for others
+        local tree_continuation = is_last and "       " or " │     "  -- Match tree structure indentation
+        path_line = tree_continuation .. path_dir .. "/"
+    end
+    
     return {
         text = line_text,
+        path_line = path_line,
         tree_prefix = tree_prefix,
         pick_highlight_group = pick_highlight_group,
-        pick_highlight_end = pick_highlight_end
+        pick_highlight_end = pick_highlight_end,
+        has_path = path_line ~= nil
     }
 end
 
--- Apply buffer highlighting for a single buffer line
+-- Apply buffer highlighting for a single buffer line (basic highlighting only)
 local function apply_buffer_highlighting(line_info, component, actual_line_number, current_buffer_id, is_picking)
+    -- Apply basic buffer state highlighting
+    local normal_highlight_group = config_module.HIGHLIGHTS.INACTIVE
+    if component.id == current_buffer_id then
+        normal_highlight_group = config_module.HIGHLIGHTS.CURRENT
+    elseif component.focused then
+        normal_highlight_group = config_module.HIGHLIGHTS.VISIBLE
+    elseif api.nvim_buf_is_valid(component.id) and api.nvim_buf_get_option(component.id, "modified") then
+        normal_highlight_group = config_module.HIGHLIGHTS.MODIFIED
+    end
+    
+    -- Apply base highlight to entire line
+    api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, normal_highlight_group, actual_line_number - 1, 0, -1)
+    
+    -- Handle picking mode highlight (override the letter part if in picking mode)
     if is_picking and line_info.pick_highlight_group then
-        -- Highlight just the letter character in picking mode (starting after tree prefix)
-        local highlight_start = #line_info.tree_prefix
-        local highlight_end = highlight_start + 1
-        api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, line_info.pick_highlight_group, actual_line_number - 1, highlight_start, highlight_end)
+        local letter_start = #line_info.tree_prefix
+        local letter_end = letter_start + 1
+        api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, line_info.pick_highlight_group, actual_line_number - 1, letter_start, letter_end)
+    end
+end
 
-        -- Highlight the rest of the line normally, but only if there's content after the pick highlight
-        if highlight_end < #line_info.text then
-            local normal_highlight_group = config_module.HIGHLIGHTS.INACTIVE
-            if component.id == current_buffer_id then
-                normal_highlight_group = config_module.HIGHLIGHTS.CURRENT
-            elseif component.focused then
-                normal_highlight_group = config_module.HIGHLIGHTS.VISIBLE
-            elseif api.nvim_buf_is_valid(component.id) and api.nvim_buf_get_option(component.id, "modified") then
-                normal_highlight_group = config_module.HIGHLIGHTS.MODIFIED
-            end
-            api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, normal_highlight_group, actual_line_number - 1, highlight_end, -1)
-        end
+-- Apply path-specific highlighting for path lines
+local function apply_path_highlighting(component, path_line_number, current_buffer_id)
+    local path_highlight_group = config_module.HIGHLIGHTS.PATH
+    if component.id == current_buffer_id then
+        path_highlight_group = config_module.HIGHLIGHTS.PATH_CURRENT
+    elseif component.focused then
+        path_highlight_group = config_module.HIGHLIGHTS.PATH_VISIBLE
+    end
+    
+    -- Only highlight the path part, not the tree prefix
+    local line_text = api.nvim_buf_get_lines(state_module.get_buf_id(), path_line_number - 1, path_line_number, false)[1] or ""
+    local path_start = nil
+    -- Find the tree marker │ and then the first non-space character after it
+    local tree_marker_pos = line_text:find("│")
+    if tree_marker_pos then
+        path_start = line_text:find("%S", tree_marker_pos + 1)
     else
-        -- Normal highlighting for non-picking mode
-        local highlight_group = config_module.HIGHLIGHTS.INACTIVE
-        if component.id == current_buffer_id then
-            highlight_group = config_module.HIGHLIGHTS.CURRENT
-        elseif component.focused then
-            highlight_group = config_module.HIGHLIGHTS.VISIBLE
-        elseif api.nvim_buf_is_valid(component.id) and api.nvim_buf_get_option(component.id, "modified") then
-            highlight_group = config_module.HIGHLIGHTS.MODIFIED
-        end
-        api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, highlight_group, actual_line_number - 1, 0, -1)
+        -- For last buffer (no │), skip the initial spaces and find first non-space character
+        path_start = line_text:find("%S")
+    end
+    
+    if path_start then
+        api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, path_highlight_group, path_line_number - 1, path_start - 1, -1)
     end
 end
 
@@ -297,12 +383,25 @@ local function render_group_buffers(group_components, current_buffer_id, is_pick
         if component.id and component.name and api.nvim_buf_is_valid(component.id) then
             local line_info = create_buffer_line(component, j, #group_components, current_buffer_id, is_picking)
 
+            -- Add main buffer line
             table.insert(lines_text, line_info.text)
-            local actual_line_number = #lines_text
-            new_line_map[actual_line_number] = component.id
+            local main_line_number = #lines_text
+            new_line_map[main_line_number] = component.id
 
-            -- Apply highlights
-            apply_buffer_highlighting(line_info, component, actual_line_number, current_buffer_id, is_picking)
+            -- Apply highlights for main line
+            apply_buffer_highlighting(line_info, component, main_line_number, current_buffer_id, is_picking)
+            
+            -- Add path line if it exists
+            if line_info.has_path and line_info.path_line then
+                table.insert(lines_text, line_info.path_line)
+                local path_line_number = #lines_text
+                
+                -- Path line also maps to the same buffer for click handling
+                new_line_map[path_line_number] = component.id
+                
+                -- Apply path-specific highlighting
+                apply_path_highlighting(component, path_line_number, current_buffer_id)
+            end
         end
     end
 end
@@ -320,7 +419,7 @@ local function render_group_header(group, i, is_active, buffer_count, lines_text
         table.insert(group_header_lines, {line = separator_line_num, type = "separator"})
     end
 
-    local group_line = string.format("▎[%d] %s %s (%d buffers)",
+    local group_line = string.format("[%d] %s %s (%d buffers)",
         i, group_marker, group_name_display, buffer_count)
     table.insert(lines_text, group_line)
 
@@ -458,8 +557,8 @@ local function apply_group_highlights(group_header_lines, lines_text)
             local group_highlight = header_info.is_active and config_module.HIGHLIGHTS.GROUP_ACTIVE or config_module.HIGHLIGHTS.GROUP_INACTIVE
             api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, group_highlight, header_info.line, 0, -1)
 
-            -- Highlight group number [1]
-            api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, config_module.HIGHLIGHTS.GROUP_NUMBER, header_info.line, config_module.SYSTEM.GROUP_NUMBER_START, config_module.SYSTEM.GROUP_NUMBER_END)
+            -- Highlight group number [1] - include the brackets for consistency
+            api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, config_module.HIGHLIGHTS.GROUP_NUMBER, header_info.line, 0, config_module.SYSTEM.GROUP_NUMBER_END)
 
             -- Highlight group marker (● or ○)
             local line_text = lines_text[header_info.line + 1] or ""
@@ -475,8 +574,12 @@ end
 local function finalize_buffer_display(lines_text, new_line_map)
     api.nvim_buf_set_option(state_module.get_buf_id(), "modifiable", true)
     api.nvim_buf_set_lines(state_module.get_buf_id(), 0, -1, false, lines_text)
-    api.nvim_buf_set_option(state_module.get_buf_id(), "modifiable", false)
     state_module.set_line_to_buffer_id(new_line_map)
+end
+
+-- Complete buffer setup and make it read-only
+local function complete_buffer_setup()
+    api.nvim_buf_set_option(state_module.get_buf_id(), "modifiable", false)
 end
 
 --- Refreshes the sidebar content with the current list of buffers.
@@ -501,11 +604,65 @@ function M.refresh()
     -- Render all groups with their buffers
     local remaining_components = render_all_groups(active_group, components, current_buffer_id, is_picking, lines_text, new_line_map, group_header_lines)
 
-    -- Apply group header highlights
-    apply_group_highlights(group_header_lines, lines_text)
-
-    -- Finalize buffer display
+    -- Finalize buffer display (set lines but keep modifiable)
     finalize_buffer_display(lines_text, new_line_map)
+    
+    -- Apply group header highlights AFTER setting buffer content
+    apply_group_highlights(group_header_lines, lines_text)
+    
+    -- Force reapply our custom highlights as the final step
+    vim.schedule(function()
+        if state_module.is_sidebar_open() and api.nvim_buf_is_valid(state_module.get_buf_id()) then
+            -- Reapply buffer and path highlights with precise positioning
+            for line_num, buffer_id in pairs(new_line_map) do
+                local line_text = api.nvim_buf_get_lines(state_module.get_buf_id(), line_num - 1, line_num, false)[1] or ""
+                if line_text:match("%.") then  -- Filename line
+                    -- Find the filename part in the line (after icon and spaces)
+                    local filename_start = nil
+                    -- Look for pattern like "🌙 filename.ext" - find the filename after the icon
+                    local icon_pos = line_text:find("[🌙📄🐍🟢🦀📝📋]")
+                    if icon_pos then
+                        filename_start = line_text:find("%S", icon_pos + 4) -- Skip icon and spaces
+                    else
+                        -- Fallback: find after common prefix patterns
+                        filename_start = line_text:find("[%w_%-%.]+%.[%w]+")
+                    end
+                    
+                    if filename_start then
+                        local highlight_group = config_module.HIGHLIGHTS.FILENAME
+                        if buffer_id == current_buffer_id then
+                            highlight_group = config_module.HIGHLIGHTS.FILENAME_CURRENT
+                        end
+                        -- Only highlight the filename part, not the entire line
+                        api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, highlight_group, line_num - 1, filename_start - 1, -1)
+                    end
+                elseif line_text:match("/") then  -- Path line
+                    -- Only highlight the path part, not the tree structure
+                    local path_start = nil
+                    -- Find the tree marker │ and then the first non-space character after it
+                    local tree_marker_pos = line_text:find("│")
+                    if tree_marker_pos then
+                        path_start = line_text:find("%S", tree_marker_pos + 1)
+                    else
+                        -- For last buffer (no │), skip the initial spaces and find first non-space character
+                        path_start = line_text:find("%S")
+                    end
+                    
+                    if path_start then
+                        local highlight_group = config_module.HIGHLIGHTS.PATH
+                        if buffer_id == current_buffer_id then
+                            highlight_group = config_module.HIGHLIGHTS.PATH_CURRENT
+                        end
+                        -- Only highlight from the path start to end, leaving tree prefix normal
+                        api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, highlight_group, line_num - 1, path_start - 1, -1)
+                    end
+                end
+            end
+        end
+    end)
+    
+    -- Complete buffer setup (make read-only)
+    complete_buffer_setup()
 end
 
 
@@ -563,7 +720,7 @@ function M.apply_picking_highlights()
                     -- Calculate correct highlight position, skip tree prefix
                     -- Determine if this is the last buffer or middle buffer
                     local is_last = (i == #components)
-                    local tree_prefix = is_last and ("  " .. config_module.UI.TREE_LAST) or ("  " .. config_module.UI.TREE_BRANCH)
+                    local tree_prefix = is_last and (" " .. config_module.UI.TREE_LAST) or (" " .. config_module.UI.TREE_BRANCH)
                     local highlight_start = #tree_prefix
                     local highlight_end = highlight_start + 1
 
@@ -934,6 +1091,58 @@ M.add_current_buffer_to_group = function(group_name)
 end
 M.move_group_up = function() commands.move_group_up() end
 M.move_group_down = function() commands.move_group_down() end
+
+-- Debug function to test highlights
+function M.debug_highlights()
+    print("Testing highlights...")
+    
+    -- Test if highlight groups exist
+    local test_groups = {
+        config_module.HIGHLIGHTS.FILENAME,
+        config_module.HIGHLIGHTS.FILENAME_CURRENT,
+        config_module.HIGHLIGHTS.FILENAME_VISIBLE,
+        config_module.HIGHLIGHTS.PATH,
+        config_module.HIGHLIGHTS.PATH_CURRENT,
+        config_module.HIGHLIGHTS.PATH_VISIBLE,
+    }
+    
+    for _, group in ipairs(test_groups) do
+        local hl = api.nvim_get_hl(0, {name = group})
+        print(string.format("Highlight group %s: %s", group, vim.inspect(hl)))
+    end
+end
+
+-- Force refresh highlights - manual testing function
+function M.force_refresh_highlights()
+    if not state_module.is_sidebar_open() then
+        print("Sidebar not open")
+        return
+    end
+    
+    local buf_id = state_module.get_buf_id()
+    if not buf_id or not api.nvim_buf_is_valid(buf_id) then
+        print("Invalid buffer")
+        return
+    end
+    
+    -- Clear all highlights first
+    api.nvim_buf_clear_namespace(buf_id, ns_id, 0, -1)
+    
+    -- Apply test highlights manually to see if they work
+    local total_lines = api.nvim_buf_line_count(buf_id)
+    for line = 1, math.min(total_lines, 10) do
+        local line_text = api.nvim_buf_get_lines(buf_id, line - 1, line, false)[1] or ""
+        if line_text:match("%.") then  -- Looks like a filename line
+            api.nvim_buf_add_highlight(buf_id, ns_id, config_module.HIGHLIGHTS.FILENAME_CURRENT, line - 1, 0, -1)
+            print(string.format("Applied FILENAME_CURRENT to line %d: %s", line, line_text))
+        elseif line_text:match("/") then  -- Looks like a path line
+            api.nvim_buf_add_highlight(buf_id, ns_id, config_module.HIGHLIGHTS.PATH_CURRENT, line - 1, 0, -1)
+            print(string.format("Applied PATH_CURRENT to line %d: %s", line, line_text))
+        end
+    end
+    
+    vim.cmd("redraw!")
+end
 
 -- Initialize immediately on plugin load
 initialize_plugin()

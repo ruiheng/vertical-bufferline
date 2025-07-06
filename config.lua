@@ -26,6 +26,11 @@ M.UI = {
     TREE_EMPTY = "(empty)",
     NUMBER_OVERFLOW_CHAR = "·",
     CURRENT_BUFFER_MARKER = "► ",
+    
+    -- Path display formatting
+    PATH_CONTINUATION = "│     ",  -- For tree visual continuity
+    PATH_PREFIX = "~/",
+    PATH_MAX_LENGTH = 50,
 
     -- Group display
     ACTIVE_GROUP_MARKER = "●",
@@ -67,6 +72,16 @@ M.HIGHLIGHTS = {
     PICK = "VBufferLinePick",
     PICK_VISIBLE = "VBufferLinePickVisible",
     PICK_SELECTED = "VBufferLinePickSelected",
+    
+    -- Path display highlights
+    PATH = "VBufferLinePath",
+    PATH_CURRENT = "VBufferLinePathCurrent",
+    PATH_VISIBLE = "VBufferLinePathVisible",
+    
+    -- Filename-specific highlights for better distinction
+    FILENAME = "VBufferLineFilename",
+    FILENAME_CURRENT = "VBufferLineFilenameCurrent",
+    FILENAME_VISIBLE = "VBufferLineFilenameVisible",
 }
 
 -- Event names for autocmds
@@ -96,6 +111,11 @@ M.DEFAULTS = {
     -- UI settings
     width = M.UI.DEFAULT_WIDTH,
     expand_all_groups = true,
+    
+    -- Path display settings
+    show_path = true,
+    path_style = "relative", -- "relative", "absolute", "smart"
+    path_max_length = M.UI.PATH_MAX_LENGTH,
 }
 
 -- File extensions and icons mapping
