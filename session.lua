@@ -504,13 +504,13 @@ function M.setup(opts)
                 "VBufferLineBufferRemovedFromGroup"
             },
             callback = function()
-                -- 防抖：取消之前的定时器，重新开始计时
+                -- Debounce: cancel previous timer and restart counting
                 if auto_save_timer then
                     auto_save_timer:stop()
                     auto_save_timer:close()
                 end
                 
-                -- 延迟保存，避免频繁IO
+                -- Delayed save to avoid frequent IO
                 auto_save_timer = vim.loop.new_timer()
                 auto_save_timer:start(2000, 0, vim.schedule_wrap(function()
                     M.save_session()
@@ -528,7 +528,7 @@ function M.setup(opts)
         -- Auto-load on startup with more delay to ensure bufferline is ready
         vim.defer_fn(function()
             if M.has_session() then
-                -- 确保bufferline集成已启用
+                -- Ensure bufferline integration is enabled
                 local bufferline_integration = require('vertical-bufferline.bufferline-integration')
                 if not bufferline_integration.status().is_hooked then
                     bufferline_integration.enable()
@@ -538,11 +538,11 @@ function M.setup(opts)
                 vim.defer_fn(function()
                     M.load_session()
                     
-                    -- 在session加载完成后额外等待，然后强制同步
+                    -- Additional wait after session load completion, then force sync
                     vim.defer_fn(function()
                         bufferline_integration.force_refresh()
                         
-                        -- 再次确保当前缓冲区正确
+                        -- Ensure current buffer is correct again
                         local groups = require('vertical-bufferline.groups')
                         local active_group = groups.get_active_group()
                         if active_group and #active_group.buffers > 0 then
