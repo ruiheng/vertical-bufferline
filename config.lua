@@ -116,6 +116,20 @@ M.DEFAULTS = {
     show_path = true,
     path_style = "relative", -- "relative", "absolute", "smart"
     path_max_length = M.UI.PATH_MAX_LENGTH,
+    
+    -- Session integration settings
+    session = {
+        -- mini.sessions integration
+        mini_sessions_integration = true,
+        
+        -- Native mksession support
+        auto_serialize = true,              -- Enable auto-serialization to global variable
+        serialize_interval = 3000,          -- Serialization interval in milliseconds (3 seconds)
+        optimize_serialize = true,          -- Only serialize when state actually changes
+        auto_restore_prompt = true,         -- Show restore prompt when session data changes during source
+        confirm_restore = true,             -- Ask for confirmation before restoring
+        global_variable = "VerticalBufferlineSession"  -- Global variable name for session data
+    },
 }
 
 -- File extensions and icons mapping

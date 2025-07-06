@@ -976,6 +976,9 @@ local function initialize_plugin()
         auto_save = config_module.DEFAULTS.auto_save,
         auto_load = config_module.DEFAULTS.auto_load,
     })
+    
+    -- Setup global variable session integration (for mini.sessions and native mksession)
+    session.setup_session_integration()
 
     -- Setup global autocmds (not dependent on sidebar state)
     api.nvim_command("augroup VerticalBufferlineGlobal")
