@@ -720,10 +720,10 @@ local function initialize_plugin()
     bufferline_integration.enable()
     
     -- 初始化 session 模块
-    -- session.setup({
-    --     auto_save = true,
-    --     auto_load = true,
-    -- })
+    session.setup({
+        auto_save = false,
+        auto_load = false,
+    })
     
     -- 设置全局自动命令（不依赖sidebar状态）
     api.nvim_command("augroup VerticalBufferlineGlobal")
