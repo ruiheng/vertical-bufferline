@@ -91,6 +91,22 @@ local state = {
     highlight_timer = nil, -- Timer for picking highlights
 }
 
+-- Helper function to get the current buffer from main window, not sidebar
+local function get_main_window_current_buffer()
+    for _, win_id in ipairs(api.nvim_list_wins()) do
+        if win_id ~= state.win_id and api.nvim_win_is_valid(win_id) then
+            -- Check if this window is not a floating window
+            local win_config = api.nvim_win_get_config(win_id)
+            if win_config.relative == "" then  -- Not a floating window
+                return api.nvim_win_get_buf(win_id)
+            end
+        end
+    end
+    
+    -- Fallback to global current buffer if no main window found
+    return api.nvim_get_current_buf()
+end
+
 --- Refreshes the sidebar content with the current list of buffers.
 function M.refresh()
     if not state.is_sidebar_open or not api.nvim_win_is_valid(state.win_id) then return end
@@ -102,7 +118,8 @@ function M.refresh()
     if not state.buf_id or not api.nvim_buf_is_valid(state.buf_id) then return end
 
     local components = bufferline_state.components
-    local current_buffer_id = api.nvim_get_current_buf()
+    
+    local current_buffer_id = get_main_window_current_buffer()
     
     -- 过滤掉无效的components和特殊buffer
     local valid_components = {}
@@ -474,7 +491,8 @@ function M.apply_picking_highlights()
     
     -- Get current components
     local components = bufferline_state.components
-    local current_buffer_id = api.nvim_get_current_buf()
+    
+    local current_buffer_id = get_main_window_current_buffer()
     
     -- 我们需要找到每个component对应的实际行号
     -- 通过line_to_buffer_id映射来查找
