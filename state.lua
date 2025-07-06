@@ -208,12 +208,12 @@ function M.cleanup_invalid_state()
         state.win_id = nil
         state.is_sidebar_open = false
     end
-    
+
     -- Clean up invalid buffer references
     if state.buf_id and not is_valid_buf_id(state.buf_id) then
         state.buf_id = nil
     end
-    
+
     -- Clean up invalid line mappings
     local valid_mapping = {}
     for line, buf_id in pairs(state.line_to_buffer_id) do

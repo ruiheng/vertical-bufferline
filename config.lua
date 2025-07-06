@@ -7,11 +7,11 @@ local M = {}
 M.UI = {
     -- Sidebar dimensions
     DEFAULT_WIDTH = 40,
-    
+
     -- Display limits
     MAX_BUFFERS_PER_GROUP = 10,
     MAX_DISPLAY_NUMBER = 10,
-    
+
     -- Timing constants (in milliseconds)
     HIGHLIGHT_UPDATE_INTERVAL = 50,
     AUTO_SAVE_DELAY = 2000,
@@ -19,14 +19,14 @@ M.UI = {
     SESSION_LOAD_DELAY = 500,
     SESSION_ADDITIONAL_DELAY = 200,
     SESSION_FINAL_DELAY = 300,
-    
+
     -- Tree display characters
     TREE_BRANCH = "├─ ",
     TREE_LAST = "└─ ",
     TREE_EMPTY = "(empty)",
     NUMBER_OVERFLOW_CHAR = "·",
     CURRENT_BUFFER_MARKER = "► ",
-    
+
     -- Group display
     ACTIVE_GROUP_MARKER = "●",
     INACTIVE_GROUP_MARKER = "○",
@@ -50,19 +50,19 @@ M.COLORS = {
 M.HIGHLIGHTS = {
     -- Buffer highlights
     CURRENT = "VBufferLineCurrent",
-    VISIBLE = "VBufferLineVisible", 
+    VISIBLE = "VBufferLineVisible",
     MODIFIED = "VBufferLineModified",
     INACTIVE = "VBufferLineInactive",
     ERROR = "VBufferLineError",
     WARNING = "VBufferLineWarning",
-    
+
     -- Group highlights
     GROUP_ACTIVE = "VBufferLineGroupActive",
-    GROUP_INACTIVE = "VBufferLineGroupInactive", 
+    GROUP_INACTIVE = "VBufferLineGroupInactive",
     GROUP_NUMBER = "VBufferLineGroupNumber",
     GROUP_SEPARATOR = "VBufferLineGroupSeparator",
     GROUP_MARKER = "VBufferLineGroupMarker",
-    
+
     -- Pick mode highlights
     PICK = "VBufferLinePick",
     PICK_VISIBLE = "VBufferLinePickVisible",
@@ -72,7 +72,7 @@ M.HIGHLIGHTS = {
 -- Event names for autocmds
 M.EVENTS = {
     GROUP_CREATED = "VBufferLineGroupCreated",
-    GROUP_DELETED = "VBufferLineGroupDeleted", 
+    GROUP_DELETED = "VBufferLineGroupDeleted",
     GROUP_RENAMED = "VBufferLineGroupRenamed",
     GROUP_CHANGED = "VBufferLineGroupChanged",
     GROUP_REORDERED = "VBufferLineGroupReordered",
@@ -87,12 +87,12 @@ M.DEFAULTS = {
     max_buffers_per_group = M.UI.MAX_BUFFERS_PER_GROUP,
     auto_create_groups = true,
     auto_add_new_buffers = true,
-    
+
     -- Session management
     auto_save = false,
     auto_load = false,
     session_name_strategy = "cwd_hash", -- "cwd_hash" or "cwd_path" or "manual"
-    
+
     -- UI settings
     width = M.UI.DEFAULT_WIDTH,
     expand_all_groups = true,
@@ -101,7 +101,7 @@ M.DEFAULTS = {
 -- File extensions and icons mapping
 M.ICONS = {
     lua = "🌙",
-    js = "📄", 
+    js = "📄",
     py = "🐍",
     go = "🟢",
     rs = "🦀",
@@ -118,15 +118,15 @@ M.ICONS = {
 M.SYSTEM = {
     -- Buffer validation
     EMPTY_BUFTYPE = '',
-    
+
     -- Position constants
     FIRST_INDEX = 1,
     ZERO_BASED_OFFSET = 1,
-    
+
     -- Session version
     SESSION_VERSION = "1.0",
     SESSION_HASH_LENGTH = 16,
-    
+
     -- Highlight constants
     HIGHLIGHT_START_COL = 0,
     HIGHLIGHT_END_COL = -1,

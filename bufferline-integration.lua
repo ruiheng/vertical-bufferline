@@ -15,14 +15,11 @@ local last_buffer_state = {}
 
 -- Prevent reload protection
 if _G._vertical_bufferline_integration_loaded then
-    print("bufferline-integration already loaded globally, returning existing instance")
     return _G._vertical_bufferline_integration_instance
 end
 
 _G._vertical_bufferline_integration_loaded = true
 
--- Add debug flag
-local debug = false
 
 -- Check if it's a special buffer (based on buftype)
 local function is_special_buffer(buf_id)
@@ -38,7 +35,7 @@ local function sync_bufferline_to_group()
     if not is_enabled then
         return
     end
-    
+
     -- Check pointer: if nil, copy is invalid
     if not sync_target_group_id then
         return
@@ -47,45 +44,30 @@ local function sync_bufferline_to_group()
     -- Get all valid buffer list from bufferline (not just visible ones)
     local bufferline_utils = require('bufferline.utils')
     local all_valid_buffers = {}
-    
+
     if bufferline_utils and bufferline_utils.get_valid_buffers then
         all_valid_buffers = bufferline_utils.get_valid_buffers()
     end
-    
-    -- Debug information
-    if debug then
-        print("=== Sync Debug ===")
-        print("all_valid_buffers count:", #all_valid_buffers)
-        print("sync_target_group_id:", sync_target_group_id)
-    end
-    
+
+
     -- Filter out special buffers (based on buftype)
     local filtered_buffer_ids = {}
     for _, buf_id in ipairs(all_valid_buffers) do
         local should_include = not is_special_buffer(buf_id)
-        
+
         -- Ensure special buffers remain unlisted
         if is_special_buffer(buf_id) then
             pcall(vim.api.nvim_buf_set_option, buf_id, 'buflisted', false)
         end
-        
-        if debug then
-            local buf_name = vim.api.nvim_buf_get_name(buf_id)
-            local buftype = vim.api.nvim_buf_get_option(buf_id, 'buftype')
-            print(string.format("Buffer %d: '%s' (type: '%s') -> %s", 
-                buf_id, 
-                vim.fn.fnamemodify(buf_name, ":t") or "[No Name]",
-                buftype,
-                should_include and "included" or "filtered"))
-        end
-        
+
+
         if should_include then
             table.insert(filtered_buffer_ids, buf_id)
         end
     end
-    
+
     local target_group = groups.find_group_by_id(sync_target_group_id)
-    
+
     if target_group then
         -- Build current buffer state snapshot (including ID and name)
         local current_buffer_state = {}
@@ -94,24 +76,24 @@ local function sync_bufferline_to_group()
                 current_buffer_state[buf_id] = vim.api.nvim_buf_get_name(buf_id)
             end
         end
-        
+
         -- Check for changes: buffer list changes or buffer name changes
         local buffers_changed = not vim.deep_equal(target_group.buffers, filtered_buffer_ids)
         local names_changed = not vim.deep_equal(last_buffer_state, current_buffer_state)
-        
+
         if buffers_changed or names_changed then
             -- Update cached state
             last_buffer_state = current_buffer_state
-            
+
             -- Directly update the target group's buffer list
             target_group.buffers = filtered_buffer_ids
-            
+
             -- Trigger event to notify that group content has been updated
             vim.api.nvim_exec_autocmds("User", {
                 pattern = "VBufferLineGroupBuffersUpdated",
                 data = { group_id = sync_target_group_id, buffers = target_group.buffers }
             })
-            
+
             -- Actively refresh sidebar display
             local vbl = require('vertical-bufferline')
             if vbl.state and vbl.state.is_sidebar_open and vbl.refresh then
@@ -121,34 +103,24 @@ local function sync_bufferline_to_group()
     end
 end
 
--- Debug function
-function M.toggle_debug()
-    debug = not debug
-    print("Bufferline integration debug:", debug)
-    return debug
-end
 
--- Export debug state
-function M.get_debug()
-    return debug
-end
-
--- Direction 2: group → bufferline (when switching groups, 1% of the time)
+--- Direction 2: group → bufferline (when switching groups, 1% of the time)
+--- @param buffer_list table List of buffer IDs to show in bufferline
 function M.set_bufferline_buffers(buffer_list)
     if not is_enabled then
         return
     end
-    
+
     -- 2. Copy buffer_list to bufferline
     -- Get all buffers (not using bufferline_utils, as it may not check buflisted)
     local all_buffers = vim.api.nvim_list_bufs()
-    
+
     -- Create buffer set for fast lookup
     local target_buffer_set = {}
     for _, buf_id in ipairs(buffer_list) do
         target_buffer_set[buf_id] = true
     end
-    
+
     -- Hide buffers not in target list (set to unlisted)
     for _, buf_id in ipairs(all_buffers) do
         if vim.api.nvim_buf_is_valid(buf_id) then
@@ -161,7 +133,7 @@ function M.set_bufferline_buffers(buffer_list)
             end
         end
     end
-    
+
     -- Handle empty group case: if buffer_list is empty, need to display empty state
     if #buffer_list == 0 then
         M.handle_empty_group_display()
@@ -174,18 +146,18 @@ function M.set_bufferline_buffers(buffer_list)
             end
         end
     end
-    
+
     -- Refresh bufferline
     local bufferline_ui = require('bufferline.ui')
     if bufferline_ui.refresh then
         bufferline_ui.refresh()
     end
-    
+
     -- 3. Point the pointer to the new group (set by caller)
     -- This step is completed by the set_sync_target function
 end
 
--- Handle empty group display: create or switch to an empty temporary buffer
+--- Handle empty group display: create or switch to an empty temporary buffer
 function M.handle_empty_group_display()
     -- First hide all currently listed normal buffers (keep special buffers)
     local all_buffers = vim.api.nvim_list_bufs()
@@ -194,17 +166,17 @@ function M.handle_empty_group_display()
             local buftype = vim.api.nvim_buf_get_option(buf_id, 'buftype')
             local buflisted = vim.api.nvim_buf_get_option(buf_id, 'buflisted')
             local buf_name = vim.api.nvim_buf_get_name(buf_id)
-            
+
             -- If it's a normal empty buffer (no name), hide it
             if buftype == '' and buflisted and (buf_name == '' or buf_name:match('^%s*$')) then
                 pcall(vim.api.nvim_buf_set_option, buf_id, 'buflisted', false)
             end
         end
     end
-    
+
     -- Find or create a dedicated empty group buffer
     local empty_group_buffer = nil
-    
+
     -- Find existing empty group buffer (using buftype check)
     for _, buf_id in ipairs(all_buffers) do
         if vim.api.nvim_buf_is_valid(buf_id) then
@@ -216,7 +188,7 @@ function M.handle_empty_group_display()
             end
         end
     end
-    
+
     -- If not found, create a new empty buffer
     if not empty_group_buffer then
         empty_group_buffer = vim.api.nvim_create_buf(false, true)
@@ -224,7 +196,7 @@ function M.handle_empty_group_display()
         vim.api.nvim_buf_set_option(empty_group_buffer, 'buftype', 'nofile')
         vim.api.nvim_buf_set_option(empty_group_buffer, 'swapfile', false)
         vim.api.nvim_buf_set_option(empty_group_buffer, 'buflisted', false)
-        
+
         -- Set some help text
         local lines = {
             "# Empty Group",
@@ -238,77 +210,79 @@ function M.handle_empty_group_display()
         vim.api.nvim_buf_set_lines(empty_group_buffer, 0, -1, false, lines)
         vim.api.nvim_buf_set_option(empty_group_buffer, 'modifiable', false)
     end
-    
+
     -- Switch to empty buffer
     pcall(vim.api.nvim_set_current_buf, empty_group_buffer)
 end
 
--- Set sync target group (step 3 of atomic operation)
+--- Set sync target group (step 3 of atomic operation)
+--- @param group_id string Group ID to sync with bufferline
 function M.set_sync_target(group_id)
     sync_target_group_id = group_id
 end
 
--- Manual sync function
+--- Manual sync function
 function M.manual_sync()
     local bufferline_ui = require('bufferline.ui')
     if bufferline_ui and bufferline_ui.refresh then
         bufferline_ui.refresh()
     end
-    
+
     local vbl = require('vertical-bufferline')
     if vbl.state and vbl.state.is_sidebar_open and vbl.refresh then
         vbl.refresh()
     end
-    
+
     vim.notify("Manual sync triggered", vim.log.levels.INFO)
 end
 
--- Enable integration
+--- Enable integration
+--- @return boolean success
 function M.enable()
     if is_enabled then
         return true
     end
-    
+
     -- Ensure bufferline is loaded
     local ok_state, _ = pcall(require, 'bufferline.state')
     if not ok_state then
         vim.notify("bufferline.nvim not found", vim.log.levels.WARN)
         return false
     end
-    
+
     -- Start timed sync: bufferline → group
     sync_timer = vim.loop.new_timer()
     if sync_timer then
         sync_timer:start(100, 100, vim.schedule_wrap(sync_bufferline_to_group))
     end
-    
+
     -- Set initial sync target to current active group
     local active_group = groups.get_active_group()
     if active_group then
         sync_target_group_id = active_group.id
     end
-    
+
     is_enabled = true
     return true
 end
 
--- Disable integration
+--- Disable integration
 function M.disable()
     if not is_enabled then
         return
     end
-    
+
     -- Stop timer
     if sync_timer then
         sync_timer:stop()
         sync_timer:close()
         sync_timer = nil
     end
-    
+
     is_enabled = false
 end
 
--- Toggle integration
+--- Toggle integration
 function M.toggle()
     if is_enabled then
         M.disable()
@@ -317,7 +291,8 @@ function M.toggle()
     end
 end
 
--- Status check
+--- Status check
+--- @return table Integration status information
 function M.status()
     local bufferline_available = pcall(require, 'bufferline.state')
     return {
@@ -329,7 +304,8 @@ function M.status()
     }
 end
 
--- Get current group's buffer information (for compatibility with init.lua)
+--- Get current group's buffer information (for compatibility with init.lua)
+--- @return table Buffer information
 function M.get_group_buffer_info()
     local active_group = groups.get_active_group()
     if not active_group then
@@ -339,16 +315,16 @@ function M.get_group_buffer_info()
             visible_buffers = 0
         }
     end
-    
+
     local active_buffers = groups.get_active_group_buffers()
     local valid_buffers = 0
-    
+
     for _, buf_id in ipairs(active_buffers) do
         if vim.api.nvim_buf_is_valid(buf_id) then
             valid_buffers = valid_buffers + 1
         end
     end
-    
+
     return {
         group_name = active_group.name,
         total_buffers = #active_buffers,
@@ -356,14 +332,14 @@ function M.get_group_buffer_info()
     }
 end
 
--- Force refresh (for compatibility with session.lua)
+--- Force refresh (for compatibility with session.lua)
 function M.force_refresh()
     vim.schedule(function()
         local bufferline_ui = require('bufferline.ui')
         if bufferline_ui.refresh then
             bufferline_ui.refresh()
         end
-        
+
         -- Refresh our sidebar
         local vbl = require('vertical-bufferline')
         if vbl.state and vbl.state.is_sidebar_open and vbl.refresh then
@@ -372,10 +348,12 @@ function M.force_refresh()
     end)
 end
 
--- Safe buffer close function, avoiding E85 error
+--- Safe buffer close function, avoiding E85 error
+--- @param target_buf number Optional buffer ID to close
+--- @return boolean success
 function M.smart_close_buffer(target_buf)
     target_buf = target_buf or vim.api.nvim_get_current_buf()
-    
+
     -- Check if there are unsaved modifications
     if vim.api.nvim_buf_get_option(target_buf, "modified") then
         local choice = vim.fn.confirm("Buffer has unsaved changes. Close anyway?", "&Yes\n&No", 2)
@@ -383,7 +361,7 @@ function M.smart_close_buffer(target_buf)
             return false
         end
     end
-    
+
     -- Get all listed buffers
     local all_buffers = vim.api.nvim_list_bufs()
     local listed_buffers = {}
@@ -392,14 +370,14 @@ function M.smart_close_buffer(target_buf)
             table.insert(listed_buffers, buf_id)
         end
     end
-    
+
     -- If this is the last listed buffer, directly use empty group display
     if #listed_buffers <= 1 then
         -- First delete target buffer
         if vim.api.nvim_buf_is_valid(target_buf) then
             pcall(vim.api.nvim_buf_delete, target_buf, { force = true })
         end
-        
+
         -- Directly handle empty group display (this will create [Empty Group] buffer and switch to it)
         M.handle_empty_group_display()
     else
@@ -411,17 +389,17 @@ function M.smart_close_buffer(target_buf)
                 break
             end
         end
-        
+
         if next_buf then
             vim.api.nvim_set_current_buf(next_buf)
         end
-        
+
         -- Then delete target buffer
         if vim.api.nvim_buf_is_valid(target_buf) then
             pcall(vim.api.nvim_buf_delete, target_buf, { force = true })
         end
     end
-    
+
     return true
 end
 

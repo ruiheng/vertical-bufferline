@@ -2,7 +2,6 @@
 
 -- Anti-reload protection
 if _G._vertical_bufferline_init_loaded then
-    print("init.lua already loaded globally, returning existing instance")
     return _G._vertical_bufferline_init_instance
 end
 
@@ -48,20 +47,20 @@ local function setup_pick_highlights()
     local bufferline_pick = vim.api.nvim_get_hl(0, {name = "BufferLinePick"})
     local bufferline_pick_visible = vim.api.nvim_get_hl(0, {name = "BufferLinePickVisible"})
     local bufferline_pick_selected = vim.api.nvim_get_hl(0, {name = "BufferLinePickSelected"})
-    
+
     -- Set our highlights to match exactly
     if next(bufferline_pick) then
         api.nvim_set_hl(0, config_module.HIGHLIGHTS.PICK, bufferline_pick)
     else
         api.nvim_set_hl(0, config_module.HIGHLIGHTS.PICK, { fg = config_module.COLORS.RED, bold = true, italic = true })
     end
-    
+
     if next(bufferline_pick_visible) then
         api.nvim_set_hl(0, config_module.HIGHLIGHTS.PICK_VISIBLE, bufferline_pick_visible)
     else
         api.nvim_set_hl(0, config_module.HIGHLIGHTS.PICK_VISIBLE, { fg = config_module.COLORS.RED, bold = true, italic = true })
     end
-    
+
     if next(bufferline_pick_selected) then
         api.nvim_set_hl(0, config_module.HIGHLIGHTS.PICK_SELECTED, bufferline_pick_selected)
     else
@@ -98,30 +97,30 @@ local function get_main_window_current_buffer()
             end
         end
     end
-    
+
     -- Fallback to global current buffer if no main window found
     return api.nvim_get_current_buf()
 end
 
 -- Validate and initialize refresh state
 local function validate_and_initialize_refresh()
-    if not state_module.is_sidebar_open() or not api.nvim_win_is_valid(state_module.get_win_id()) then 
-        return nil 
+    if not state_module.is_sidebar_open() or not api.nvim_win_is_valid(state_module.get_win_id()) then
+        return nil
     end
 
     local bufferline_state = require('bufferline.state')
-    if not bufferline_state or not bufferline_state.components then 
-        return nil 
+    if not bufferline_state or not bufferline_state.components then
+        return nil
     end
-    
+
     -- Ensure buf_id is valid
-    if not state_module.get_buf_id() or not api.nvim_buf_is_valid(state_module.get_buf_id()) then 
-        return nil 
+    if not state_module.get_buf_id() or not api.nvim_buf_is_valid(state_module.get_buf_id()) then
+        return nil
     end
 
     local components = bufferline_state.components
     local current_buffer_id = get_main_window_current_buffer()
-    
+
     -- Filter out invalid components and special buffers
     local valid_components = {}
     for _, comp in ipairs(components) do
@@ -129,11 +128,11 @@ local function validate_and_initialize_refresh()
             table.insert(valid_components, comp)
         end
     end
-    
+
     -- Get group information
     local group_info = bufferline_integration.get_group_buffer_info()
     local active_group = groups.get_active_group()
-    
+
     return {
         bufferline_state = bufferline_state,
         components = valid_components,
@@ -146,30 +145,27 @@ end
 -- Detect picking mode and manage picking state and timers
 local function detect_and_manage_picking_mode(bufferline_state, components)
     local is_picking = false
-    local debug_info = ""
-    
+
     -- Try different ways to detect picking mode
     if bufferline_state.is_picking then
         is_picking = true
-        debug_info = debug_info .. "is_picking=true "
     end
-    
+
     -- Check if any component has picking-related text
     for _, comp in ipairs(components) do
         if comp.text and comp.text:match("^%w") and #comp.text == 1 then
             is_picking = true
-            debug_info = debug_info .. "found_hint_text "
             break
         end
     end
-    
+
     -- Detect picking mode state changes
     if is_picking and not state_module.was_picking() then
         state_module.set_was_picking(true)
-        
+
         -- Stop existing timer if any
         state_module.stop_highlight_timer()
-        
+
         -- Start highlight application timer during picking mode
         local timer = vim.loop.new_timer()
         timer:start(0, config_module.UI.HIGHLIGHT_UPDATE_INTERVAL, vim.schedule_wrap(function()
@@ -186,7 +182,7 @@ local function detect_and_manage_picking_mode(bufferline_state, components)
         -- Clean up timer when exiting picking mode
         state_module.stop_highlight_timer()
     end
-    
+
     return is_picking
 end
 
@@ -195,12 +191,12 @@ local function create_buffer_line(component, j, total_components, current_buffer
     local is_last = (j == total_components)
     local tree_prefix = is_last and ("  " .. config_module.UI.TREE_LAST) or ("  " .. config_module.UI.TREE_BRANCH)
     local modified_indicator = ""
-    
+
     -- Check if buffer is modified
     if api.nvim_buf_is_valid(component.id) and api.nvim_buf_get_option(component.id, "modified") then
         modified_indicator = "● "
     end
-    
+
     local icon = component.icon or ""
     if icon == "" then
         -- Fallback to basic file type detection
@@ -209,7 +205,7 @@ local function create_buffer_line(component, j, total_components, current_buffer
             icon = config_module.ICONS[extension] or config_module.ICONS.default
         end
     end
-    
+
     -- Get letter for picking mode
     local ok, element = pcall(function() return component:as_element() end)
     local letter = nil
@@ -218,28 +214,28 @@ local function create_buffer_line(component, j, total_components, current_buffer
     elseif component.letter then
         letter = component.letter
     end
-    
+
     -- Add number display (1-9 correspond to <leader>1-9, 10 uses 0)
     local number_display = j <= 9 and tostring(j) or "0"
     if j > config_module.UI.MAX_DISPLAY_NUMBER then
         number_display = config_module.UI.NUMBER_OVERFLOW_CHAR
     end
-    
+
     -- Add arrow marker for current buffer
     local current_marker = ""
     if component.id == current_buffer_id then
         current_marker = config_module.UI.CURRENT_BUFFER_MARKER
     end
-    
+
     local line_text
     local pick_highlight_group = nil
     local pick_highlight_end = 0
-    
+
     if letter and is_picking then
         -- In picking mode: show hint character + buffer name with tree structure
         line_text = tree_prefix .. letter .. " " .. current_marker .. number_display .. " " .. modified_indicator .. icon .. " " .. component.name
         pick_highlight_end = #tree_prefix + 1  -- Only highlight the letter character
-        
+
         -- Choose appropriate pick highlight based on buffer state
         if component.id == current_buffer_id then
             pick_highlight_group = config_module.HIGHLIGHTS.PICK_SELECTED
@@ -252,7 +248,7 @@ local function create_buffer_line(component, j, total_components, current_buffer
         -- Normal mode: regular display with tree structure, current marker and number
         line_text = tree_prefix .. current_marker .. number_display .. " " .. modified_indicator .. icon .. " " .. component.name
     end
-    
+
     return {
         text = line_text,
         tree_prefix = tree_prefix,
@@ -268,7 +264,7 @@ local function apply_buffer_highlighting(line_info, component, actual_line_numbe
         local highlight_start = #line_info.tree_prefix
         local highlight_end = highlight_start + 1
         api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, line_info.pick_highlight_group, actual_line_number - 1, highlight_start, highlight_end)
-        
+
         -- Highlight the rest of the line normally, but only if there's content after the pick highlight
         if highlight_end < #line_info.text then
             local normal_highlight_group = config_module.HIGHLIGHTS.INACTIVE
@@ -300,11 +296,11 @@ local function render_group_buffers(group_components, current_buffer_id, is_pick
     for j, component in ipairs(group_components) do
         if component.id and component.name and api.nvim_buf_is_valid(component.id) then
             local line_info = create_buffer_line(component, j, #group_components, current_buffer_id, is_picking)
-            
+
             table.insert(lines_text, line_info.text)
             local actual_line_number = #lines_text
             new_line_map[actual_line_number] = component.id
-            
+
             -- Apply highlights
             apply_buffer_highlighting(line_info, component, actual_line_number, current_buffer_id, is_picking)
         end
@@ -315,7 +311,7 @@ end
 local function render_group_header(group, i, is_active, buffer_count, lines_text, group_header_lines)
     local group_marker = is_active and config_module.UI.ACTIVE_GROUP_MARKER or config_module.UI.INACTIVE_GROUP_MARKER
     local group_name_display = group.name == "" and config_module.UI.UNNAMED_GROUP_DISPLAY or group.name
-    
+
     -- Add visual separator (except for first group)
     if i > config_module.SYSTEM.FIRST_INDEX then
         table.insert(lines_text, "")  -- Empty line separator
@@ -323,11 +319,11 @@ local function render_group_header(group, i, is_active, buffer_count, lines_text
         table.insert(lines_text, config_module.UI.GROUP_SEPARATOR)  -- Separator line
         table.insert(group_header_lines, {line = separator_line_num, type = "separator"})
     end
-    
-    local group_line = string.format("▎[%d] %s %s (%d buffers)", 
+
+    local group_line = string.format("▎[%d] %s %s (%d buffers)",
         i, group_marker, group_name_display, buffer_count)
     table.insert(lines_text, group_line)
-    
+
     -- Record group header line info
     table.insert(group_header_lines, {
         line = #lines_text - config_module.SYSTEM.ZERO_BASED_OFFSET,  -- 0-based line number
@@ -342,14 +338,14 @@ local function render_all_groups(active_group, components, current_buffer_id, is
     if not active_group then
         return components
     end
-    
+
     local all_groups = groups.get_all_groups()
     local remaining_components = components
-    
+
     for i, group in ipairs(all_groups) do
         local is_active = group.id == active_group.id
         local group_buffers = groups.get_group_buffers(group.id) or {}
-        
+
         -- Calculate valid buffer count (filter out unnamed and special buffers)
         local valid_buffer_count = 0
         for _, buf_id in ipairs(group_buffers) do
@@ -361,10 +357,10 @@ local function render_all_groups(active_group, components, current_buffer_id, is
             end
         end
         local buffer_count = valid_buffer_count
-        
+
         -- Render group header
         render_group_header(group, i, is_active, buffer_count, lines_text, group_header_lines)
-        
+
         -- Decide whether to expand group based on mode
         local should_expand = state_module.get_expand_all_groups() or is_active
         if should_expand then
@@ -382,7 +378,7 @@ local function render_all_groups(active_group, components, current_buffer_id, is
                     end
                 end
             end
-            
+
             -- Apply smart filenames for current active group too (if needed)
             if is_active and #group_components > 0 then
                 -- Check if there are duplicate filenames that need smart handling
@@ -392,7 +388,7 @@ local function render_all_groups(active_group, components, current_buffer_id, is
                         table.insert(buffer_ids, comp.id)
                     end
                 end
-                
+
                 if #buffer_ids > 1 then
                     local unique_names = filename_utils.generate_unique_names(buffer_ids)
                     -- Update component names
@@ -403,11 +399,11 @@ local function render_all_groups(active_group, components, current_buffer_id, is
                     end
                 end
             end
-            
+
             -- For expand-all mode and non-active groups, manually construct components
             if state_module.get_expand_all_groups() and not is_active then
                 group_components = {}
-                
+
                 -- First collect all valid buffer information
                 local valid_buffers = {}
                 for _, buf_id in ipairs(group_buffers) do
@@ -418,10 +414,10 @@ local function render_all_groups(active_group, components, current_buffer_id, is
                         end
                     end
                 end
-                
+
                 -- Generate smart unique filenames
                 local unique_names = filename_utils.generate_unique_names(valid_buffers)
-                
+
                 -- Construct components
                 for j, buf_id in ipairs(valid_buffers) do
                     table.insert(group_components, {
@@ -432,22 +428,22 @@ local function render_all_groups(active_group, components, current_buffer_id, is
                     })
                 end
             end
-            
+
             -- If group is empty, show clean empty group hint
             if #group_components == 0 then
                 table.insert(lines_text, "  " .. config_module.UI.TREE_LAST .. config_module.UI.TREE_EMPTY)
             end
-            
+
             -- Render group buffers
             render_group_buffers(group_components, current_buffer_id, is_picking, lines_text, new_line_map)
-            
+
             -- If current active group and not expand-all mode, clear remaining components
             if is_active and not state_module.get_expand_all_groups() then
                 remaining_components = {}
             end
         end
     end
-    
+
     return remaining_components
 end
 
@@ -461,10 +457,10 @@ local function apply_group_highlights(group_header_lines, lines_text)
             -- Group title line overall highlight
             local group_highlight = header_info.is_active and config_module.HIGHLIGHTS.GROUP_ACTIVE or config_module.HIGHLIGHTS.GROUP_INACTIVE
             api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, group_highlight, header_info.line, 0, -1)
-            
+
             -- Highlight group number [1]
             api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, config_module.HIGHLIGHTS.GROUP_NUMBER, header_info.line, config_module.SYSTEM.GROUP_NUMBER_START, config_module.SYSTEM.GROUP_NUMBER_END)
-            
+
             -- Highlight group marker (● or ○)
             local line_text = lines_text[header_info.line + 1] or ""
             local marker_start = string.find(line_text, "[●○]")
@@ -487,11 +483,11 @@ end
 function M.refresh()
     local refresh_data = validate_and_initialize_refresh()
     if not refresh_data then return end
-    
+
     local components = refresh_data.components
     local current_buffer_id = refresh_data.current_buffer_id
     local active_group = refresh_data.active_group
-    
+
     -- Handle picking mode detection and timer management
     local is_picking = detect_and_manage_picking_mode(refresh_data.bufferline_state, components)
 
@@ -504,10 +500,10 @@ function M.refresh()
 
     -- Render all groups with their buffers
     local remaining_components = render_all_groups(active_group, components, current_buffer_id, is_picking, lines_text, new_line_map, group_header_lines)
-    
+
     -- Apply group header highlights
     apply_group_highlights(group_header_lines, lines_text)
-    
+
     -- Finalize buffer display
     finalize_buffer_display(lines_text, new_line_map)
 end
@@ -519,18 +515,18 @@ M.setup_pick_highlights = setup_pick_highlights
 --- Apply picking highlights continuously during picking mode
 function M.apply_picking_highlights()
     if not state_module.is_sidebar_open() then return end
-    
+
     local bufferline_state = require('bufferline.state')
     if not bufferline_state.is_picking then return end
-    
+
     -- Re-setup highlights to ensure they're current
     setup_pick_highlights()
-    
+
     -- Get current components
     local components = bufferline_state.components
-    
+
     local current_buffer_id = get_main_window_current_buffer()
-    
+
     -- We need to find the actual line number for each component
     -- Find through line_to_buffer_id mapping
     for i, component in ipairs(components) do
@@ -542,7 +538,7 @@ function M.apply_picking_highlights()
             elseif component.letter then
                 letter = component.letter
             end
-            
+
             if letter then
                 -- Find the actual line number of this buffer in sidebar
                 local actual_line_number = nil
@@ -552,7 +548,7 @@ function M.apply_picking_highlights()
                         break
                     end
                 end
-                
+
                 if actual_line_number then
                     -- Choose appropriate pick highlight based on buffer state
                     local pick_highlight_group
@@ -563,14 +559,14 @@ function M.apply_picking_highlights()
                     else
                         pick_highlight_group = config_module.HIGHLIGHTS.PICK
                     end
-                    
+
                     -- Calculate correct highlight position, skip tree prefix
                     -- Determine if this is the last buffer or middle buffer
                     local is_last = (i == #components)
                     local tree_prefix = is_last and ("  " .. config_module.UI.TREE_LAST) or ("  " .. config_module.UI.TREE_BRANCH)
                     local highlight_start = #tree_prefix
                     local highlight_end = highlight_start + 1
-                    
+
                     -- Apply highlight with both namespace and without
                     api.nvim_buf_add_highlight(state_module.get_buf_id(), 0, pick_highlight_group, actual_line_number - 1, highlight_start, highlight_end)
                     api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, pick_highlight_group, actual_line_number - 1, highlight_start, highlight_end)
@@ -578,7 +574,7 @@ function M.apply_picking_highlights()
             end
         end
     end
-    
+
     vim.cmd("redraw!")
 end
 
@@ -587,11 +583,11 @@ end
 --- Closes the sidebar window.
 function M.close_sidebar()
     if not state_module.is_sidebar_open() or not api.nvim_win_is_valid(state_module.get_win_id()) then return end
-    
+
     local current_win = api.nvim_get_current_win()
     local all_windows = api.nvim_list_wins()
     local sidebar_win_id = state_module.get_win_id()
-    
+
     -- Check if only one window remains (sidebar is the last window)
     if #all_windows == 1 then
         -- If only sidebar window remains, exit nvim completely
@@ -600,7 +596,7 @@ function M.close_sidebar()
         -- Normal case: multiple windows, safe to close sidebar
         api.nvim_set_current_win(sidebar_win_id)
         vim.cmd("close")
-        
+
         -- Return to previous window
         if api.nvim_win_is_valid(current_win) and current_win ~= sidebar_win_id then
             api.nvim_set_current_win(current_win)
@@ -614,7 +610,7 @@ function M.close_sidebar()
             end
         end
     end
-    
+
     state_module.close_sidebar()
 end
 
@@ -651,6 +647,7 @@ local function open_sidebar()
     M.refresh()
 end
 
+--- Handle buffer selection from sidebar
 function M.handle_selection()
     if not state_module.is_sidebar_open() then return end
     local line_number = api.nvim_win_get_cursor(state_module.get_win_id())[1]
@@ -668,7 +665,7 @@ function M.handle_selection()
                 end
             end
         end
-        
+
         if main_win_id then
             -- Switch to the main window and set the buffer there
             local success, err = pcall(function()
@@ -690,7 +687,7 @@ function M.handle_selection()
                 return
             end
         end
-        
+
         -- After successfully switching buffer, check if we need to switch active group
         local buffer_group = groups.find_buffer_group(bufnr)
         if buffer_group then
@@ -703,6 +700,7 @@ function M.handle_selection()
     end
 end
 
+--- Close the selected buffer from sidebar
 function M.close_buffer()
     if not state_module.is_sidebar_open() then return end
     local line_number = api.nvim_win_get_cursor(state_module.get_win_id())[1]
@@ -713,7 +711,7 @@ function M.close_buffer()
             vim.notify("Buffer is modified, use :bd! to force close", vim.log.levels.WARN)
             return
         end
-        
+
         local success, err = pcall(vim.cmd, "bd " .. bufnr)
         if success then
             vim.schedule(function()
@@ -725,6 +723,7 @@ function M.close_buffer()
     end
 end
 
+--- Remove buffer from current group via sidebar
 function M.remove_from_group()
     if not state_module.is_sidebar_open() then return end
     local line_number = api.nvim_win_get_cursor(state_module.get_win_id())[1]
@@ -734,13 +733,14 @@ function M.remove_from_group()
         -- This will automatically trigger our sync logic
         local success, err = pcall(vim.cmd, "bd " .. bufnr)
         if success then
-            print("Buffer closed")
+            vim.notify("Buffer closed", vim.log.levels.INFO)
         else
             vim.notify("Error closing buffer: " .. (err or "unknown"), vim.log.levels.ERROR)
         end
     end
 end
 
+--- Smart close buffer with group-aware logic
 function M.smart_close_buffer()
     if not state_module.is_sidebar_open() then return end
     local line_number = api.nvim_win_get_cursor(state_module.get_win_id())[1]
@@ -760,7 +760,7 @@ function M.toggle_expand_all()
     local new_status = state_module.toggle_expand_all_groups()
     local status = new_status and "enabled" or "disabled"
     vim.notify("Expand all groups mode " .. status, vim.log.levels.INFO)
-    
+
     -- Refresh display
     if state_module.is_sidebar_open() then
         vim.schedule(function()
@@ -774,7 +774,7 @@ local function setup_bufferline_hook()
     -- Try to hook into bufferline's UI refresh
     local bufferline_ui = require('bufferline.ui')
     local original_refresh = bufferline_ui.refresh
-    
+
     bufferline_ui.refresh = function(...)
         local result = original_refresh(...)
         -- Immediately update our sidebar synchronously during picking
@@ -803,63 +803,63 @@ end
 local function initialize_plugin()
     -- Setup commands
     commands.setup()
-    
+
     -- Initialize group functionality
     groups.setup({
         max_buffers_per_group = config_module.DEFAULTS.max_buffers_per_group,
         auto_create_groups = config_module.DEFAULTS.auto_create_groups,
         auto_add_new_buffers = config_module.DEFAULTS.auto_add_new_buffers
     })
-    
+
     -- Enable bufferline integration
     bufferline_integration.enable()
-    
+
     -- Initialize session module
     session.setup({
         auto_save = config_module.DEFAULTS.auto_save,
         auto_load = config_module.DEFAULTS.auto_load,
     })
-    
+
     -- Setup global autocmds (not dependent on sidebar state)
     api.nvim_command("augroup VerticalBufferlineGlobal")
     api.nvim_command("autocmd!")
     api.nvim_command("autocmd BufEnter,BufDelete,BufWipeout * lua require('vertical-bufferline').refresh_if_open()")
     api.nvim_command("autocmd WinClosed * lua require('vertical-bufferline').check_quit_condition()")
     api.nvim_command("augroup END")
-    
+
     -- Setup bufferline hooks
     setup_bufferline_hook()
-    
+
     -- Setup highlights
     setup_pick_highlights()
 end
 
--- Wrapper function to refresh only when sidebar is open
+--- Wrapper function to refresh only when sidebar is open
 function M.refresh_if_open()
     if state_module.is_sidebar_open() then
         M.refresh()
     end
 end
 
--- Check if should exit nvim (when only sidebar window remains)
+--- Check if should exit nvim (when only sidebar window remains)
 function M.check_quit_condition()
     if not state_module.is_sidebar_open() then
         return
     end
-    
+
     -- Delayed check to ensure window close events are processed
     vim.schedule(function()
         local all_windows = api.nvim_list_wins()
         local non_sidebar_windows = 0
         local sidebar_win_id = state_module.get_win_id()
-        
+
         -- Count non-sidebar windows
         for _, win_id in ipairs(all_windows) do
             if api.nvim_win_is_valid(win_id) and win_id ~= sidebar_win_id then
                 non_sidebar_windows = non_sidebar_windows + 1
             end
         end
-        
+
         -- If only sidebar window remains, auto-exit nvim
         if non_sidebar_windows == 0 and #all_windows == 1 then
             vim.cmd("qall")
@@ -873,7 +873,7 @@ function M.toggle()
         M.close_sidebar()
     else
         open_sidebar()
-        
+
         -- Manually add existing buffers to default group
         -- Use multiple delayed attempts to ensure buffers are correctly identified
         for _, delay in ipairs(config_module.UI.STARTUP_DELAYS) do
@@ -882,7 +882,7 @@ function M.toggle()
                 if state_module.is_session_loading() then
                     return
                 end
-                
+
                 local all_buffers = vim.api.nvim_list_bufs()
                 local default_group = groups.get_active_group()
                 if default_group then
@@ -892,7 +892,7 @@ function M.toggle()
                             local buf_name = vim.api.nvim_buf_get_name(buf)
                             local buf_type = vim.api.nvim_buf_get_option(buf, 'buftype')
                             -- Only add normal file buffers not already in groups
-                            if buf_name ~= "" and not buf_name:match("^%s*$") and 
+                            if buf_name ~= "" and not buf_name:match("^%s*$") and
                                buf_type == config_module.SYSTEM.EMPTY_BUFTYPE and
                                not vim.tbl_contains(default_group.buffers, buf) then
                                 groups.add_buffer_to_group(buf, default_group.id)
@@ -907,7 +907,7 @@ function M.toggle()
                 end
             end, delay)
         end
-        
+
         -- Ensure initial state displays correctly
         vim.schedule(function()
             M.refresh()
@@ -923,14 +923,14 @@ M.session = session
 M.state = state_module.get_raw_state()  -- Export state for session module use
 
 -- Convenient group operation functions
-M.create_group = function(name) 
+M.create_group = function(name)
     return commands.create_group({args = name or ""})
 end
 M.delete_current_group = function() commands.delete_current_group() end
 M.switch_to_next_group = function() commands.next_group() end
 M.switch_to_prev_group = function() commands.prev_group() end
-M.add_current_buffer_to_group = function(group_name) 
-    commands.add_buffer_to_group({args = group_name}) 
+M.add_current_buffer_to_group = function(group_name)
+    commands.add_buffer_to_group({args = group_name})
 end
 M.move_group_up = function() commands.move_group_up() end
 M.move_group_down = function() commands.move_group_down() end
