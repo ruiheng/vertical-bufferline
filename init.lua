@@ -601,9 +601,49 @@ function M.handle_selection()
     local line_number = api.nvim_win_get_cursor(state.win_id)[1]
     local bufnr = state.line_to_buffer_id[line_number]
     if bufnr and api.nvim_buf_is_valid(bufnr) and api.nvim_buf_is_loaded(bufnr) then
-        local success, err = pcall(api.nvim_set_current_buf, bufnr)
-        if not success then
-            vim.notify("Error switching to buffer: " .. err, vim.log.levels.ERROR)
+        -- Find the main window (not the sidebar)
+        local main_win_id = nil
+        for _, win_id in ipairs(api.nvim_list_wins()) do
+            if win_id ~= state.win_id and api.nvim_win_is_valid(win_id) then
+                -- Check if this window is not a floating window or special window
+                local win_config = api.nvim_win_get_config(win_id)
+                if win_config.relative == "" then  -- Not a floating window
+                    main_win_id = win_id
+                    break
+                end
+            end
+        end
+        
+        if main_win_id then
+            -- Switch to the main window and set the buffer there
+            local success, err = pcall(function()
+                api.nvim_set_current_win(main_win_id)
+                api.nvim_set_current_buf(bufnr)
+            end)
+            if not success then
+                vim.notify("Error switching to buffer: " .. err, vim.log.levels.ERROR)
+                return
+            end
+        else
+            -- Fallback: if no main window found, create a new split
+            local success, err = pcall(function()
+                vim.cmd("wincmd p")  -- Go to previous window
+                api.nvim_set_current_buf(bufnr)
+            end)
+            if not success then
+                vim.notify("Error switching to buffer: " .. err, vim.log.levels.ERROR)
+                return
+            end
+        end
+        
+        -- After successfully switching buffer, check if we need to switch active group
+        local buffer_group = groups.find_buffer_group(bufnr)
+        if buffer_group then
+            local current_active_group = groups.get_active_group()
+            if not current_active_group or current_active_group.id ~= buffer_group.id then
+                -- Switch to the group containing this buffer
+                groups.set_active_group(buffer_group.id)
+            end
         end
     end
 end
