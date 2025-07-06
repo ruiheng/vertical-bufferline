@@ -1,19 +1,19 @@
 -- /home/ruiheng/config_files/nvim/lua/vertical-bufferline/bufferline-integration.lua
--- 与 bufferline.nvim 的集成模块，简单的双向copy策略
+-- Integration module with bufferline.nvim, simple bidirectional copy strategy
 
 local M = {}
 
 local groups = require('vertical-bufferline.groups')
 
--- 简单状态
+-- Simple state
 local sync_timer = nil
 local is_enabled = false
--- 指针：指向当前从bufferline copy数据的目标分组ID
+-- Pointer: points to the target group ID for copying data from bufferline
 local sync_target_group_id = nil
--- 缓存上次的buffer状态，用于检测buffer内容变化
+-- Cache last buffer state for detecting buffer content changes
 local last_buffer_state = {}
 
--- 防重载保护
+-- Prevent reload protection
 if _G._vertical_bufferline_integration_loaded then
     print("bufferline-integration already loaded globally, returning existing instance")
     return _G._vertical_bufferline_integration_instance
@@ -21,30 +21,30 @@ end
 
 _G._vertical_bufferline_integration_loaded = true
 
--- 添加调试标志
+-- Add debug flag
 local debug = false
 
--- 检查是否为特殊buffer（基于buftype）
+-- Check if it's a special buffer (based on buftype)
 local function is_special_buffer(buf_id)
     if not vim.api.nvim_buf_is_valid(buf_id) then
-        return true -- 无效buffer也算特殊
+        return true -- Invalid buffer is also considered special
     end
     local buftype = vim.api.nvim_buf_get_option(buf_id, 'buftype')
-    return buftype ~= '' -- 非空表示特殊buffer（nofile, quickfix, help, terminal等）
+    return buftype ~= '' -- Non-empty indicates special buffer (nofile, quickfix, help, terminal, etc.)
 end
 
--- 方向1：bufferline → 当前分组（定时器，99%的时间）
+-- Direction 1: bufferline → current group (timer, 99% of the time)
 local function sync_bufferline_to_group()
     if not is_enabled then
         return
     end
     
-    -- 检查指针：如果为nil，copy失效
+    -- Check pointer: if nil, copy is invalid
     if not sync_target_group_id then
         return
     end
 
-    -- 获取bufferline的所有有效buffer列表（不只是可见的）
+    -- Get all valid buffer list from bufferline (not just visible ones)
     local bufferline_utils = require('bufferline.utils')
     local all_valid_buffers = {}
     
@@ -52,19 +52,19 @@ local function sync_bufferline_to_group()
         all_valid_buffers = bufferline_utils.get_valid_buffers()
     end
     
-    -- 调试信息
+    -- Debug information
     if debug then
         print("=== Sync Debug ===")
         print("all_valid_buffers count:", #all_valid_buffers)
         print("sync_target_group_id:", sync_target_group_id)
     end
     
-    -- 过滤掉特殊buffer（基于buftype）
+    -- Filter out special buffers (based on buftype)
     local filtered_buffer_ids = {}
     for _, buf_id in ipairs(all_valid_buffers) do
         local should_include = not is_special_buffer(buf_id)
         
-        -- 确保特殊buffer保持unlisted状态
+        -- Ensure special buffers remain unlisted
         if is_special_buffer(buf_id) then
             pcall(vim.api.nvim_buf_set_option, buf_id, 'buflisted', false)
         end
@@ -87,7 +87,7 @@ local function sync_bufferline_to_group()
     local target_group = groups.find_group_by_id(sync_target_group_id)
     
     if target_group then
-        -- 构建当前buffer状态快照（包含ID和名称）
+        -- Build current buffer state snapshot (including ID and name)
         local current_buffer_state = {}
         for _, buf_id in ipairs(filtered_buffer_ids) do
             if vim.api.nvim_buf_is_valid(buf_id) then
@@ -95,24 +95,24 @@ local function sync_bufferline_to_group()
             end
         end
         
-        -- 检查是否有变化：buffer列表变化或buffer名称变化
+        -- Check for changes: buffer list changes or buffer name changes
         local buffers_changed = not vim.deep_equal(target_group.buffers, filtered_buffer_ids)
         local names_changed = not vim.deep_equal(last_buffer_state, current_buffer_state)
         
         if buffers_changed or names_changed then
-            -- 更新缓存的状态
+            -- Update cached state
             last_buffer_state = current_buffer_state
             
-            -- 直接更新目标分组的buffer列表
+            -- Directly update the target group's buffer list
             target_group.buffers = filtered_buffer_ids
             
-            -- 触发事件通知分组内容已更新
+            -- Trigger event to notify that group content has been updated
             vim.api.nvim_exec_autocmds("User", {
                 pattern = "VBufferLineGroupBuffersUpdated",
                 data = { group_id = sync_target_group_id, buffers = target_group.buffers }
             })
             
-            -- 主动刷新侧边栏显示
+            -- Actively refresh sidebar display
             local vbl = require('vertical-bufferline')
             if vbl.state and vbl.state.is_sidebar_open and vbl.refresh then
                 vbl.refresh()
@@ -121,52 +121,52 @@ local function sync_bufferline_to_group()
     end
 end
 
--- 调试函数
+-- Debug function
 function M.toggle_debug()
     debug = not debug
     print("Bufferline integration debug:", debug)
     return debug
 end
 
--- 导出debug状态
+-- Export debug state
 function M.get_debug()
     return debug
 end
 
--- 方向2：分组 → bufferline（切换分组时，1%的时间）
+-- Direction 2: group → bufferline (when switching groups, 1% of the time)
 function M.set_bufferline_buffers(buffer_list)
     if not is_enabled then
         return
     end
     
-    -- 2. 把buffer_list copy到bufferline
-    -- 获取所有buffer（不使用bufferline_utils，因为它可能不检查buflisted）
+    -- 2. Copy buffer_list to bufferline
+    -- Get all buffers (not using bufferline_utils, as it may not check buflisted)
     local all_buffers = vim.api.nvim_list_bufs()
     
-    -- 创建buffer集合用于快速查找
+    -- Create buffer set for fast lookup
     local target_buffer_set = {}
     for _, buf_id in ipairs(buffer_list) do
         target_buffer_set[buf_id] = true
     end
     
-    -- 隐藏不在目标列表中的buffer（设置为unlisted）
+    -- Hide buffers not in target list (set to unlisted)
     for _, buf_id in ipairs(all_buffers) do
         if vim.api.nvim_buf_is_valid(buf_id) then
             if target_buffer_set[buf_id] then
-                -- 确保目标buffer是listed的
+                -- Ensure target buffer is listed
                 pcall(vim.api.nvim_buf_set_option, buf_id, 'buflisted', true)
             else
-                -- 隐藏不在目标列表中的buffer
+                -- Hide buffers not in target list
                 pcall(vim.api.nvim_buf_set_option, buf_id, 'buflisted', false)
             end
         end
     end
     
-    -- 处理空分组的情况：如果buffer_list为空，需要显示空状态
+    -- Handle empty group case: if buffer_list is empty, need to display empty state
     if #buffer_list == 0 then
         M.handle_empty_group_display()
     else
-        -- 如果有buffer，切换到第一个有效的buffer
+        -- If there are buffers, switch to the first valid buffer
         for _, buf_id in ipairs(buffer_list) do
             if vim.api.nvim_buf_is_valid(buf_id) then
                 pcall(vim.api.nvim_set_current_buf, buf_id)
@@ -175,19 +175,19 @@ function M.set_bufferline_buffers(buffer_list)
         end
     end
     
-    -- 刷新bufferline
+    -- Refresh bufferline
     local bufferline_ui = require('bufferline.ui')
     if bufferline_ui.refresh then
         bufferline_ui.refresh()
     end
     
-    -- 3. 把指针指向新的分组（由调用者设置）
-    -- 这一步由 set_sync_target 函数完成
+    -- 3. Point the pointer to the new group (set by caller)
+    -- This step is completed by the set_sync_target function
 end
 
--- 处理空分组显示：创建或切换到一个空的临时buffer
+-- Handle empty group display: create or switch to an empty temporary buffer
 function M.handle_empty_group_display()
-    -- 首先隐藏所有当前listed的普通buffer（保留特殊buffer）
+    -- First hide all currently listed normal buffers (keep special buffers)
     local all_buffers = vim.api.nvim_list_bufs()
     for _, buf_id in ipairs(all_buffers) do
         if vim.api.nvim_buf_is_valid(buf_id) then
@@ -195,17 +195,17 @@ function M.handle_empty_group_display()
             local buflisted = vim.api.nvim_buf_get_option(buf_id, 'buflisted')
             local buf_name = vim.api.nvim_buf_get_name(buf_id)
             
-            -- 如果是普通的空buffer（no name），隐藏它
+            -- If it's a normal empty buffer (no name), hide it
             if buftype == '' and buflisted and (buf_name == '' or buf_name:match('^%s*$')) then
                 pcall(vim.api.nvim_buf_set_option, buf_id, 'buflisted', false)
             end
         end
     end
     
-    -- 查找或创建一个专用的空分组buffer
+    -- Find or create a dedicated empty group buffer
     local empty_group_buffer = nil
     
-    -- 查找现有的空分组buffer（使用buftype检查）
+    -- Find existing empty group buffer (using buftype check)
     for _, buf_id in ipairs(all_buffers) do
         if vim.api.nvim_buf_is_valid(buf_id) then
             local buftype = vim.api.nvim_buf_get_option(buf_id, 'buftype')
@@ -217,7 +217,7 @@ function M.handle_empty_group_display()
         end
     end
     
-    -- 如果没有找到，创建一个新的空buffer
+    -- If not found, create a new empty buffer
     if not empty_group_buffer then
         empty_group_buffer = vim.api.nvim_create_buf(false, true)
         vim.api.nvim_buf_set_name(empty_group_buffer, '[Empty Group]')
@@ -225,7 +225,7 @@ function M.handle_empty_group_display()
         vim.api.nvim_buf_set_option(empty_group_buffer, 'swapfile', false)
         vim.api.nvim_buf_set_option(empty_group_buffer, 'buflisted', false)
         
-        -- 设置一些帮助文本
+        -- Set some help text
         local lines = {
             "# Empty Group",
             "",
@@ -239,16 +239,16 @@ function M.handle_empty_group_display()
         vim.api.nvim_buf_set_option(empty_group_buffer, 'modifiable', false)
     end
     
-    -- 切换到空buffer
+    -- Switch to empty buffer
     pcall(vim.api.nvim_set_current_buf, empty_group_buffer)
 end
 
--- 设置同步目标分组（原子操作的第3步）
+-- Set sync target group (step 3 of atomic operation)
 function M.set_sync_target(group_id)
     sync_target_group_id = group_id
 end
 
--- 手动同步函数
+-- Manual sync function
 function M.manual_sync()
     local bufferline_ui = require('bufferline.ui')
     if bufferline_ui and bufferline_ui.refresh then
@@ -263,26 +263,26 @@ function M.manual_sync()
     vim.notify("Manual sync triggered", vim.log.levels.INFO)
 end
 
--- 启用集成
+-- Enable integration
 function M.enable()
     if is_enabled then
         return true
     end
     
-    -- 确保 bufferline 已加载
+    -- Ensure bufferline is loaded
     local ok_state, _ = pcall(require, 'bufferline.state')
     if not ok_state then
         vim.notify("bufferline.nvim not found", vim.log.levels.WARN)
         return false
     end
     
-    -- 启动定时同步：bufferline → 分组
+    -- Start timed sync: bufferline → group
     sync_timer = vim.loop.new_timer()
     if sync_timer then
         sync_timer:start(100, 100, vim.schedule_wrap(sync_bufferline_to_group))
     end
     
-    -- 设置初始同步目标为当前活跃分组
+    -- Set initial sync target to current active group
     local active_group = groups.get_active_group()
     if active_group then
         sync_target_group_id = active_group.id
@@ -292,13 +292,13 @@ function M.enable()
     return true
 end
 
--- 禁用集成
+-- Disable integration
 function M.disable()
     if not is_enabled then
         return
     end
     
-    -- 停止定时器
+    -- Stop timer
     if sync_timer then
         sync_timer:stop()
         sync_timer:close()
@@ -308,7 +308,7 @@ function M.disable()
     is_enabled = false
 end
 
--- 切换集成
+-- Toggle integration
 function M.toggle()
     if is_enabled then
         M.disable()
@@ -317,7 +317,7 @@ function M.toggle()
     end
 end
 
--- 状态检查
+-- Status check
 function M.status()
     local bufferline_available = pcall(require, 'bufferline.state')
     return {
@@ -329,7 +329,7 @@ function M.status()
     }
 end
 
--- 获取当前分组的 buffer 信息（为了兼容init.lua）
+-- Get current group's buffer information (for compatibility with init.lua)
 function M.get_group_buffer_info()
     local active_group = groups.get_active_group()
     if not active_group then
@@ -356,7 +356,7 @@ function M.get_group_buffer_info()
     }
 end
 
--- 强制刷新（为了兼容session.lua）
+-- Force refresh (for compatibility with session.lua)
 function M.force_refresh()
     vim.schedule(function()
         local bufferline_ui = require('bufferline.ui')
@@ -364,7 +364,7 @@ function M.force_refresh()
             bufferline_ui.refresh()
         end
         
-        -- 刷新我们的侧边栏
+        -- Refresh our sidebar
         local vbl = require('vertical-bufferline')
         if vbl.state and vbl.state.is_sidebar_open and vbl.refresh then
             vbl.refresh()
@@ -372,11 +372,11 @@ function M.force_refresh()
     end)
 end
 
--- 安全的buffer关闭函数，避免E85错误
+-- Safe buffer close function, avoiding E85 error
 function M.smart_close_buffer(target_buf)
     target_buf = target_buf or vim.api.nvim_get_current_buf()
     
-    -- 检查是否有修改未保存
+    -- Check if there are unsaved modifications
     if vim.api.nvim_buf_get_option(target_buf, "modified") then
         local choice = vim.fn.confirm("Buffer has unsaved changes. Close anyway?", "&Yes\n&No", 2)
         if choice ~= 1 then
@@ -384,7 +384,7 @@ function M.smart_close_buffer(target_buf)
         end
     end
     
-    -- 获取所有listed buffers
+    -- Get all listed buffers
     local all_buffers = vim.api.nvim_list_bufs()
     local listed_buffers = {}
     for _, buf_id in ipairs(all_buffers) do
@@ -393,17 +393,17 @@ function M.smart_close_buffer(target_buf)
         end
     end
     
-    -- 如果这是最后一个listed buffer，直接使用空分组显示
+    -- If this is the last listed buffer, directly use empty group display
     if #listed_buffers <= 1 then
-        -- 先删除目标buffer
+        -- First delete target buffer
         if vim.api.nvim_buf_is_valid(target_buf) then
             pcall(vim.api.nvim_buf_delete, target_buf, { force = true })
         end
         
-        -- 直接处理空分组显示（这会创建[Empty Group] buffer并切换到它）
+        -- Directly handle empty group display (this will create [Empty Group] buffer and switch to it)
         M.handle_empty_group_display()
     else
-        -- 如果还有其他buffer，先切换到下一个
+        -- If there are other buffers, first switch to the next one
         local next_buf = nil
         for _, buf_id in ipairs(listed_buffers) do
             if buf_id ~= target_buf then
@@ -416,7 +416,7 @@ function M.smart_close_buffer(target_buf)
             vim.api.nvim_set_current_buf(next_buf)
         end
         
-        -- 然后删除目标buffer
+        -- Then delete target buffer
         if vim.api.nvim_buf_is_valid(target_buf) then
             pcall(vim.api.nvim_buf_delete, target_buf, { force = true })
         end
@@ -425,7 +425,7 @@ function M.smart_close_buffer(target_buf)
     return true
 end
 
--- 保存全局实例
+-- Save global instance
 _G._vertical_bufferline_integration_instance = M
 
 return M
