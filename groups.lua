@@ -7,6 +7,8 @@ if _G._vertical_bufferline_groups_loaded then
     return _G._vertical_bufferline_groups_instance
 end
 
+local config_module = require('vertical-bufferline.config')
+
 local M = {}
 
 local api = vim.api
@@ -32,13 +34,13 @@ local groups_data = {
     default_group_id = "default",
     
     -- Counter for next group ID
-    next_group_id = 1,
+    next_group_id = config_module.SYSTEM.FIRST_INDEX,
     
     -- Group settings
     settings = {
-        max_buffers_per_group = 10,
-        auto_create_groups = true,
-        auto_add_new_buffers = true,
+        max_buffers_per_group = config_module.DEFAULTS.max_buffers_per_group,
+        auto_create_groups = config_module.DEFAULTS.auto_create_groups,
+        auto_add_new_buffers = config_module.DEFAULTS.auto_add_new_buffers,
         group_name_prefix = "Group",
     },
     
@@ -54,7 +56,7 @@ local function init_default_group()
             name = "Default",
             buffers = {},
             created_at = os.time(),
-            color = "#61afef"
+            color = config_module.COLORS.BLUE
         }
         table.insert(groups_data.groups, default_group)
         groups_data.active_group_id = groups_data.default_group_id
@@ -100,14 +102,14 @@ function M.create_group(name, color)
         name = group_name,
         buffers = {},
         created_at = os.time(),
-        color = color or "#98c379"
+        color = color or config_module.COLORS.GREEN
     }
     
     table.insert(groups_data.groups, new_group)
     
     -- Trigger event
     vim.api.nvim_exec_autocmds("User", {
-        pattern = "VBufferLineGroupCreated",
+        pattern = config_module.EVENTS.GROUP_CREATED,
         data = { group = new_group }
     })
     
@@ -149,7 +151,7 @@ function M.delete_group(group_id)
     
     -- Trigger event
     vim.api.nvim_exec_autocmds("User", {
-        pattern = "VBufferLineGroupDeleted",
+        pattern = config_module.EVENTS.GROUP_DELETED,
         data = { group_id = group_id }
     })
     
@@ -169,7 +171,7 @@ function M.rename_group(group_id, new_name)
     
     -- Trigger event
     vim.api.nvim_exec_autocmds("User", {
-        pattern = "VBufferLineGroupRenamed",
+        pattern = config_module.EVENTS.GROUP_RENAMED,
         data = { group_id = group_id, old_name = old_name, new_name = new_name }
     })
     
@@ -239,7 +241,7 @@ function M.set_active_group(group_id)
     
     -- Trigger event
     vim.api.nvim_exec_autocmds("User", {
-        pattern = "VBufferLineGroupChanged",
+        pattern = config_module.EVENTS.GROUP_CHANGED,
         data = { old_group_id = old_group_id, new_group_id = group_id }
     })
     
@@ -277,7 +279,7 @@ function M.add_buffer_to_group(buffer_id, group_id)
     
     -- Trigger event
     vim.api.nvim_exec_autocmds("User", {
-        pattern = "VBufferLineBufferAddedToGroup",
+        pattern = config_module.EVENTS.BUFFER_ADDED_TO_GROUP,
         data = { buffer_id = buffer_id, group_id = group_id }
     })
     
@@ -297,7 +299,7 @@ function M.remove_buffer_from_group(buffer_id, group_id)
             
             -- Trigger event
             vim.api.nvim_exec_autocmds("User", {
-                pattern = "VBufferLineBufferRemovedFromGroup",
+                pattern = config_module.EVENTS.BUFFER_REMOVED_FROM_GROUP,
                 data = { buffer_id = buffer_id, group_id = group_id }
             })
             
@@ -375,7 +377,7 @@ end
 -- Move group up
 function M.move_group_up(group_id)
     local group_index = find_group_index_by_id(group_id)
-    if not group_index or group_index == 1 then
+    if not group_index or group_index == config_module.SYSTEM.FIRST_INDEX then
         return false -- Already first group or group doesn't exist
     end
     
@@ -386,7 +388,7 @@ function M.move_group_up(group_id)
     
     -- Trigger event
     vim.api.nvim_exec_autocmds("User", {
-        pattern = "VBufferLineGroupReordered",
+        pattern = config_module.EVENTS.GROUP_REORDERED,
         data = { group_id = group_id, direction = "up", from_index = group_index, to_index = group_index - 1 }
     })
     
@@ -407,7 +409,7 @@ function M.move_group_down(group_id)
     
     -- Trigger event
     vim.api.nvim_exec_autocmds("User", {
-        pattern = "VBufferLineGroupReordered",
+        pattern = config_module.EVENTS.GROUP_REORDERED,
         data = { group_id = group_id, direction = "down", from_index = group_index, to_index = group_index + 1 }
     })
     
@@ -422,7 +424,7 @@ function M.move_group_to_position(group_id, target_position)
     end
     
     -- Validate target position
-    if target_position < 1 or target_position > #groups_data.groups then
+    if target_position < config_module.SYSTEM.FIRST_INDEX or target_position > #groups_data.groups then
         return false -- Invalid target position
     end
     
@@ -438,7 +440,7 @@ function M.move_group_to_position(group_id, target_position)
     
     -- Trigger event
     vim.api.nvim_exec_autocmds("User", {
-        pattern = "VBufferLineGroupReordered",
+        pattern = config_module.EVENTS.GROUP_REORDERED,
         data = { group_id = group_id, direction = "position", from_index = group_index, to_index = target_position }
     })
     
@@ -485,7 +487,7 @@ function M.sync_active_group_with_bufferline(buffer_list)
 
     -- Trigger event to notify group content updated
     vim.api.nvim_exec_autocmds("User", {
-        pattern = "VBufferLineGroupBuffersUpdated",
+        pattern = config_module.EVENTS.GROUP_BUFFERS_UPDATED,
         data = { group_id = active_group_id, buffers = active_group.buffers }
     })
 end
@@ -530,7 +532,7 @@ function M.setup(opts)
     vim.schedule(function()
         -- Trigger UI update event
         vim.api.nvim_exec_autocmds("User", {
-            pattern = "VBufferLineGroupChanged",
+            pattern = config_module.EVENTS.GROUP_CHANGED,
             data = { new_group_id = groups_data.active_group_id }
         })
     end)
@@ -541,7 +543,7 @@ function M.setup(opts)
     -- Periodically clean up invalid buffers
     vim.defer_fn(function()
         M.cleanup_invalid_buffers()
-    end, 5000)
+    end, config_module.UI.AUTO_SAVE_DELAY)
 end
 
 -- Export debug information

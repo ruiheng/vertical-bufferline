@@ -10,6 +10,9 @@ local M = {}
 
 local api = vim.api
 
+-- Configuration and constants
+local config_module = require('vertical-bufferline.config')
+
 -- Group management modules
 local groups = require('vertical-bufferline.groups')
 local commands = require('vertical-bufferline.commands')
@@ -21,19 +24,19 @@ local filename_utils = require('vertical-bufferline.filename_utils')
 local ns_id = api.nvim_create_namespace("VerticalBufferline")
 
 -- Default highlights
-api.nvim_set_hl(0, "VBufferLineCurrent", { link = "Visual", default = true })
-api.nvim_set_hl(0, "VBufferLineVisible", { link = "TabLineSel", default = true })
-api.nvim_set_hl(0, "VBufferLineModified", { fg = "#e5c07b", italic = true, default = true })
-api.nvim_set_hl(0, "VBufferLineInactive", { link = "TabLine", default = true })
-api.nvim_set_hl(0, "VBufferLineError", { fg = "#e06c75", default = true })
-api.nvim_set_hl(0, "VBufferLineWarning", { fg = "#e5c07b", default = true })
+api.nvim_set_hl(0, config_module.HIGHLIGHTS.CURRENT, { link = "Visual", default = true })
+api.nvim_set_hl(0, config_module.HIGHLIGHTS.VISIBLE, { link = "TabLineSel", default = true })
+api.nvim_set_hl(0, config_module.HIGHLIGHTS.MODIFIED, { fg = config_module.COLORS.YELLOW, italic = true, default = true })
+api.nvim_set_hl(0, config_module.HIGHLIGHTS.INACTIVE, { link = "TabLine", default = true })
+api.nvim_set_hl(0, config_module.HIGHLIGHTS.ERROR, { fg = config_module.COLORS.RED, default = true })
+api.nvim_set_hl(0, config_module.HIGHLIGHTS.WARNING, { fg = config_module.COLORS.YELLOW, default = true })
 
 -- Group header highlights
-api.nvim_set_hl(0, "VBufferLineGroupActive", { fg = "#61afef", bold = true, default = true })
-api.nvim_set_hl(0, "VBufferLineGroupInactive", { fg = "#5c6370", bold = true, default = true })
-api.nvim_set_hl(0, "VBufferLineGroupNumber", { fg = "#c678dd", bold = true, default = true })
-api.nvim_set_hl(0, "VBufferLineGroupSeparator", { fg = "#3e4452", default = true })
-api.nvim_set_hl(0, "VBufferLineGroupMarker", { fg = "#98c379", bold = true, default = true })
+api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_ACTIVE, { fg = config_module.COLORS.BLUE, bold = true, default = true })
+api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_INACTIVE, { fg = config_module.COLORS.GRAY, bold = true, default = true })
+api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_NUMBER, { fg = config_module.COLORS.PURPLE, bold = true, default = true })
+api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_SEPARATOR, { fg = config_module.COLORS.DARK_GRAY, default = true })
+api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_MARKER, { fg = config_module.COLORS.GREEN, bold = true, default = true })
 
 -- Pick highlights matching bufferline's style
 -- Copy the exact colors from BufferLine groups
@@ -45,21 +48,21 @@ local function setup_pick_highlights()
     
     -- Set our highlights to match exactly
     if next(bufferline_pick) then
-        api.nvim_set_hl(0, "VBufferLinePick", bufferline_pick)
+        api.nvim_set_hl(0, config_module.HIGHLIGHTS.PICK, bufferline_pick)
     else
-        api.nvim_set_hl(0, "VBufferLinePick", { fg = "#e06c75", bold = true, italic = true })
+        api.nvim_set_hl(0, config_module.HIGHLIGHTS.PICK, { fg = config_module.COLORS.RED, bold = true, italic = true })
     end
     
     if next(bufferline_pick_visible) then
-        api.nvim_set_hl(0, "VBufferLinePickVisible", bufferline_pick_visible)
+        api.nvim_set_hl(0, config_module.HIGHLIGHTS.PICK_VISIBLE, bufferline_pick_visible)
     else
-        api.nvim_set_hl(0, "VBufferLinePickVisible", { fg = "#e06c75", bold = true, italic = true })
+        api.nvim_set_hl(0, config_module.HIGHLIGHTS.PICK_VISIBLE, { fg = config_module.COLORS.RED, bold = true, italic = true })
     end
     
     if next(bufferline_pick_selected) then
-        api.nvim_set_hl(0, "VBufferLinePickSelected", bufferline_pick_selected)
+        api.nvim_set_hl(0, config_module.HIGHLIGHTS.PICK_SELECTED, bufferline_pick_selected)
     else
-        api.nvim_set_hl(0, "VBufferLinePickSelected", { fg = "#e06c75", bold = true, italic = true })
+        api.nvim_set_hl(0, config_module.HIGHLIGHTS.PICK_SELECTED, { fg = config_module.COLORS.RED, bold = true, italic = true })
     end
 end
 
@@ -67,7 +70,7 @@ end
 setup_pick_highlights()
 
 local config = {
-    width = 40,
+    width = config_module.DEFAULTS.width,
 }
 
 -- Check if buffer is special (based on buftype)
@@ -76,7 +79,7 @@ local function is_special_buffer(buf_id)
         return true -- Invalid buffers are also considered special
     end
     local buftype = api.nvim_buf_get_option(buf_id, 'buftype')
-    return buftype ~= '' -- Non-empty means special buffer (nofile, quickfix, help, terminal, etc.)
+    return buftype ~= config_module.SYSTEM.EMPTY_BUFTYPE -- Non-empty means special buffer (nofile, quickfix, help, terminal, etc.)
 end
 
 local state = {
@@ -171,7 +174,7 @@ function M.refresh()
         
         -- Start highlight application timer during picking mode
         state.highlight_timer = vim.loop.new_timer()
-        state.highlight_timer:start(0, 50, vim.schedule_wrap(function()
+        state.highlight_timer:start(0, config_module.UI.HIGHLIGHT_UPDATE_INTERVAL, vim.schedule_wrap(function()
             local current_state = require('bufferline.state')
             if current_state.is_picking and state.is_sidebar_open then
                 M.apply_picking_highlights()
@@ -218,14 +221,14 @@ function M.refresh()
             local buffer_count = valid_buffer_count
             
             -- Group header line with more visible format
-            local group_marker = is_active and "●" or "○"
-            local group_name_display = group.name == "" and "(unnamed)" or group.name
+            local group_marker = is_active and config_module.UI.ACTIVE_GROUP_MARKER or config_module.UI.INACTIVE_GROUP_MARKER
+            local group_name_display = group.name == "" and config_module.UI.UNNAMED_GROUP_DISPLAY or group.name
             
             -- Add visual separator (except for first group)
-            if i > 1 then
+            if i > config_module.SYSTEM.FIRST_INDEX then
                 table.insert(lines_text, "")  -- Empty line separator
                 local separator_line_num = #lines_text
-                table.insert(lines_text, "────────────────────────────────────")  -- Separator line
+                table.insert(lines_text, config_module.UI.GROUP_SEPARATOR)  -- Separator line
                 table.insert(group_header_lines, {line = separator_line_num, type = "separator"})
             end
             
@@ -235,7 +238,7 @@ function M.refresh()
             
             -- Record group header line info
             table.insert(group_header_lines, {
-                line = #lines_text - 1,  -- 0-based line number
+                line = #lines_text - config_module.SYSTEM.ZERO_BASED_OFFSET,  -- 0-based line number
                 type = "header",
                 is_active = is_active,
                 group_number = i
@@ -311,14 +314,14 @@ function M.refresh()
                 
                 -- If group is empty, show clean empty group hint
                 if #group_components == 0 then
-                    table.insert(lines_text, "  └─ (empty)")
+                    table.insert(lines_text, "  " .. config_module.UI.TREE_LAST .. config_module.UI.TREE_EMPTY)
                 end
                 
                 for j, component in ipairs(group_components) do
                     if component.id and component.name and api.nvim_buf_is_valid(component.id) then
                         -- Use tree structure prefix, add indentation to highlight hierarchy
                         local is_last = (j == #group_components)
-                        local tree_prefix = is_last and "  └─ " or "  ├─ "
+                        local tree_prefix = is_last and ("  " .. config_module.UI.TREE_LAST) or ("  " .. config_module.UI.TREE_BRANCH)
                         local modified_indicator = ""
                         
                         -- Check if buffer is modified
@@ -331,19 +334,7 @@ function M.refresh()
                             -- Fallback to basic file type detection
                             local extension = component.name:match("%.([^%.]+)$")
                             if extension then
-                                local icon_map = {
-                                    lua = "🌙",
-                                    js = "📄",
-                                    py = "🐍",
-                                    go = "🟢",
-                                    rs = "🦀",
-                                    md = "📝",
-                                    txt = "📄",
-                                    json = "📋",
-                                    yaml = "📋",
-                                    yml = "📋",
-                                }
-                                icon = icon_map[extension] or "📄"
+                                icon = config_module.ICONS[extension] or config_module.ICONS.default
                             end
                         end
                         
@@ -363,14 +354,14 @@ function M.refresh()
                         
                         -- Add number display (1-9 correspond to <leader>1-9, 10 uses 0)
                         local number_display = j <= 9 and tostring(j) or "0"
-                        if j > 10 then
-                            number_display = "·"  -- Use dot for numbers over 10
+                        if j > config_module.UI.MAX_DISPLAY_NUMBER then
+                            number_display = config_module.UI.NUMBER_OVERFLOW_CHAR
                         end
                         
                         -- Add arrow marker for current buffer
                         local current_marker = ""
                         if component.id == current_buffer_id then
-                            current_marker = "► "
+                            current_marker = config_module.UI.CURRENT_BUFFER_MARKER
                         end
                         
                         if letter and is_picking then
@@ -380,11 +371,11 @@ function M.refresh()
                             
                             -- Choose appropriate pick highlight based on buffer state
                             if component.id == current_buffer_id then
-                                pick_highlight_group = "VBufferLinePickSelected"
+                                pick_highlight_group = config_module.HIGHLIGHTS.PICK_SELECTED
                             elseif component.focused then
-                                pick_highlight_group = "VBufferLinePickVisible"
+                                pick_highlight_group = config_module.HIGHLIGHTS.PICK_VISIBLE
                             else
-                                pick_highlight_group = "VBufferLinePick"
+                                pick_highlight_group = config_module.HIGHLIGHTS.PICK
                             end
                             
                         else
@@ -407,25 +398,25 @@ function M.refresh()
                             
                             -- Highlight the rest of the line normally, but only if there's content after the pick highlight
                             if highlight_end < #line_text then
-                                local normal_highlight_group = "VBufferLineInactive"
+                                local normal_highlight_group = config_module.HIGHLIGHTS.INACTIVE
                                 if component.id == current_buffer_id then
-                                    normal_highlight_group = "VBufferLineCurrent"
+                                    normal_highlight_group = config_module.HIGHLIGHTS.CURRENT
                                 elseif component.focused then
-                                    normal_highlight_group = "VBufferLineVisible"
+                                    normal_highlight_group = config_module.HIGHLIGHTS.VISIBLE
                                 elseif api.nvim_buf_is_valid(component.id) and api.nvim_buf_get_option(component.id, "modified") then
-                                    normal_highlight_group = "VBufferLineModified"
+                                    normal_highlight_group = config_module.HIGHLIGHTS.MODIFIED
                                 end
                                 api.nvim_buf_add_highlight(state.buf_id, ns_id, normal_highlight_group, actual_line_number - 1, highlight_end, -1)
                             end
                         else
                             -- Normal highlighting for non-picking mode
-                            local highlight_group = "VBufferLineInactive"
+                            local highlight_group = config_module.HIGHLIGHTS.INACTIVE
                             if component.id == current_buffer_id then
-                                highlight_group = "VBufferLineCurrent"
+                                highlight_group = config_module.HIGHLIGHTS.CURRENT
                             elseif component.focused then
-                                highlight_group = "VBufferLineVisible"
+                                highlight_group = config_module.HIGHLIGHTS.VISIBLE
                             elseif api.nvim_buf_is_valid(component.id) and api.nvim_buf_get_option(component.id, "modified") then
-                                highlight_group = "VBufferLineModified"
+                                highlight_group = config_module.HIGHLIGHTS.MODIFIED
                             end
                             api.nvim_buf_add_highlight(state.buf_id, ns_id, highlight_group, actual_line_number - 1, 0, -1)
                         end
@@ -452,20 +443,20 @@ function M.refresh()
     for _, header_info in ipairs(group_header_lines) do
         if header_info.type == "separator" then
             -- Separator line highlight
-            api.nvim_buf_add_highlight(state.buf_id, ns_id, "VBufferLineGroupSeparator", header_info.line, 0, -1)
+            api.nvim_buf_add_highlight(state.buf_id, ns_id, config_module.HIGHLIGHTS.GROUP_SEPARATOR, header_info.line, 0, -1)
         elseif header_info.type == "header" then
             -- Group title line overall highlight
-            local group_highlight = header_info.is_active and "VBufferLineGroupActive" or "VBufferLineGroupInactive"
+            local group_highlight = header_info.is_active and config_module.HIGHLIGHTS.GROUP_ACTIVE or config_module.HIGHLIGHTS.GROUP_INACTIVE
             api.nvim_buf_add_highlight(state.buf_id, ns_id, group_highlight, header_info.line, 0, -1)
             
             -- Highlight group number [1]
-            api.nvim_buf_add_highlight(state.buf_id, ns_id, "VBufferLineGroupNumber", header_info.line, 1, 4)
+            api.nvim_buf_add_highlight(state.buf_id, ns_id, config_module.HIGHLIGHTS.GROUP_NUMBER, header_info.line, config_module.SYSTEM.GROUP_NUMBER_START, config_module.SYSTEM.GROUP_NUMBER_END)
             
             -- Highlight group marker (● or ○)
             local line_text = lines_text[header_info.line + 1] or ""
             local marker_start = string.find(line_text, "[●○]")
             if marker_start then
-                api.nvim_buf_add_highlight(state.buf_id, ns_id, "VBufferLineGroupMarker", header_info.line, marker_start - 1, marker_start)
+                api.nvim_buf_add_highlight(state.buf_id, ns_id, config_module.HIGHLIGHTS.GROUP_MARKER, header_info.line, marker_start - 1, marker_start)
             end
         end
     end
@@ -520,17 +511,17 @@ function M.apply_picking_highlights()
                     -- Choose appropriate pick highlight based on buffer state
                     local pick_highlight_group
                     if component.id == current_buffer_id then
-                        pick_highlight_group = "VBufferLinePickSelected"
+                        pick_highlight_group = config_module.HIGHLIGHTS.PICK_SELECTED
                     elseif component.focused then
-                        pick_highlight_group = "VBufferLinePickVisible"
+                        pick_highlight_group = config_module.HIGHLIGHTS.PICK_VISIBLE
                     else
-                        pick_highlight_group = "VBufferLinePick"
+                        pick_highlight_group = config_module.HIGHLIGHTS.PICK
                     end
                     
                     -- Calculate correct highlight position, skip tree prefix
                     -- Determine if this is the last buffer or middle buffer
                     local is_last = (i == #components)
-                    local tree_prefix = is_last and "  └─ " or "  ├─ "
+                    local tree_prefix = is_last and ("  " .. config_module.UI.TREE_LAST) or ("  " .. config_module.UI.TREE_BRANCH)
                     local highlight_start = #tree_prefix
                     local highlight_end = highlight_start + 1
                     
@@ -769,9 +760,9 @@ local function initialize_plugin()
     
     -- Initialize group functionality
     groups.setup({
-        max_buffers_per_group = 10,
-        auto_create_groups = true,
-        auto_add_new_buffers = true
+        max_buffers_per_group = config_module.DEFAULTS.max_buffers_per_group,
+        auto_create_groups = config_module.DEFAULTS.auto_create_groups,
+        auto_add_new_buffers = config_module.DEFAULTS.auto_add_new_buffers
     })
     
     -- Enable bufferline integration
@@ -779,8 +770,8 @@ local function initialize_plugin()
     
     -- Initialize session module
     session.setup({
-        auto_save = false,
-        auto_load = false,
+        auto_save = config_module.DEFAULTS.auto_save,
+        auto_load = config_module.DEFAULTS.auto_load,
     })
     
     -- Setup global autocmds (not dependent on sidebar state)
@@ -838,7 +829,7 @@ function M.toggle()
         
         -- Manually add existing buffers to default group
         -- Use multiple delayed attempts to ensure buffers are correctly identified
-        for _, delay in ipairs({50, 200, 500}) do
+        for _, delay in ipairs(config_module.UI.STARTUP_DELAYS) do
             vim.defer_fn(function()
                 -- If loading session, skip auto-add to avoid conflicts
                 if state.session_loading then
@@ -855,7 +846,7 @@ function M.toggle()
                             local buf_type = vim.api.nvim_buf_get_option(buf, 'buftype')
                             -- Only add normal file buffers not already in groups
                             if buf_name ~= "" and not buf_name:match("^%s*$") and 
-                               buf_type == "" and
+                               buf_type == config_module.SYSTEM.EMPTY_BUFTYPE and
                                not vim.tbl_contains(default_group.buffers, buf) then
                                 groups.add_buffer_to_group(buf, default_group.id)
                                 added_count = added_count + 1
