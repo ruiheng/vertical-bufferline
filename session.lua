@@ -665,7 +665,7 @@ local function collect_current_state()
     return session_data
 end
 
--- State restoration from global variable
+-- State restoration from global variable (simplified synchronous version)
 local function restore_state_from_global()
     if not vim.g.VerticalBufferlineSession then
         return false
@@ -683,75 +683,34 @@ local function restore_state_from_global()
         return false
     end
     
-    -- Use async execution to avoid blocking UI
-    vim.schedule(function()
-        local groups = require('vertical-bufferline.groups')
-        local bufferline_integration = require('vertical-bufferline.bufferline-integration')
-        
-        -- Show progress notification
-        vim.notify("Restoring VBL state...", vim.log.levels.INFO)
-        
-        -- Temporarily disable bufferline sync during loading
-        bufferline_integration.set_sync_target(nil)
-        
-        -- Handle existing buffers (non-blocking)
-        local handled_buffers = handle_existing_buffers(session_data)
-        
-        -- Collect and open session files (potentially slow operation)
-        local session_files = collect_session_files(session_data)
-        local buffer_mappings, opened_count = open_session_files(session_files)
-        
-        -- Rebuild group structure
-        rebuild_groups(session_data, buffer_mappings)
-        
-        -- Restore expand mode if available
-        if session_data.expand_all_groups ~= nil then
-            local state_module = require('vertical-bufferline.state')
-            state_module.set_expand_all_groups(session_data.expand_all_groups)
-        end
-        
-        -- Final sync to bufferline
-        local active_group = groups.get_active_group()
-        if active_group then
-            bufferline_integration.set_bufferline_buffers(active_group.buffers)
-            bufferline_integration.set_sync_target(active_group.id)
-            
-            -- Switch to group's remembered current buffer or fallback intelligently
-            if #active_group.buffers > 0 then
-                local target_buffer = nil
-                
-                -- First priority: use group's remembered current buffer if valid
-                if active_group.current_buffer and vim.api.nvim_buf_is_valid(active_group.current_buffer) 
-                   and vim.tbl_contains(active_group.buffers, active_group.current_buffer) then
-                    target_buffer = active_group.current_buffer
-                else
-                    -- Fallback: use first valid buffer in group
-                    for _, buf_id in ipairs(active_group.buffers) do
-                        if vim.api.nvim_buf_is_valid(buf_id) and vim.api.nvim_buf_is_loaded(buf_id) then
-                            target_buffer = buf_id
-                            break
-                        end
-                    end
-                end
-                
-                if target_buffer then
-                    vim.api.nvim_set_current_buf(target_buffer)
-                end
-            end
-        else
-            bufferline_integration.set_sync_target("default")
-        end
-        
-        -- Final UI refresh with additional delay
-        vim.defer_fn(function()
-            local vbl = require('vertical-bufferline')
-            if vbl.refresh then
-                vbl.refresh()
-            end
-            vim.notify(string.format("VBL state restored (%d groups, %d buffers)", 
-                #session_data.groups, opened_count), vim.log.levels.INFO)
-        end, 100)
-    end)
+    -- Synchronous execution - remove vim.schedule() wrapper
+    local groups = require('vertical-bufferline.groups')
+    local bufferline_integration = require('vertical-bufferline.bufferline-integration')
+    
+    -- Show progress notification
+    vim.notify("Restoring VBL state...", vim.log.levels.INFO)
+    
+    -- Temporarily disable bufferline sync during loading
+    bufferline_integration.set_sync_target(nil)
+    
+    -- Basic group restoration only
+    rebuild_groups(session_data, {})  -- Skip file opening for now
+    
+    -- Restore expand mode if available
+    if session_data.expand_all_groups ~= nil then
+        local state_module = require('vertical-bufferline.state')
+        state_module.set_expand_all_groups(session_data.expand_all_groups)
+    end
+    
+    -- Final sync to bufferline
+    local active_group = groups.get_active_group()
+    if active_group then
+        bufferline_integration.set_sync_target(active_group.id)
+    else
+        bufferline_integration.set_sync_target("default")
+    end
+    
+    vim.notify(string.format("VBL state restored (%d groups)", #session_data.groups), vim.log.levels.INFO)
     
     return true
 end
@@ -792,26 +751,18 @@ end
 
 -- Setup session integration
 local function setup_session_integration()
+    -- Minimal re-enablement: Only SessionLoadPost with simplified synchronous restore
     local config_module = require('vertical-bufferline.config')
     
     -- Get session config with fallback defaults
     local session_config = config_module.DEFAULTS.session or {
         mini_sessions_integration = true,
-        auto_serialize = true,
-        auto_restore_prompt = true
+        auto_serialize = false,    -- Temporarily disable other features
+        auto_restore_prompt = false
     }
     
-    -- Event-based integration for mini.sessions
+    -- Only enable basic SessionLoadPost restore for now
     if session_config.mini_sessions_integration then
-        -- Save state before session write
-        vim.api.nvim_create_autocmd("User", {
-            pattern = "SessionSavePre",
-            callback = function()
-                vim.g.VerticalBufferlineSession = vim.json.encode(collect_current_state())
-            end,
-            desc = "Auto-save VBL state for mini.sessions"
-        })
-        
         -- Restore state after session load
         vim.api.nvim_create_autocmd("SessionLoadPost", {
             callback = function()
@@ -823,106 +774,6 @@ local function setup_session_integration()
         })
     end
     
-    -- Auto-serialization for native mksession
-    if session_config.auto_serialize then
-        start_auto_serialize()
-        
-        -- Immediate serialization on state changes
-        vim.api.nvim_create_autocmd("User", {
-            pattern = {
-                "VBufferLineGroupChanged",
-                "VBufferLineGroupCreated",
-                "VBufferLineGroupDeleted",
-                "VBufferLineBufferAddedToGroup",
-                "VBufferLineBufferRemovedFromGroup"
-            },
-            callback = function()
-                vim.g.VerticalBufferlineSession = vim.json.encode(collect_current_state())
-            end,
-            desc = "Real-time serialize VBL state on changes"
-        })
-    end
-    
-    -- Smart restore prompt based on session data changes during source operations
-    if session_config.auto_restore_prompt then
-        local session_before_source = nil
-        
-        -- Record session data before source operation
-        vim.api.nvim_create_autocmd("SourcePre", {
-            pattern = "*.vim",
-            callback = function()
-                session_before_source = vim.g.VerticalBufferlineSession
-            end,
-            desc = "Record VBL session data before source"
-        })
-        
-        -- Check for session data changes after source operation
-        vim.api.nvim_create_autocmd("SourcePost", {
-            pattern = "*.vim",
-            callback = function()
-                local session_after_source = vim.g.VerticalBufferlineSession
-                
-                -- Only prompt if session data actually changed during source operation
-                if session_before_source ~= session_after_source and session_after_source then
-                    vim.defer_fn(function()
-                        if vim.g.vbl_auto_restore then
-                            restore_state_from_global()
-                        else
-                            local choice = vim.fn.confirm(
-                                "Session data detected. Restore VBL state?",
-                                "&Yes\n&No\n&Always\n&Never", 1
-                            )
-                            if choice == 1 then
-                                restore_state_from_global()
-                            elseif choice == 3 then
-                                vim.g.vbl_auto_restore = true
-                                restore_state_from_global()
-                            elseif choice == 4 then
-                                vim.g.vbl_auto_restore = false
-                            end
-                        end
-                    end, 500)
-                end
-            end,
-            desc = "Smart prompt for VBL state restoration on data change"
-        })
-    end
-    
-    -- Manual restore command
-    vim.api.nvim_create_user_command("VBufferLineRestoreSession", function()
-        if vim.g.VerticalBufferlineSession then
-            -- Decode session data to show preview
-            local success, session_data = pcall(vim.json.decode, vim.g.VerticalBufferlineSession)
-            local preview = ""
-            if success and session_data.groups then
-                local group_count = #session_data.groups
-                local buffer_count = 0
-                for _, group in ipairs(session_data.groups) do
-                    buffer_count = buffer_count + #(group.buffers or {})
-                end
-                preview = string.format(" (%d groups, %d buffers)", group_count, buffer_count)
-            end
-            
-            local choice = vim.fn.confirm(
-                "Restore VBL state from session?" .. preview,
-                "&Yes\n&No", 1
-            )
-            if choice == 1 then
-                restore_state_from_global()
-            end
-        else
-            vim.notify("No VBL session data found", vim.log.levels.WARN)
-        end
-    end, { desc = "Restore VBL state from session" })
-    
-    -- Commands to control auto-restore prompt
-    vim.api.nvim_create_user_command("VBufferLineEnableAutoPrompt", function()
-        M.enable_auto_restore_prompt()
-    end, { desc = "Enable auto-restore prompt after sourcing session files" })
-    
-    vim.api.nvim_create_user_command("VBufferLineDisableAutoPrompt", function()
-        M.disable_auto_restore_prompt()
-    end, { desc = "Disable auto-restore prompt after sourcing session files" })
 end
 
 -- Enable/disable auto restore prompt
