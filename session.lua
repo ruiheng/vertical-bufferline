@@ -810,6 +810,8 @@ local function restore_state_from_global()
     else
         bufferline_integration.set_sync_target("default")
     end
+
+    bufferline_integration.set_bufferline_buffers(active_group.buffers)
     
     vim.notify(string.format("VBL state restored (%d groups)", #session_data.groups), vim.log.levels.INFO)
     
