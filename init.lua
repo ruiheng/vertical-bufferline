@@ -42,7 +42,7 @@ api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_MARKER, { link = "Special", bo
 
 -- Path highlights - linked to semantic highlight groups for color scheme compatibility
 api.nvim_set_hl(0, config_module.HIGHLIGHTS.PATH, { link = "Comment", italic = true, default = true })
-api.nvim_set_hl(0, config_module.HIGHLIGHTS.PATH_CURRENT, { link = "NonText", italic = true, default = true })
+api.nvim_set_hl(0, config_module.HIGHLIGHTS.PATH_CURRENT, { link = "Comment", italic = true, default = true })
 api.nvim_set_hl(0, config_module.HIGHLIGHTS.PATH_VISIBLE, { link = "Comment", italic = true, default = true })
 
 -- Filename highlights - linked to semantic highlight groups for color scheme compatibility
@@ -352,22 +352,16 @@ local function apply_buffer_highlighting(line_info, component, actual_line_numbe
         normal_highlight_group = config_module.HIGHLIGHTS.MODIFIED
     end
     
-    -- Apply base highlight to entire line
+    -- Apply base highlight to entire line first
     api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, normal_highlight_group, actual_line_number - 1, 0, -1)
     
-    -- Handle picking mode highlight (override the letter part if in picking mode)
-    if is_picking and line_info.pick_highlight_group then
-        local letter_start = #line_info.tree_prefix
-        local letter_end = letter_start + 1
-        api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, line_info.pick_highlight_group, actual_line_number - 1, letter_start, letter_end)
-    end
-    
-    -- Apply separate highlighting for prefix and filename if prefix exists
+    -- Apply separate highlighting for prefix and filename if prefix exists (before picking mode to avoid conflicts)
     if line_info.prefix_info then
         local line_text = line_info.text
         
         -- Find the position of the filename part in the line
-        local filename_start = line_text:find(line_info.prefix_info.prefix .. line_info.prefix_info.filename)
+        local search_pattern = line_info.prefix_info.prefix .. line_info.prefix_info.filename
+        local filename_start = line_text:find(search_pattern, 1, true)  -- Use plain text search to avoid regex issues
         if filename_start then
             local prefix_start = filename_start - 1  -- Convert to 0-based
             local prefix_end = prefix_start + #line_info.prefix_info.prefix
@@ -392,6 +386,13 @@ local function apply_buffer_highlighting(line_info, component, actual_line_numbe
             -- Apply filename highlight
             api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, filename_highlight, actual_line_number - 1, prefix_end, filename_end)
         end
+    end
+    
+    -- Handle picking mode highlight (override the letter part if in picking mode) - apply last
+    if is_picking and line_info.pick_highlight_group then
+        local letter_start = #line_info.tree_prefix
+        local letter_end = letter_start + 1
+        api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, line_info.pick_highlight_group, actual_line_number - 1, letter_start, letter_end)
     end
 end
 
