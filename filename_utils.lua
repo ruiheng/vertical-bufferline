@@ -254,6 +254,53 @@ function M.get_smart_buffer_name(buffer_id, all_group_buffers)
     end
 end
 
+-- Find the minimal prefix that distinguishes current_dir from all conflicting_dirs
+local function find_minimal_distinguishing_prefix(current_dir, conflicting_dirs)
+    if current_dir == "" or current_dir == "." then
+        return ""
+    end
+    
+    local current_parts = split_path(current_dir)
+    if #current_parts == 0 then
+        return ""
+    end
+
+    -- Simple approach: just use the last directory component and find minimal distinguishing prefix
+    local target_part = current_parts[#current_parts]
+    
+    -- Collect all conflicting last parts that we need to distinguish from
+    local conflicting_parts = {}
+    for _, conflict_dir in ipairs(conflicting_dirs) do
+        local conflict_parts = split_path(conflict_dir)
+        if #conflict_parts > 0 then
+            table.insert(conflicting_parts, conflict_parts[#conflict_parts])
+        end
+    end
+    
+    -- Find minimal prefix that makes target_part unique
+    for prefix_len = 1, #target_part do
+        local candidate = string.sub(target_part, 1, prefix_len)
+        
+        local is_unique = true
+        for _, conflict_part in ipairs(conflicting_parts) do
+            if #conflict_part >= prefix_len then
+                local conflict_prefix = string.sub(conflict_part, 1, prefix_len)
+                if candidate == conflict_prefix then
+                    is_unique = false
+                    break
+                end
+            end
+        end
+        
+        if is_unique then
+            return candidate
+        end
+    end
+    
+    -- Fallback: use full directory name
+    return target_part
+end
+
 -- Generate minimal distinguishing prefixes for files with same names
 -- Returns: { {prefix = "s/", filename = "config.lua"}, {prefix = "t/", filename = "config.lua"} }
 function M.generate_minimal_prefixes(buffer_list)
@@ -369,53 +416,6 @@ function M.generate_minimal_prefixes(buffer_list)
     end
 
     return results
-end
-
--- Find the minimal prefix that distinguishes current_dir from all conflicting_dirs
-local function find_minimal_distinguishing_prefix(current_dir, conflicting_dirs)
-    if current_dir == "" or current_dir == "." then
-        return ""
-    end
-    
-    local current_parts = split_path(current_dir)
-    if #current_parts == 0 then
-        return ""
-    end
-
-    -- Simple approach: just use the last directory component and find minimal distinguishing prefix
-    local target_part = current_parts[#current_parts]
-    
-    -- Collect all conflicting last parts that we need to distinguish from
-    local conflicting_parts = {}
-    for _, conflict_dir in ipairs(conflicting_dirs) do
-        local conflict_parts = split_path(conflict_dir)
-        if #conflict_parts > 0 then
-            table.insert(conflicting_parts, conflict_parts[#conflict_parts])
-        end
-    end
-    
-    -- Find minimal prefix that makes target_part unique
-    for prefix_len = 1, #target_part do
-        local candidate = string.sub(target_part, 1, prefix_len)
-        
-        local is_unique = true
-        for _, conflict_part in ipairs(conflicting_parts) do
-            if #conflict_part >= prefix_len then
-                local conflict_prefix = string.sub(conflict_part, 1, prefix_len)
-                if candidate == conflict_prefix then
-                    is_unique = false
-                    break
-                end
-            end
-        end
-        
-        if is_unique then
-            return candidate
-        end
-    end
-    
-    -- Fallback: use full directory name
-    return target_part
 end
 
 return M
