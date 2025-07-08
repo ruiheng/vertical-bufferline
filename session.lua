@@ -226,6 +226,52 @@ local function collect_session_files(session_data)
     return all_files
 end
 
+-- Find existing buffers without creating new ones (safe for session restore)
+local function find_existing_buffers(session_data)
+    local buffer_mappings = {} -- file_path -> buffer_id
+    local found_count = 0
+
+    -- Get all existing buffers
+    local all_bufs = vim.api.nvim_list_bufs()
+    local existing_buf_names = {}
+    for _, buf_id in ipairs(all_bufs) do
+        if vim.api.nvim_buf_is_valid(buf_id) then
+            local buf_name = vim.api.nvim_buf_get_name(buf_id)
+            if buf_name ~= "" then
+                table.insert(existing_buf_names, buf_name)
+            end
+        end
+    end
+
+    -- Try to match session data buffers with existing buffers
+    for _, group_data in ipairs(session_data.groups) do
+        for _, buffer_info in ipairs(group_data.buffers or {}) do
+            local file_path = expand_buffer_path(buffer_info.path)
+            
+            -- Only look for existing buffers, don't create new ones
+            local existing_buf = vim.fn.bufnr(file_path, false)
+            if existing_buf > 0 and vim.api.nvim_buf_is_valid(existing_buf) then
+                buffer_mappings[file_path] = existing_buf
+                found_count = found_count + 1
+            end
+        end
+    end
+
+    -- If no buffers were found in session data, but we have existing buffers,
+    -- add them to a fallback mapping (these will be added to default group)
+    if found_count == 0 and #existing_buf_names > 0 then
+        for _, buf_name in ipairs(existing_buf_names) do
+            local buf_id = vim.fn.bufnr(buf_name, false)
+            if buf_id > 0 and vim.api.nvim_buf_is_valid(buf_id) then
+                buffer_mappings[buf_name] = buf_id
+                found_count = found_count + 1
+            end
+        end
+    end
+
+    return buffer_mappings
+end
+
 -- Open all session files and return buffer mappings
 local function open_session_files(session_files)
     local buffer_mappings = {} -- file_path -> buffer_id
@@ -344,6 +390,21 @@ local function rebuild_groups(session_data, buffer_mappings)
     else
         -- Fallback to default group if target doesn't exist
         groups.set_active_group("default")
+    end
+    
+    -- Step 5: Fallback for unmapped existing buffers - add them to default group
+    local default_group = groups.find_group_by_id("default")
+    if default_group then
+        for file_path, buf_id in pairs(buffer_mappings) do
+            if vim.api.nvim_buf_is_valid(buf_id) then
+                -- Check if this buffer is already in any group
+                local buffer_group = groups.find_buffer_group(buf_id)
+                if not buffer_group then
+                    -- Buffer exists but not in any group, add to default
+                    groups.add_buffer_to_group(buf_id, "default")
+                end
+            end
+        end
     end
 end
 
@@ -677,6 +738,7 @@ local function restore_state_from_global()
         return false
     end
     
+    
     -- Validate session data
     if not session_data.groups or type(session_data.groups) ~= "table" then
         vim.notify("Invalid VBL session data format", vim.log.levels.ERROR)
@@ -693,8 +755,11 @@ local function restore_state_from_global()
     -- Temporarily disable bufferline sync during loading
     bufferline_integration.set_sync_target(nil)
     
-    -- Basic group restoration only
-    rebuild_groups(session_data, {})  -- Skip file opening for now
+    -- Find existing buffers that were already loaded by Vim session
+    local buffer_mappings = find_existing_buffers(session_data)
+    
+    -- Basic group restoration with existing buffers
+    rebuild_groups(session_data, buffer_mappings)
     
     -- Restore expand mode if available
     if session_data.expand_all_groups ~= nil then
@@ -756,7 +821,7 @@ local function setup_session_integration()
     -- Get session config with fallback defaults
     local session_config = config_module.DEFAULTS.session or {
         mini_sessions_integration = true,
-        auto_serialize = true,     -- Re-enable auto-serialization
+        auto_serialize = true,     -- Re-enable now that race condition is fixed
         auto_restore_prompt = false -- Keep this disabled for now
     }
     
@@ -764,19 +829,31 @@ local function setup_session_integration()
     if session_config.mini_sessions_integration then
         -- Save state before session write
         vim.api.nvim_create_autocmd("User", {
-            pattern = "SessionSavePre",
+            pattern = "SessionSavePre", 
             callback = function()
                 vim.g.VerticalBufferlineSession = vim.json.encode(collect_current_state())
             end,
             desc = "Auto-save VBL state for mini.sessions"
         })
         
-        -- Restore state after session load
+        -- Restore state after session load with delay to ensure buffers are loaded
         vim.api.nvim_create_autocmd("SessionLoadPost", {
             callback = function()
-                if vim.g.VerticalBufferlineSession then
-                    restore_state_from_global()
-                end
+                -- CRITICAL: Save original session data IMMEDIATELY before anything can overwrite it
+                local original_session_data = vim.g.VerticalBufferlineSession
+                
+                -- IMPORTANT: Stop any running auto-serialization timer IMMEDIATELY
+                stop_auto_serialize()
+                
+                vim.defer_fn(function()
+                    -- Restore the original data in case it was overwritten
+                    vim.g.VerticalBufferlineSession = original_session_data
+                    
+                    
+                    if vim.g.VerticalBufferlineSession then
+                        restore_state_from_global()
+                    end
+                end, 50)
             end,
             desc = "Auto-restore VBL state for mini.sessions"
         })
