@@ -3,6 +3,7 @@ debug.log
 dummy.txt
 *.tmp
 *.bak
+*.vim
 
 # 测试文件
 test_*.lua
