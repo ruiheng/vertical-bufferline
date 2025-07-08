@@ -40,10 +40,10 @@ api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_NUMBER, { link = "Number", bol
 api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_SEPARATOR, { link = "Comment", default = true })
 api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_MARKER, { link = "Special", bold = true, default = true })
 
--- Path highlights - linked to semantic highlight groups for color scheme compatibility
-api.nvim_set_hl(0, config_module.HIGHLIGHTS.PATH, { link = "Comment", italic = true, default = true })
-api.nvim_set_hl(0, config_module.HIGHLIGHTS.PATH_CURRENT, { link = "Comment", italic = true, default = true })
-api.nvim_set_hl(0, config_module.HIGHLIGHTS.PATH_VISIBLE, { link = "Comment", italic = true, default = true })
+-- Path highlights - use distinct colors for better visibility
+api.nvim_set_hl(0, config_module.HIGHLIGHTS.PATH, { fg = config_module.COLORS.GRAY, italic = true, default = true })
+api.nvim_set_hl(0, config_module.HIGHLIGHTS.PATH_CURRENT, { fg = config_module.COLORS.BLUE, italic = true, default = true })
+api.nvim_set_hl(0, config_module.HIGHLIGHTS.PATH_VISIBLE, { fg = config_module.COLORS.PURPLE, italic = true, default = true })
 
 -- Filename highlights - linked to semantic highlight groups for color scheme compatibility
 api.nvim_set_hl(0, config_module.HIGHLIGHTS.FILENAME, { link = "Normal", default = true })  -- No special highlighting for normal files
