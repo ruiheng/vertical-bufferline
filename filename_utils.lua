@@ -254,4 +254,168 @@ function M.get_smart_buffer_name(buffer_id, all_group_buffers)
     end
 end
 
+-- Generate minimal distinguishing prefixes for files with same names
+-- Returns: { {prefix = "s/", filename = "config.lua"}, {prefix = "t/", filename = "config.lua"} }
+function M.generate_minimal_prefixes(buffer_list)
+    if not buffer_list or #buffer_list == 0 then
+        return {}
+    end
+
+    local results = {}
+    local buffer_paths = {}
+    local filename_groups = {}
+
+    -- First pass: collect all paths and group by filename
+    for i, buffer_info in ipairs(buffer_list) do
+        local buffer_id = nil
+        local path = ""
+
+        -- Handle different input types
+        if type(buffer_info) == "number" then
+            buffer_id = buffer_info
+            local success, is_valid = pcall(vim.api.nvim_buf_is_valid, buffer_id)
+            if success and is_valid then
+                local name_success, name = pcall(vim.api.nvim_buf_get_name, buffer_id)
+                if name_success then
+                    path = name
+                end
+            end
+        elseif type(buffer_info) == "table" then
+            buffer_id = buffer_info.id
+            if buffer_info.name and type(buffer_info.name) == "string" then
+                path = buffer_info.name
+            elseif buffer_id then
+                local success, is_valid = pcall(vim.api.nvim_buf_is_valid, buffer_id)
+                if success and is_valid then
+                    local name_success, name = pcall(vim.api.nvim_buf_get_name, buffer_id)
+                    if name_success then
+                        path = name
+                    end
+                end
+            end
+        end
+
+        if path ~= "" then
+            local filename = vim.fn.fnamemodify(path, ":t")
+            local directory = vim.fn.fnamemodify(path, ":h")
+            
+            -- Convert to relative path
+            local cwd = vim.fn.getcwd()
+            local relative_dir = directory
+            if directory:sub(1, #cwd) == cwd then
+                relative_dir = directory:sub(#cwd + 2)
+                if relative_dir == "" then
+                    relative_dir = "."
+                end
+            end
+
+            buffer_paths[i] = {
+                path = path,
+                filename = filename,
+                directory = relative_dir,
+                full_path = path
+            }
+
+            if not filename_groups[filename] then
+                filename_groups[filename] = {}
+            end
+            table.insert(filename_groups[filename], {
+                index = i,
+                directory = relative_dir,
+                filename = filename
+            })
+        else
+            buffer_paths[i] = {
+                path = "[No Name]",
+                filename = "[No Name]",
+                directory = "",
+                full_path = ""
+            }
+        end
+    end
+
+    -- Process each buffer
+    for i = 1, #buffer_list do
+        if not buffer_paths[i] then
+            results[i] = { prefix = "", filename = "[No Name]" }
+        else
+            local buffer_info = buffer_paths[i]
+            local filename = buffer_info.filename
+            local directory = buffer_info.directory
+
+            -- Check if this filename has conflicts
+            local conflicts = filename_groups[filename]
+            if not conflicts or #conflicts <= 1 then
+                -- No conflicts, no prefix needed
+                results[i] = { prefix = "", filename = filename }
+            else
+                -- Has conflicts, need to generate minimal prefix
+                local current_dir = directory
+                local conflicting_dirs = {}
+                
+                for _, conflict in ipairs(conflicts) do
+                    if conflict.index ~= i then
+                        table.insert(conflicting_dirs, conflict.directory)
+                    end
+                end
+
+                local minimal_prefix = find_minimal_distinguishing_prefix(current_dir, conflicting_dirs)
+                results[i] = { 
+                    prefix = minimal_prefix ~= "" and (minimal_prefix .. "/") or "",
+                    filename = filename 
+                }
+            end
+        end
+    end
+
+    return results
+end
+
+-- Find the minimal prefix that distinguishes current_dir from all conflicting_dirs
+local function find_minimal_distinguishing_prefix(current_dir, conflicting_dirs)
+    if current_dir == "" or current_dir == "." then
+        return ""
+    end
+    
+    local current_parts = split_path(current_dir)
+    if #current_parts == 0 then
+        return ""
+    end
+
+    -- Simple approach: just use the last directory component and find minimal distinguishing prefix
+    local target_part = current_parts[#current_parts]
+    
+    -- Collect all conflicting last parts that we need to distinguish from
+    local conflicting_parts = {}
+    for _, conflict_dir in ipairs(conflicting_dirs) do
+        local conflict_parts = split_path(conflict_dir)
+        if #conflict_parts > 0 then
+            table.insert(conflicting_parts, conflict_parts[#conflict_parts])
+        end
+    end
+    
+    -- Find minimal prefix that makes target_part unique
+    for prefix_len = 1, #target_part do
+        local candidate = string.sub(target_part, 1, prefix_len)
+        
+        local is_unique = true
+        for _, conflict_part in ipairs(conflicting_parts) do
+            if #conflict_part >= prefix_len then
+                local conflict_prefix = string.sub(conflict_part, 1, prefix_len)
+                if candidate == conflict_prefix then
+                    is_unique = false
+                    break
+                end
+            end
+        end
+        
+        if is_unique then
+            return candidate
+        end
+    end
+    
+    -- Fallback: use full directory name
+    return target_part
+end
+
 return M

@@ -302,8 +302,19 @@ local function create_buffer_line(component, j, total_components, current_buffer
     -- Use extracted filename or fallback to original name
     local final_name = display_name or component.name
     
-    -- Replace component.name with filename in the line text
-    local name_in_line = final_name
+    -- Build display name with minimal prefix if available
+    local display_with_prefix = final_name
+    local prefix_info = nil
+    if component.minimal_prefix and component.minimal_prefix.prefix and component.minimal_prefix.prefix ~= "" then
+        display_with_prefix = component.minimal_prefix.prefix .. component.minimal_prefix.filename
+        prefix_info = {
+            prefix = component.minimal_prefix.prefix,
+            filename = component.minimal_prefix.filename
+        }
+    end
+    
+    -- Replace component.name with prefixed filename in the line text
+    local name_in_line = display_with_prefix
     if letter and is_picking then
         line_text = tree_prefix .. letter .. " " .. current_marker .. number_display .. " " .. modified_indicator .. icon .. " " .. name_in_line
     else
@@ -324,7 +335,8 @@ local function create_buffer_line(component, j, total_components, current_buffer
         tree_prefix = tree_prefix,
         pick_highlight_group = pick_highlight_group,
         pick_highlight_end = pick_highlight_end,
-        has_path = path_line ~= nil
+        has_path = path_line ~= nil,
+        prefix_info = prefix_info
     }
 end
 
@@ -348,6 +360,38 @@ local function apply_buffer_highlighting(line_info, component, actual_line_numbe
         local letter_start = #line_info.tree_prefix
         local letter_end = letter_start + 1
         api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, line_info.pick_highlight_group, actual_line_number - 1, letter_start, letter_end)
+    end
+    
+    -- Apply separate highlighting for prefix and filename if prefix exists
+    if line_info.prefix_info then
+        local line_text = line_info.text
+        
+        -- Find the position of the filename part in the line
+        local filename_start = line_text:find(line_info.prefix_info.prefix .. line_info.prefix_info.filename)
+        if filename_start then
+            local prefix_start = filename_start - 1  -- Convert to 0-based
+            local prefix_end = prefix_start + #line_info.prefix_info.prefix
+            local filename_end = prefix_end + #line_info.prefix_info.filename
+            
+            -- Determine appropriate highlight groups based on buffer state
+            local path_highlight, filename_highlight
+            if component.id == current_buffer_id then
+                path_highlight = config_module.HIGHLIGHTS.PATH_CURRENT
+                filename_highlight = config_module.HIGHLIGHTS.FILENAME_CURRENT
+            elseif component.focused then
+                path_highlight = config_module.HIGHLIGHTS.PATH_VISIBLE
+                filename_highlight = config_module.HIGHLIGHTS.FILENAME_VISIBLE
+            else
+                path_highlight = config_module.HIGHLIGHTS.PATH
+                filename_highlight = config_module.HIGHLIGHTS.FILENAME
+            end
+            
+            -- Apply prefix highlight (path-style)
+            api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, path_highlight, actual_line_number - 1, prefix_start, prefix_end)
+            
+            -- Apply filename highlight
+            api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, filename_highlight, actual_line_number - 1, prefix_end, filename_end)
+        end
     end
 end
 
@@ -489,11 +533,11 @@ local function render_all_groups(active_group, components, current_buffer_id, is
                 end
 
                 if #buffer_ids > 1 then
-                    local unique_names = filename_utils.generate_unique_names(buffer_ids)
-                    -- Update component names
+                    local minimal_prefixes = filename_utils.generate_minimal_prefixes(buffer_ids)
+                    -- Update component names with minimal prefixes
                     for j, comp in ipairs(group_components) do
-                        if comp.id and unique_names[j] then
-                            comp.name = unique_names[j]
+                        if comp.id and minimal_prefixes[j] then
+                            comp.minimal_prefix = minimal_prefixes[j]
                         end
                     end
                 end
@@ -514,14 +558,16 @@ local function render_all_groups(active_group, components, current_buffer_id, is
                     end
                 end
 
-                -- Generate smart unique filenames
-                local unique_names = filename_utils.generate_unique_names(valid_buffers)
+                -- Generate minimal prefixes for conflict resolution
+                local minimal_prefixes = filename_utils.generate_minimal_prefixes(valid_buffers)
 
                 -- Construct components
                 for j, buf_id in ipairs(valid_buffers) do
+                    local filename = vim.fn.fnamemodify(api.nvim_buf_get_name(buf_id), ":t")
                     table.insert(group_components, {
                         id = buf_id,
-                        name = unique_names[j] or vim.fn.fnamemodify(api.nvim_buf_get_name(buf_id), ":t"),
+                        name = filename,
+                        minimal_prefix = minimal_prefixes[j],
                         icon = "",
                         focused = false
                     })
