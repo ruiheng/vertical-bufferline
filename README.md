@@ -235,6 +235,20 @@ The plugin initializes automatically when the sidebar is first opened. Default s
 - **Memory efficient** - Smart cleanup of invalid buffers and groups
 - **Extensible design** - Clean API for future enhancements
 
+## Recent Improvements
+
+### Path Highlighting Consistency (v1.1.0)
+**Issue**: Path lines in inactive groups had inconsistent highlighting, with some paths missing visual effects entirely.
+
+**Root Cause**: Component data mismatch where inactive groups' components weren't included in the main highlighting loop, causing component lookup failures.
+
+**Solution**: 
+- Introduced `all_components` hash table to collect components from all groups
+- Improved component lookup efficiency from O(n) linear search to O(1) hash access
+- Ensured data consistency between rendering and highlighting phases
+
+**Result**: All path lines now display consistent highlighting based on buffer state and group activity, with significant performance improvements.
+
 ## Installation
 
 Add to your Neovim configuration and ensure the keymap setup is called after plugin loading:
