@@ -82,6 +82,11 @@ M.HIGHLIGHTS = {
     FILENAME = "VBufferLineFilename",
     FILENAME_CURRENT = "VBufferLineFilenameCurrent",
     FILENAME_VISIBLE = "VBufferLineFilenameVisible",
+    
+    -- Prefix highlights for first-line minimal prefixes (different from full path)
+    PREFIX = "VBufferLinePrefix",
+    PREFIX_CURRENT = "VBufferLinePrefixCurrent",
+    PREFIX_VISIBLE = "VBufferLinePrefixVisible",
 }
 
 -- Event names for autocmds

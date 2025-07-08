@@ -40,10 +40,15 @@ api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_NUMBER, { link = "Number", bol
 api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_SEPARATOR, { link = "Comment", default = true })
 api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_MARKER, { link = "Special", bold = true, default = true })
 
--- Path highlights - use distinct colors for better visibility
-api.nvim_set_hl(0, config_module.HIGHLIGHTS.PATH, { fg = config_module.COLORS.GRAY, italic = true, default = true })
-api.nvim_set_hl(0, config_module.HIGHLIGHTS.PATH_CURRENT, { fg = config_module.COLORS.BLUE, italic = true, default = true })
-api.nvim_set_hl(0, config_module.HIGHLIGHTS.PATH_VISIBLE, { fg = config_module.COLORS.PURPLE, italic = true, default = true })
+-- Path highlights - for second-line full paths, restore original style
+api.nvim_set_hl(0, config_module.HIGHLIGHTS.PATH, { link = "Comment", italic = true, default = true })
+api.nvim_set_hl(0, config_module.HIGHLIGHTS.PATH_CURRENT, { link = "NonText", italic = true, default = true })
+api.nvim_set_hl(0, config_module.HIGHLIGHTS.PATH_VISIBLE, { link = "Comment", italic = true, default = true })
+
+-- Prefix highlights - for first-line minimal prefixes, use distinct colors
+api.nvim_set_hl(0, config_module.HIGHLIGHTS.PREFIX, { fg = config_module.COLORS.GRAY, italic = true, default = true })
+api.nvim_set_hl(0, config_module.HIGHLIGHTS.PREFIX_CURRENT, { fg = config_module.COLORS.BLUE, italic = true, default = true })
+api.nvim_set_hl(0, config_module.HIGHLIGHTS.PREFIX_VISIBLE, { fg = config_module.COLORS.PURPLE, italic = true, default = true })
 
 -- Filename highlights - linked to semantic highlight groups for color scheme compatibility
 api.nvim_set_hl(0, config_module.HIGHLIGHTS.FILENAME, { link = "Normal", default = true })  -- No special highlighting for normal files
@@ -368,20 +373,20 @@ local function apply_buffer_highlighting(line_info, component, actual_line_numbe
             local filename_end = prefix_end + #line_info.prefix_info.filename
             
             -- Determine appropriate highlight groups based on buffer state
-            local path_highlight, filename_highlight
+            local prefix_highlight, filename_highlight
             if component.id == current_buffer_id then
-                path_highlight = config_module.HIGHLIGHTS.PATH_CURRENT
+                prefix_highlight = config_module.HIGHLIGHTS.PREFIX_CURRENT
                 filename_highlight = config_module.HIGHLIGHTS.FILENAME_CURRENT
             elseif component.focused then
-                path_highlight = config_module.HIGHLIGHTS.PATH_VISIBLE
+                prefix_highlight = config_module.HIGHLIGHTS.PREFIX_VISIBLE
                 filename_highlight = config_module.HIGHLIGHTS.FILENAME_VISIBLE
             else
-                path_highlight = config_module.HIGHLIGHTS.PATH
+                prefix_highlight = config_module.HIGHLIGHTS.PREFIX
                 filename_highlight = config_module.HIGHLIGHTS.FILENAME
             end
             
-            -- Apply prefix highlight (path-style)
-            api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, path_highlight, actual_line_number - 1, prefix_start, prefix_end)
+            -- Apply prefix highlight (using dedicated prefix highlight)
+            api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, prefix_highlight, actual_line_number - 1, prefix_start, prefix_end)
             
             -- Apply filename highlight
             api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, filename_highlight, actual_line_number - 1, prefix_end, filename_end)
