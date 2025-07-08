@@ -29,6 +29,9 @@ local groups_data = {
     -- Current active group ID
     active_group_id = nil,
 
+    -- Previous active group ID (for switching back)
+    previous_group_id = nil,
+
     -- Default group ID (fallback group for all buffers)
     default_group_id = "default",
 
@@ -220,6 +223,11 @@ function M.set_active_group(group_id)
     end
 
     local old_group_id = groups_data.active_group_id
+    
+    -- Store previous group ID for switching back
+    if old_group_id then
+        groups_data.previous_group_id = old_group_id
+    end
     
     -- Save current buffer state for the old group before switching
     local old_group = M.get_active_group()
@@ -458,6 +466,35 @@ function M.get_active_group_buffers()
     end
 
     return M.get_group_buffers(active_group.id)
+end
+
+--- Switch to previous group
+--- @return boolean success
+function M.switch_to_previous_group()
+    local current_group_id = groups_data.active_group_id
+    local previous_group_id = groups_data.previous_group_id
+    
+    -- If no previous group, cannot switch
+    if not previous_group_id then
+        vim.notify("No previous group to switch to", vim.log.levels.WARN)
+        return false
+    end
+    
+    -- If previous group is invalid, cannot switch
+    if not find_group_by_id(previous_group_id) then
+        vim.notify("Previous group no longer exists", vim.log.levels.WARN)
+        groups_data.previous_group_id = nil
+        return false
+    end
+    
+    -- If previous group is the same as current (edge case), cannot switch
+    if previous_group_id == current_group_id then
+        vim.notify("Previous group is the same as current group", vim.log.levels.WARN)
+        return false
+    end
+    
+    -- Switch to previous group
+    return M.set_active_group(previous_group_id)
 end
 
 -- Move group up
