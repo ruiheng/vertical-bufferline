@@ -157,11 +157,21 @@ function M.delete_group(group_id)
 
     local group = groups_data.groups[group_index]
 
-    -- Move all buffers from this group to default group
+    -- Only move buffers that exist ONLY in this group to default group
     local default_group = find_group_by_id(groups_data.default_group_id)
     if default_group then
         for _, buffer_id in ipairs(group.buffers) do
-            if not vim.tbl_contains(default_group.buffers, buffer_id) then
+            -- Check if this buffer exists in any other group
+            local exists_in_other_groups = false
+            for _, other_group in ipairs(groups_data.groups) do
+                if other_group.id ~= group_id and vim.tbl_contains(other_group.buffers, buffer_id) then
+                    exists_in_other_groups = true
+                    break
+                end
+            end
+            
+            -- Only move to default group if it doesn't exist in other groups
+            if not exists_in_other_groups and not vim.tbl_contains(default_group.buffers, buffer_id) then
                 table.insert(default_group.buffers, buffer_id)
             end
         end
