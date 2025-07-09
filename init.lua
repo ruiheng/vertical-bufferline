@@ -522,7 +522,7 @@ local function render_group_header(group, i, is_active, buffer_count, lines_text
     end
 
     local group_line = string.format("[%d] %s %s (%d buffers)",
-        i, group_marker, group_name_display, buffer_count)
+        group.display_number, group_marker, group_name_display, buffer_count)
     table.insert(lines_text, group_line)
 
     -- Record group header line info
@@ -530,7 +530,7 @@ local function render_group_header(group, i, is_active, buffer_count, lines_text
         line = #lines_text - config_module.SYSTEM.ZERO_BASED_OFFSET,  -- 0-based line number
         type = "header",
         is_active = is_active,
-        group_number = i
+        group_number = group.display_number
     })
 end
 

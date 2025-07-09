@@ -300,13 +300,10 @@ vim.api.nvim_create_autocmd("VimEnter", {
       vbl.move_group_down()
     end, { noremap = true, silent = true, desc = "Move current group down" })
     
-    -- Quick group switching
+    -- Quick group switching (by display number, not array index)
     for i = 1, 9 do
       vim.keymap.set('n', '<leader>g' .. i, function()
-        local groups = vbl.groups.get_all_groups()
-        if groups[i] then
-          vbl.groups.set_active_group(groups[i].id)
-        end
+        vbl.groups.switch_to_group_by_display_number(i)
       end, { noremap = true, silent = true, desc = "Switch to group " .. i })
     end
   end,

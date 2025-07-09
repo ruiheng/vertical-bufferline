@@ -37,6 +37,9 @@ local groups_data = {
 
     -- Counter for next group ID
     next_group_id = config_module.SYSTEM.FIRST_INDEX,
+    
+    -- Counter for stable display numbers (never decreases)
+    next_display_number = config_module.SYSTEM.FIRST_INDEX,
 
     -- Group settings
     settings = {
@@ -58,8 +61,10 @@ local function init_default_group()
             buffers = {},
             current_buffer = nil,  -- Track current buffer within this group
             created_at = os.time(),
-            color = config_module.COLORS.BLUE
+            color = config_module.COLORS.BLUE,
+            display_number = groups_data.next_display_number
         }
+        groups_data.next_display_number = groups_data.next_display_number + 1
         table.insert(groups_data.groups, default_group)
         groups_data.active_group_id = groups_data.default_group_id
 
@@ -71,6 +76,16 @@ end
 local function find_group_by_id(group_id)
     for _, group in ipairs(groups_data.groups) do
         if group.id == group_id then
+            return group
+        end
+    end
+    return nil
+end
+
+-- Find group by display number
+local function find_group_by_display_number(display_number)
+    for _, group in ipairs(groups_data.groups) do
+        if group.display_number == display_number then
             return group
         end
     end
@@ -109,8 +124,10 @@ function M.create_group(name, color)
         buffers = {},
         current_buffer = nil,  -- Track current buffer within this group
         created_at = os.time(),
-        color = color or config_module.COLORS.GREEN
+        color = color or config_module.COLORS.GREEN,
+        display_number = groups_data.next_display_number
     }
+    groups_data.next_display_number = groups_data.next_display_number + 1
 
     table.insert(groups_data.groups, new_group)
 
@@ -669,6 +686,17 @@ function M.debug_info()
         groups_data = groups_data,
         stats = M.get_group_stats()
     }
+end
+
+--- Switch to group by display number (for quick switch shortcuts)
+--- @param display_number number Display number shown in UI (1, 2, 3, etc.)
+--- @return boolean success
+function M.switch_to_group_by_display_number(display_number)
+    local group = find_group_by_display_number(display_number)
+    if not group then
+        return false
+    end
+    return M.set_active_group(group.id)
 end
 
 M.find_group_by_id = find_group_by_id
