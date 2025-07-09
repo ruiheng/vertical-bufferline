@@ -274,11 +274,7 @@ local function create_buffer_line(component, j, total_components, current_buffer
         letter = component.letter
     end
 
-    -- Add number display (1-9 correspond to <leader>1-9, 10 uses 0)
-    local number_display = j <= 9 and tostring(j) or "0"
-    if j > config_module.UI.MAX_DISPLAY_NUMBER then
-        number_display = config_module.UI.NUMBER_OVERFLOW_CHAR
-    end
+    local number_display = tostring(j)
 
     -- Add arrow marker for current buffer
     local current_marker = ""
@@ -1082,7 +1078,6 @@ local function initialize_plugin()
 
     -- Initialize group functionality
     groups.setup({
-        max_buffers_per_group = config_module.DEFAULTS.max_buffers_per_group,
         auto_create_groups = config_module.DEFAULTS.auto_create_groups,
         auto_add_new_buffers = config_module.DEFAULTS.auto_add_new_buffers
     })

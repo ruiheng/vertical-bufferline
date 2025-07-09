@@ -40,7 +40,6 @@ local groups_data = {
 
     -- Group settings
     settings = {
-        max_buffers_per_group = config_module.DEFAULTS.max_buffers_per_group,
         auto_create_groups = config_module.DEFAULTS.auto_create_groups,
         auto_add_new_buffers = config_module.DEFAULTS.auto_add_new_buffers,
         group_name_prefix = "Group",
@@ -319,12 +318,6 @@ function M.add_buffer_to_group(buffer_id, group_id)
     -- Check if already in group
     if vim.tbl_contains(group.buffers, buffer_id) then
         return true
-    end
-
-    -- Check if group is recommended full (warning only, not blocking)
-    if #group.buffers >= groups_data.settings.max_buffers_per_group then
-        vim.notify("Group '" .. group.name .. "' has " .. #group.buffers .. " buffers (recommended max: " .. groups_data.settings.max_buffers_per_group .. ")", vim.log.levels.WARN)
-        -- Continue execution, don't return false
     end
 
     -- Allow buffer to exist in multiple groups (commented out original restriction)

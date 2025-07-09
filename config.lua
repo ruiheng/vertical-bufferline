@@ -9,7 +9,6 @@ M.UI = {
     DEFAULT_WIDTH = 40,
 
     -- Display limits
-    MAX_BUFFERS_PER_GROUP = 10,
     MAX_DISPLAY_NUMBER = 10,
 
     -- Timing constants (in milliseconds)
@@ -24,7 +23,6 @@ M.UI = {
     TREE_BRANCH = "├─ ",
     TREE_LAST = "└─ ",
     TREE_EMPTY = "(empty)",
-    NUMBER_OVERFLOW_CHAR = "·",
     CURRENT_BUFFER_MARKER = "► ",
     
     -- Path display formatting
@@ -104,7 +102,6 @@ M.EVENTS = {
 -- Default settings
 M.DEFAULTS = {
     -- Group management
-    max_buffers_per_group = M.UI.MAX_BUFFERS_PER_GROUP,
     auto_create_groups = true,
     auto_add_new_buffers = true,
 
