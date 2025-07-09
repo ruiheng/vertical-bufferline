@@ -63,7 +63,20 @@ end
 
 -- Sidebar state management
 function M.is_sidebar_open()
-    return state.is_sidebar_open
+    -- Check if sidebar is marked as open AND the window still exists
+    if not state.is_sidebar_open then
+        return false
+    end
+    
+    -- Verify the window still exists and is valid
+    if not state.win_id or not api.nvim_win_is_valid(state.win_id) then
+        -- Window was closed externally (e.g., by Ctrl-W o), update our state
+        state.is_sidebar_open = false
+        state.win_id = nil
+        return false
+    end
+    
+    return true
 end
 
 function M.set_sidebar_open(is_open)
