@@ -681,10 +681,11 @@ local function apply_group_highlights(group_header_lines, lines_text)
 end
 
 -- Finalize buffer display with lines and mapping
-local function finalize_buffer_display(lines_text, new_line_map)
+local function finalize_buffer_display(lines_text, new_line_map, line_group_context)
     api.nvim_buf_set_option(state_module.get_buf_id(), "modifiable", true)
     api.nvim_buf_set_lines(state_module.get_buf_id(), 0, -1, false, lines_text)
     state_module.set_line_to_buffer_id(new_line_map)
+    state_module.set_line_group_context(line_group_context or {})
 end
 
 -- Complete buffer setup and make it read-only
@@ -716,7 +717,7 @@ function M.refresh()
     local remaining_components = render_all_groups(active_group, components, current_buffer_id, is_picking, lines_text, new_line_map, group_header_lines, line_types, all_components, line_components, line_group_context)
 
     -- Finalize buffer display (set lines but keep modifiable) - this clears highlights
-    finalize_buffer_display(lines_text, new_line_map)
+    finalize_buffer_display(lines_text, new_line_map, line_group_context)
     
     -- Clear old highlights and apply all highlights AFTER buffer content is set
     api.nvim_buf_clear_namespace(state_module.get_buf_id(), ns_id, 0, -1)
@@ -812,36 +813,48 @@ function M.apply_picking_highlights()
             end
 
             if letter then
-                -- Find the actual line number of this buffer in sidebar
-                local actual_line_number = nil
-                for line_num, buffer_id in pairs(state_module.get_line_to_buffer_id()) do
-                    if buffer_id == component.id then
-                        actual_line_number = line_num
-                        break
-                    end
-                end
-
-                if actual_line_number then
-                    -- Choose appropriate pick highlight based on buffer state
-                    local pick_highlight_group
-                    if component.id == current_buffer_id then
-                        pick_highlight_group = config_module.HIGHLIGHTS.PICK_SELECTED
-                    elseif component.focused then
-                        pick_highlight_group = config_module.HIGHLIGHTS.PICK_VISIBLE
-                    else
-                        pick_highlight_group = config_module.HIGHLIGHTS.PICK
+                -- Only highlight buffers in the active group
+                local active_group = groups.get_active_group()
+                if not active_group then return end
+                
+                local active_group_buffers = groups.get_group_buffers(active_group.id)
+                if vim.tbl_contains(active_group_buffers, component.id) then
+                    -- Find the actual line number of this buffer in the active group context
+                    local actual_line_number = nil
+                    local line_to_buffer = state_module.get_line_to_buffer_id()
+                    local line_group_context = state_module.get_line_group_context()
+                    
+                    for line_num, buffer_id in pairs(line_to_buffer) do
+                        if buffer_id == component.id and line_group_context and line_group_context[line_num] == active_group.id then
+                            actual_line_number = line_num
+                            break
+                        end
                     end
 
-                    -- Calculate correct highlight position, skip tree prefix
-                    -- Determine if this is the last buffer or middle buffer
-                    local is_last = (i == #components)
-                    local tree_prefix = is_last and (" " .. config_module.UI.TREE_LAST) or (" " .. config_module.UI.TREE_BRANCH)
-                    local highlight_start = #tree_prefix
-                    local highlight_end = highlight_start + 1
+                    if actual_line_number then
+                        -- Choose appropriate pick highlight based on buffer state
+                        local pick_highlight_group
+                        if component.id == current_buffer_id then
+                            pick_highlight_group = config_module.HIGHLIGHTS.PICK_SELECTED
+                        elseif component.focused then
+                            pick_highlight_group = config_module.HIGHLIGHTS.PICK_VISIBLE
+                        else
+                            pick_highlight_group = config_module.HIGHLIGHTS.PICK
+                        end
 
-                    -- Apply highlight with both namespace and without
-                    api.nvim_buf_add_highlight(state_module.get_buf_id(), 0, pick_highlight_group, actual_line_number - 1, highlight_start, highlight_end)
-                    api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, pick_highlight_group, actual_line_number - 1, highlight_start, highlight_end)
+                        -- Get the actual line text to find the letter position
+                        local line_text = api.nvim_buf_get_lines(state_module.get_buf_id(), actual_line_number - 1, actual_line_number, false)[1] or ""
+                        local letter_pos = line_text:find(vim.pesc(letter))
+                        
+                        if letter_pos then
+                            local highlight_start = letter_pos - 1  -- Convert to 0-based
+                            local highlight_end = letter_pos  -- Highlight just the letter
+                            
+                            -- Apply highlight with both namespace and without
+                            api.nvim_buf_add_highlight(state_module.get_buf_id(), 0, pick_highlight_group, actual_line_number - 1, highlight_start, highlight_end)
+                            api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, pick_highlight_group, actual_line_number - 1, highlight_start, highlight_end)
+                        end
+                    end
                 end
             end
         end

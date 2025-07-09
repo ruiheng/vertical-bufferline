@@ -13,6 +13,7 @@ local state = {
     is_sidebar_open = false,
     line_to_buffer_id = {}, -- Maps a line number in our window to a buffer ID
     hint_to_buffer_id = {}, -- Maps a hint character to a buffer ID
+    line_group_context = {}, -- Maps a line number to the group ID it belongs to
     was_picking = false, -- Track picking mode state to avoid spam
     expand_all_groups = true, -- Default mode: show all groups expanded
     session_loading = false, -- Flag to prevent interference during session loading
@@ -115,6 +116,22 @@ end
 
 function M.clear_hint_mapping()
     state.hint_to_buffer_id = {}
+end
+
+-- Line group context mapping
+function M.get_line_group_context()
+    return state.line_group_context
+end
+
+function M.set_line_group_context(mapping)
+    if type(mapping) ~= "table" then
+        error("line_group_context must be table, got: " .. type(mapping))
+    end
+    state.line_group_context = mapping
+end
+
+function M.clear_line_group_context()
+    state.line_group_context = {}
 end
 
 -- Picking mode state
