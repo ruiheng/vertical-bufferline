@@ -938,6 +938,8 @@ function M.handle_selection()
     local line_number = api.nvim_win_get_cursor(state_module.get_win_id())[1]
     local bufnr = state_module.get_buffer_for_line(line_number)
     if bufnr and api.nvim_buf_is_valid(bufnr) and api.nvim_buf_is_loaded(bufnr) then
+        -- Save current buffer state before switching (for within-group buffer state preservation)
+        groups.save_current_buffer_state()
         -- Find the main window (not the sidebar)
         local main_win_id = nil
         for _, win_id in ipairs(api.nvim_list_wins()) do
@@ -982,6 +984,11 @@ function M.handle_selection()
                 groups.set_active_group(buffer_group.id)
             end
         end
+        
+        -- Restore buffer state for the newly selected buffer (for within-group state preservation)
+        vim.schedule(function()
+            groups.restore_buffer_state_for_current_group(bufnr)
+        end)
     end
 end
 

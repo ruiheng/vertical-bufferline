@@ -62,7 +62,8 @@ local function init_default_group()
             current_buffer = nil,  -- Track current buffer within this group
             created_at = os.time(),
             color = config_module.COLORS.BLUE,
-            display_number = groups_data.next_display_number
+            display_number = groups_data.next_display_number,
+            buffer_states = {}  -- Store per-buffer window states (cursor, scroll, etc.)
         }
         groups_data.next_display_number = groups_data.next_display_number + 1
         table.insert(groups_data.groups, default_group)
@@ -90,6 +91,106 @@ local function find_group_by_display_number(display_number)
         end
     end
     return nil
+end
+
+-- Buffer state management utilities (defined early to be available everywhere)
+local function save_buffer_state(group, buffer_id)
+    if not group or not buffer_id or not api.nvim_buf_is_valid(buffer_id) then
+        return
+    end
+    
+    -- Only save state if the buffer is currently displayed in a window
+    local buf_windows = vim.fn.win_findbuf(buffer_id)
+    if #buf_windows == 0 then
+        return  -- Buffer not currently displayed, nothing to save
+    end
+    
+    -- Get current window showing this buffer
+    local current_win = api.nvim_get_current_win()
+    local target_win = current_win
+    
+    -- If current window doesn't show this buffer, find one that does
+    if api.nvim_win_get_buf(current_win) ~= buffer_id then
+        for _, win_id in ipairs(buf_windows) do
+            if api.nvim_win_is_valid(win_id) then
+                target_win = win_id
+                break
+            end
+        end
+    end
+    
+    -- Save comprehensive window state
+    local saved_win = api.nvim_get_current_win()
+    api.nvim_set_current_win(target_win)
+    
+    local state = {
+        cursor_pos = api.nvim_win_get_cursor(target_win),
+        view_state = vim.fn.winsaveview(),
+        last_accessed = os.time()
+    }
+    
+    group.buffer_states[buffer_id] = state
+    api.nvim_set_current_win(saved_win)
+end
+
+local function restore_buffer_state(group, buffer_id)
+    if not group or not buffer_id or not api.nvim_buf_is_valid(buffer_id) then
+        return false
+    end
+    
+    local state = group.buffer_states[buffer_id]
+    if not state then
+        return false  -- No saved state for this buffer
+    end
+    
+    -- Only restore if buffer is currently displayed
+    local buf_windows = vim.fn.win_findbuf(buffer_id)
+    if #buf_windows == 0 then
+        return false  -- Buffer not displayed, can't restore
+    end
+    
+    -- Find appropriate window to restore state to
+    local current_win = api.nvim_get_current_win()
+    local target_win = current_win
+    
+    if api.nvim_win_get_buf(current_win) ~= buffer_id then
+        for _, win_id in ipairs(buf_windows) do
+            if api.nvim_win_is_valid(win_id) then
+                target_win = win_id
+                break
+            end
+        end
+    end
+    
+    -- Restore state
+    local saved_win = api.nvim_get_current_win()
+    api.nvim_set_current_win(target_win)
+    
+    -- Restore cursor position (fallback method)
+    pcall(api.nvim_win_set_cursor, target_win, state.cursor_pos)
+    
+    -- Restore comprehensive view state (primary method)
+    pcall(vim.fn.winrestview, state.view_state)
+    
+    api.nvim_set_current_win(saved_win)
+    return true
+end
+
+local function cleanup_buffer_states(group, max_age_seconds)
+    if not group or not group.buffer_states then
+        return
+    end
+    
+    max_age_seconds = max_age_seconds or (30 * 60)  -- Default 30 minutes
+    local current_time = os.time()
+    
+    for buffer_id, state in pairs(group.buffer_states) do
+        -- Remove states for invalid buffers or old states
+        if not api.nvim_buf_is_valid(buffer_id) or 
+           (state.last_accessed and (current_time - state.last_accessed) > max_age_seconds) then
+            group.buffer_states[buffer_id] = nil
+        end
+    end
 end
 
 -- Find group index
@@ -125,7 +226,8 @@ function M.create_group(name, color)
         current_buffer = nil,  -- Track current buffer within this group
         created_at = os.time(),
         color = color or config_module.COLORS.GREEN,
-        display_number = groups_data.next_display_number
+        display_number = groups_data.next_display_number,
+        buffer_states = {}  -- Store per-buffer window states (cursor, scroll, etc.)
     }
     groups_data.next_display_number = groups_data.next_display_number + 1
 
@@ -270,6 +372,8 @@ function M.set_active_group(group_id)
         local current_buf = vim.api.nvim_get_current_buf()
         if vim.tbl_contains(old_group.buffers, current_buf) then
             old_group.current_buffer = current_buf
+            -- Save comprehensive window state for current buffer
+            save_buffer_state(old_group, current_buf)
         end
     end
 
@@ -309,6 +413,11 @@ function M.set_active_group(group_id)
             vim.api.nvim_set_current_buf(target_buffer)
             -- Update group's current buffer record
             group.current_buffer = target_buffer
+            
+            -- Restore saved window state for this buffer in this group
+            vim.schedule(function()
+                restore_buffer_state(group, target_buffer)
+            end)
         end
     end
     -- If group is empty, keep current buffer unchanged, let bufferline show empty list
@@ -693,9 +802,13 @@ function M.setup(opts)
     -- No longer need BufEnter autocmd for buffer management, changed to sync through bufferline
     -- Cleanup invalid buffer autocmd also no longer needed, handled by bufferline state sync
 
-    -- Periodically clean up invalid buffers
+    -- Periodically clean up invalid buffers and buffer states
     vim.defer_fn(function()
         M.cleanup_invalid_buffers()
+        -- Clean up old buffer states from all groups
+        for _, group in ipairs(groups_data.groups) do
+            cleanup_buffer_states(group)
+        end
     end, config_module.UI.AUTO_SAVE_DELAY)
 end
 
@@ -717,6 +830,36 @@ function M.switch_to_group_by_display_number(display_number)
     end
     return M.set_active_group(group.id)
 end
+
+--- Save current buffer state for active group (call before switching buffers within group)
+function M.save_current_buffer_state()
+    local active_group = M.get_active_group()
+    if not active_group then
+        return false
+    end
+    
+    local current_buf = api.nvim_get_current_buf()
+    if vim.tbl_contains(active_group.buffers, current_buf) then
+        save_buffer_state(active_group, current_buf)
+        return true
+    end
+    return false
+end
+
+--- Restore buffer state for specified buffer in active group (call after switching to buffer)
+--- @param buffer_id number Buffer ID to restore state for
+function M.restore_buffer_state_for_current_group(buffer_id)
+    local active_group = M.get_active_group()
+    if not active_group then
+        return false
+    end
+    
+    if vim.tbl_contains(active_group.buffers, buffer_id) then
+        return restore_buffer_state(active_group, buffer_id)
+    end
+    return false
+end
+
 
 M.find_group_by_id = find_group_by_id
 
