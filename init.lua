@@ -978,7 +978,25 @@ local function render_all_groups(active_group, components, current_buffer_id, is
 
             -- Render group buffers
             line_group_context.current_group_id = group.id  -- Set current group context
-            render_group_buffers(group_components, current_buffer_id, is_picking, lines_text, new_line_map, line_types, line_components, line_group_context)
+            
+            -- Determine current buffer for this specific group
+            local group_current_buffer_id = nil
+            if is_active then
+                -- For active group, use global current buffer if it's in the group, otherwise use group's remembered current_buffer
+                local global_current = current_buffer_id
+                if global_current and vim.tbl_contains(group.buffers, global_current) then
+                    group_current_buffer_id = global_current
+                elseif group.current_buffer and vim.tbl_contains(group.buffers, group.current_buffer) then
+                    group_current_buffer_id = group.current_buffer
+                end
+            else
+                -- For non-active groups, always use the group's remembered current_buffer
+                if group.current_buffer and vim.tbl_contains(group.buffers, group.current_buffer) then
+                    group_current_buffer_id = group.current_buffer
+                end
+            end
+            
+            render_group_buffers(group_components, group_current_buffer_id, is_picking, lines_text, new_line_map, line_types, line_components, line_group_context)
             
             -- Collect all components for highlighting
             for _, comp in ipairs(group_components) do
@@ -1087,16 +1105,36 @@ function M.refresh()
         local component = line_components[line_num]
         
         if component then
-            -- Determine if this line belongs to the active group
+            -- Determine if this line belongs to the active group and get group-specific current buffer
             local line_group_id = line_group_context[line_num]
             local is_in_active_group = false
+            local group_current_buffer_id = nil
+            
             if active_group and line_group_id then
                 is_in_active_group = (line_group_id == active_group.id)
+                
+                -- Get the group this line belongs to
+                local line_group = groups.find_group_by_id(line_group_id)
+                if line_group then
+                    if is_in_active_group then
+                        -- For active group, use global current buffer if it's in the group, otherwise use group's remembered current_buffer
+                        if current_buffer_id and vim.tbl_contains(line_group.buffers, current_buffer_id) then
+                            group_current_buffer_id = current_buffer_id
+                        elseif line_group.current_buffer and vim.tbl_contains(line_group.buffers, line_group.current_buffer) then
+                            group_current_buffer_id = line_group.current_buffer
+                        end
+                    else
+                        -- For non-active groups, always use the group's remembered current_buffer
+                        if line_group.current_buffer and vim.tbl_contains(line_group.buffers, line_group.current_buffer) then
+                            group_current_buffer_id = line_group.current_buffer
+                        end
+                    end
+                end
             end
             
             if line_type == "path" then
                 -- This is a path line - apply path-specific highlighting
-                apply_path_highlighting(component, line_num, current_buffer_id, is_in_active_group)
+                apply_path_highlighting(component, line_num, group_current_buffer_id, is_in_active_group)
             elseif line_type == "buffer" then
                 -- This is a main buffer line - apply buffer highlighting
                 local line_text = api.nvim_buf_get_lines(state_module.get_buf_id(), line_num - 1, line_num, false)[1] or ""
@@ -1109,7 +1147,7 @@ function M.refresh()
                 }
                 
                 -- Apply highlighting with group context
-                apply_buffer_highlighting(line_info, component, line_num, current_buffer_id, is_picking, is_in_active_group)
+                apply_buffer_highlighting(line_info, component, line_num, group_current_buffer_id, is_picking, is_in_active_group)
             end
             -- Note: group headers and separators are handled by apply_group_highlights above
         end
@@ -1384,6 +1422,11 @@ function M.handle_selection()
             if not current_active_group or current_active_group.id ~= buffer_group.id then
                 -- Switch to the group containing this buffer
                 groups.set_active_group(buffer_group.id)
+            else
+                -- Buffer is in current group, update the group's current_buffer
+                if vim.tbl_contains(current_active_group.buffers, bufnr) then
+                    current_active_group.current_buffer = bufnr
+                end
             end
         end
         
