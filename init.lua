@@ -1469,18 +1469,19 @@ function M.remove_from_group()
     local line_number = api.nvim_win_get_cursor(state_module.get_win_id())[1]
     local bufnr = state_module.get_buffer_for_line(line_number)
     if bufnr and api.nvim_buf_is_valid(bufnr) then
-        local active_group = groups.get_active_group()
-        if active_group and vim.tbl_contains(active_group.buffers, bufnr) then
-            -- Remove buffer from current group only (don't close the buffer)
-            groups.remove_buffer_from_group(bufnr, active_group.id)
-            vim.notify("Buffer removed from group", vim.log.levels.INFO)
+        -- Find which group contains this buffer
+        local buffer_group = groups.find_buffer_group(bufnr)
+        if buffer_group then
+            -- Remove buffer from the group it belongs to
+            groups.remove_buffer_from_group(bufnr, buffer_group.id)
+            vim.notify("Buffer removed from group: " .. buffer_group.name, vim.log.levels.INFO)
             
             -- Refresh display
             vim.schedule(function()
                 M.refresh()
             end)
         else
-            vim.notify("Buffer not found in current group", vim.log.levels.WARN)
+            vim.notify("Buffer not found in any group", vim.log.levels.WARN)
         end
     end
 end
