@@ -1473,13 +1473,24 @@ function M.remove_from_group()
         local buffer_group = groups.find_buffer_group(bufnr)
         if buffer_group then
             -- Remove buffer from the group it belongs to
-            groups.remove_buffer_from_group(bufnr, buffer_group.id)
-            vim.notify("Buffer removed from group: " .. buffer_group.name, vim.log.levels.INFO)
-            
-            -- Refresh display
-            vim.schedule(function()
-                M.refresh()
-            end)
+            local success = groups.remove_buffer_from_group(bufnr, buffer_group.id)
+            if success then
+                vim.notify("Buffer removed from group: " .. buffer_group.name, vim.log.levels.INFO)
+                
+                -- If this was the active group, sync the change to bufferline
+                local active_group = groups.get_active_group()
+                if active_group and active_group.id == buffer_group.id then
+                    -- Pause sync, update bufferline, then resume sync
+                    bufferline_integration.set_sync_target(nil)
+                    bufferline_integration.set_bufferline_buffers(active_group.buffers)
+                    bufferline_integration.set_sync_target(active_group.id)
+                end
+                
+                -- Refresh display
+                vim.schedule(function()
+                    M.refresh()
+                end)
+            end
         else
             vim.notify("Buffer not found in any group", vim.log.levels.WARN)
         end
