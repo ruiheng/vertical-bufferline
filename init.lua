@@ -25,6 +25,15 @@ local filename_utils = require('vertical-bufferline.filename_utils')
 -- Namespace for our highlights
 local ns_id = api.nvim_create_namespace("VerticalBufferline")
 
+-- Extended picking mode state
+local extended_picking_state = {
+    active = false,
+    mode_type = nil, -- "switch" or "close"
+    extended_hints = {}, -- line_num -> hint_char mapping
+    bufferline_used_chars = {},
+    original_commands = {} -- Store original commands for restoration
+}
+
 -- Setup highlight groups function
 local function setup_highlights()
     -- Buffer state highlights using semantic nvim highlight groups for theme compatibility
@@ -60,6 +69,288 @@ api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_INACTIVE, { link = "Comment", 
 api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_NUMBER, { link = "Number", bold = true, default = true })
 api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_SEPARATOR, { link = "Comment", default = true })
 api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_MARKER, { link = "Special", bold = true, default = true })
+
+
+-- Extended picking mode utilities
+local function get_bufferline_used_characters()
+    local used_chars = {}
+    local bufferline_state = require('bufferline.state')
+    
+    if bufferline_state.components then
+        for _, component in ipairs(bufferline_state.components) do
+            local ok, element = pcall(function() return component:as_element() end)
+            local letter = nil
+            if ok and element and element.letter then
+                letter = element.letter
+            elseif component.letter then
+                letter = component.letter
+            end
+            
+            if letter then
+                used_chars[letter] = true
+            end
+        end
+    end
+    
+    return used_chars
+end
+
+-- Extended picking mode implementation
+local PICK_ALPHABET = "asdfjkl;ghqwertyuiopzxcvbnm1234567890ASDFJKL;GHQWERTYUIOPZXCVBNM"
+
+-- Helper function to get main window current buffer
+local function get_main_window_current_buffer()
+    for _, win_id in ipairs(api.nvim_list_wins()) do
+        if win_id ~= state_module.get_win_id() and api.nvim_win_is_valid(win_id) then
+            -- Check if this window is not a floating window
+            local win_config = api.nvim_win_get_config(win_id)
+            if win_config.relative == "" then  -- Not a floating window
+                return api.nvim_win_get_buf(win_id)
+            end
+        end
+    end
+    return api.nvim_get_current_buf()
+end
+
+-- Generate extended hints for all sidebar buffers
+local function generate_extended_hints(bufferline_components, line_to_buffer, line_group_context, active_group_id)
+    local line_hints = {}
+    local hint_lines = {}
+    local bufferline_hints = {}
+    
+    -- Extract existing bufferline hints
+    local used_chars = {}
+    for _, component in ipairs(bufferline_components or {}) do
+        local ok, element = pcall(function() return component:as_element() end)
+        local letter = nil
+        if ok and element and element.letter then
+            letter = element.letter
+        elseif component.letter then
+            letter = component.letter
+        end
+        
+        if letter then
+            used_chars[letter] = true
+            bufferline_hints[component.id] = letter
+        end
+    end
+    
+    -- Generate available character pool
+    local available_chars = {}
+    for i = 1, #PICK_ALPHABET do
+        local char = PICK_ALPHABET:sub(i, i)
+        if not used_chars[char] then
+            table.insert(available_chars, char)
+        end
+    end
+    
+    -- Assign hints to non-active group lines
+    local char_index = 1
+    for line_num, buffer_id in pairs(line_to_buffer) do
+        local line_group_id = line_group_context[line_num]
+        
+        -- Skip lines in active group (they use bufferline hints)
+        if line_group_id ~= active_group_id and char_index <= #available_chars then
+            local hint_char = available_chars[char_index]
+            line_hints[line_num] = hint_char
+            hint_lines[hint_char] = line_num
+            char_index = char_index + 1
+        end
+    end
+    
+    return line_hints, hint_lines, bufferline_hints
+end
+
+-- Extended picking mode management
+local function start_extended_picking(mode_type)
+    extended_picking_state.active = true
+    extended_picking_state.mode_type = mode_type
+    
+    -- Generate hints directly instead of relying on refresh timing
+    if state_module.is_sidebar_open() then
+        -- Get current bufferline components and state
+        local bufferline_state = require('bufferline.state')
+        local components = bufferline_state.components or {}
+        
+        local active_group = groups.get_active_group()
+        local active_group_id = active_group and active_group.id or nil
+        local line_to_buffer = state_module.get_line_to_buffer_id()
+        local line_group_context = state_module.get_line_group_context()
+        
+        -- Generate hints directly
+        local line_hints, hint_lines, bufferline_hints = generate_extended_hints(
+            components, line_to_buffer, line_group_context, active_group_id
+        )
+        
+        -- Store hints in both state systems
+        state_module.set_extended_picking_active(true)
+        state_module.set_extended_picking_mode(mode_type)
+        state_module.set_extended_picking_hints(line_hints, hint_lines, bufferline_hints)
+        extended_picking_state.extended_hints = line_hints
+    end
+    
+    -- Apply extended picking highlights immediately
+    vim.schedule(function()
+        M.apply_extended_picking_highlights()
+    end)
+end
+
+local function exit_extended_picking()
+    extended_picking_state.active = false
+    extended_picking_state.mode_type = nil
+    extended_picking_state.extended_hints = {}
+    extended_picking_state.bufferline_used_chars = {}
+    
+    -- Deactivate extended picking in state module
+    state_module.set_extended_picking_active(false)
+end
+
+local function find_line_by_hint(hint_char)
+    for line_num, char in pairs(extended_picking_state.extended_hints) do
+        if char == hint_char then
+            return line_num
+        end
+    end
+    return nil
+end
+
+-- Cross-group buffer actions
+local function switch_to_buffer_and_group(buffer_id, target_group_id)
+    -- Save current state
+    groups.save_current_buffer_state()
+    
+    -- Switch to target group first
+    groups.set_active_group(target_group_id)
+    
+    -- Then switch to buffer
+    vim.schedule(function()
+        api.nvim_set_current_buf(buffer_id)
+        -- Restore buffer state in new group context
+        groups.restore_buffer_state_for_current_group(buffer_id)
+    end)
+end
+
+local function close_buffer_from_group(buffer_id, group_id)
+    -- Remove buffer from the specific group only
+    groups.remove_buffer_from_group(buffer_id, group_id)
+    
+    -- Check if buffer exists in other groups
+    local all_groups_with_buffer = groups.find_buffer_groups(buffer_id)
+    if #all_groups_with_buffer <= 1 then
+        -- This was the only group with this buffer, actually close the buffer
+        pcall(vim.cmd, "bd " .. buffer_id)
+    end
+    
+    -- Refresh the display
+    vim.schedule(function()
+        M.refresh()
+    end)
+end
+
+-- Key handling for extended picking
+local function handle_extended_picking_key(key)
+    if not extended_picking_state.active then
+        return false
+    end
+    
+    -- First check if this key belongs to bufferline's hints (current group)
+    local extended_picking = state_module.get_extended_picking_state()
+    if extended_picking.bufferline_hints then
+        for buffer_id, hint_char in pairs(extended_picking.bufferline_hints) do
+            if hint_char == key then
+                -- This is a bufferline hint, let bufferline handle it
+                return false
+            end
+        end
+    end
+    
+    -- Check if this key is for our extended hints (cross-group)
+    local line_num = find_line_by_hint(key)
+    if not line_num then
+        return false  -- Not our key either, let bufferline handle it
+    end
+    
+    local buffer_id = state_module.get_buffer_for_line(line_num)
+    if not buffer_id or not api.nvim_buf_is_valid(buffer_id) then
+        return false
+    end
+    
+    local line_group_context = state_module.get_line_group_context()
+    local target_group_id = line_group_context[line_num]
+    if not target_group_id then
+        return false
+    end
+    
+    -- Perform the action based on mode type
+    if extended_picking_state.mode_type == "switch" then
+        switch_to_buffer_and_group(buffer_id, target_group_id)
+    elseif extended_picking_state.mode_type == "close" then
+        close_buffer_from_group(buffer_id, target_group_id)
+    end
+    
+    -- Exit picking mode
+    exit_extended_picking()
+    return true
+end
+
+local function setup_extended_picking_hooks()
+    -- Hook into bufferline's pick module directly
+    vim.defer_fn(function()
+        local ok, pick_module = pcall(require, 'bufferline.pick')
+        if not ok or not pick_module then
+            return
+        end
+        
+        -- Hook the choose_then function
+        if pick_module.choose_then then
+            local original_choose_then = pick_module.choose_then
+            pick_module.choose_then = function(func)
+                start_extended_picking("switch")
+                
+                -- Use our own implementation instead of intercepting getchar
+                local bufferline_state = require('bufferline.state')
+                local ui = require('bufferline.ui')
+                local fn = vim.fn
+                
+                bufferline_state.is_picking = true
+                ui.refresh()
+                
+                local char = fn.getchar()
+                
+                if char then
+                    local letter = fn.nr2char(char)
+                    
+                    -- Check if this is one of our extended keys first
+                    if handle_extended_picking_key(letter) then
+                        bufferline_state.is_picking = false
+                        ui.refresh()
+                        exit_extended_picking()
+                        return
+                    end
+                    
+                    -- Otherwise, let bufferline handle it
+                    for _, item in ipairs(bufferline_state.components) do
+                        local element = item:as_element()
+                        if element and letter == element.letter then 
+                            func(element.id)
+                            break
+                        end
+                    end
+                end
+                
+                bufferline_state.is_picking = false
+                ui.refresh()
+                exit_extended_picking()
+            end
+        end
+    end, 100)
+end
+
+local function apply_extended_picking_highlights()
+    -- This function is no longer needed since hints are already embedded during line creation
+    -- Just let the normal highlight system handle it
+    return
+end
 
 
 -- Pick highlights matching bufferline's style
@@ -163,6 +454,25 @@ local function validate_and_initialize_refresh()
         active_group = active_group
     }
 end
+-- Detect pick mode type from bufferline state
+local function detect_pick_mode()
+    local bufferline_state = require('bufferline.state')
+    
+    if not bufferline_state.is_picking then
+        return nil
+    end
+    
+    -- Try to detect the picking mode by analyzing the call stack
+    local info = debug.getinfo(4, "n")
+    if info and info.name then
+        if info.name:find("close") then
+            return "close"
+        end
+    end
+    
+    -- Default to switch mode
+    return "switch"
+end
 
 -- Detect picking mode and manage picking state and timers
 local function detect_and_manage_picking_mode(bufferline_state, components)
@@ -187,13 +497,29 @@ local function detect_and_manage_picking_mode(bufferline_state, components)
 
         -- Stop existing timer if any
         state_module.stop_highlight_timer()
+        
+        -- Generate extended hints for all sidebar buffers
+        local active_group = groups.get_active_group()
+        local active_group_id = active_group and active_group.id or nil
+        local line_to_buffer = state_module.get_line_to_buffer_id()
+        local line_group_context = state_module.get_line_group_context()
+        
+        local line_hints, hint_lines, bufferline_hints = generate_extended_hints(
+            components, line_to_buffer, line_group_context, active_group_id
+        )
+        
+        -- Activate extended picking mode
+        local pick_mode = detect_pick_mode()
+        state_module.set_extended_picking_active(true)
+        state_module.set_extended_picking_mode(pick_mode)
+        state_module.set_extended_picking_hints(line_hints, hint_lines, bufferline_hints)
 
         -- Start highlight application timer during picking mode
         local timer = vim.loop.new_timer()
         timer:start(0, config_module.UI.HIGHLIGHT_UPDATE_INTERVAL, vim.schedule_wrap(function()
             local current_state = require('bufferline.state')
             if current_state.is_picking and state_module.is_sidebar_open() then
-                M.apply_picking_highlights()
+                M.apply_extended_picking_highlights()
             else
                 state_module.stop_highlight_timer()
             end
@@ -203,6 +529,8 @@ local function detect_and_manage_picking_mode(bufferline_state, components)
         state_module.set_was_picking(false)
         -- Clean up timer when exiting picking mode
         state_module.stop_highlight_timer()
+        -- Deactivate extended picking mode
+        state_module.set_extended_picking_active(false)
     end
 
     return is_picking
@@ -246,7 +574,7 @@ local function get_buffer_path_info(component)
 end
 
 -- Create individual buffer line with proper formatting and highlights
-local function create_buffer_line(component, j, total_components, current_buffer_id, is_picking)
+local function create_buffer_line(component, j, total_components, current_buffer_id, is_picking, line_number)
     local is_last = (j == total_components)
     local tree_prefix = is_last and (" " .. config_module.UI.TREE_LAST) or (" " .. config_module.UI.TREE_BRANCH)
     local modified_indicator = ""
@@ -266,12 +594,22 @@ local function create_buffer_line(component, j, total_components, current_buffer
     end
 
     -- Get letter for picking mode
-    local ok, element = pcall(function() return component:as_element() end)
     local letter = nil
-    if ok and element and element.letter then
-        letter = element.letter
-    elseif component.letter then
-        letter = component.letter
+    if is_picking then
+        -- Check if we're in extended picking mode
+        local extended_picking = state_module.get_extended_picking_state()
+        if extended_picking.is_active and line_number and extended_picking.line_hints[line_number] then
+            -- Use extended hint for this line
+            letter = extended_picking.line_hints[line_number]
+        else
+            -- Fallback to bufferline hints (for active group)
+            local ok, element = pcall(function() return component:as_element() end)
+            if ok and element and element.letter then
+                letter = element.letter
+            elseif component.letter then
+                letter = component.letter
+            end
+        end
     end
 
     local number_display = tostring(j)
@@ -479,11 +817,12 @@ end
 local function render_group_buffers(group_components, current_buffer_id, is_picking, lines_text, new_line_map, line_types, line_components, line_group_context)
     for j, component in ipairs(group_components) do
         if component.id and component.name and api.nvim_buf_is_valid(component.id) then
-            local line_info = create_buffer_line(component, j, #group_components, current_buffer_id, is_picking)
+            -- Calculate the line number this buffer will be on
+            local main_line_number = #lines_text + 1
+            local line_info = create_buffer_line(component, j, #group_components, current_buffer_id, is_picking, main_line_number)
 
             -- Add main buffer line
             table.insert(lines_text, line_info.text)
-            local main_line_number = #lines_text
             new_line_map[main_line_number] = component.id
             line_types[main_line_number] = "buffer"  -- Record this as a buffer line
             line_components[main_line_number] = component  -- Store specific component for this line
@@ -782,8 +1121,66 @@ function M.refresh()
 end
 
 
+--- Detect pick mode type from bufferline state
+
 -- Make setup_pick_highlights available globally
 M.setup_pick_highlights = setup_pick_highlights
+
+--- Apply extended picking highlights for all sidebar buffers
+function M.apply_extended_picking_highlights()
+    if not state_module.is_sidebar_open() then return end
+
+    local bufferline_state = require('bufferline.state')
+    if not bufferline_state.is_picking then return end
+
+    -- Re-setup highlights to ensure they're current
+    setup_pick_highlights()
+
+    local extended_picking = state_module.get_extended_picking_state()
+    if not extended_picking.is_active then
+        -- Fall back to original picking highlights
+        M.apply_picking_highlights()
+        return
+    end
+
+    local current_buffer_id = get_main_window_current_buffer()
+    local line_to_buffer = state_module.get_line_to_buffer_id()
+    local line_group_context = state_module.get_line_group_context()
+    local active_group = groups.get_active_group()
+    local active_group_id = active_group and active_group.id or nil
+
+    -- Apply highlights to all lines with hints
+    for line_num, hint_char in pairs(extended_picking.line_hints) do
+        local buffer_id = line_to_buffer[line_num]
+        if buffer_id then
+            -- Choose appropriate pick highlight based on buffer state
+            local pick_highlight_group
+            if buffer_id == current_buffer_id then
+                pick_highlight_group = config_module.HIGHLIGHTS.PICK_SELECTED
+            else
+                pick_highlight_group = config_module.HIGHLIGHTS.PICK
+            end
+
+            -- Get the actual line text to find the hint position
+            local line_text = api.nvim_buf_get_lines(state_module.get_buf_id(), line_num - 1, line_num, false)[1] or ""
+            local hint_pos = line_text:find(vim.pesc(hint_char))
+            
+            if hint_pos then
+                local highlight_start = hint_pos - 1  -- Convert to 0-based
+                local highlight_end = hint_pos  -- Highlight just the hint character
+                
+                -- Apply highlight with both namespace and without
+                api.nvim_buf_add_highlight(state_module.get_buf_id(), 0, pick_highlight_group, line_num - 1, highlight_start, highlight_end)
+                api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, pick_highlight_group, line_num - 1, highlight_start, highlight_end)
+            end
+        end
+    end
+
+    -- Also apply original bufferline highlights for active group buffers
+    M.apply_picking_highlights()
+
+    vim.cmd("redraw!")
+end
 
 --- Apply picking highlights continuously during picking mode
 function M.apply_picking_highlights()
@@ -858,6 +1255,11 @@ function M.apply_picking_highlights()
                 end
             end
         end
+    end
+    
+    -- Apply extended hints for non-active group buffers
+    if extended_picking_state.active then
+        apply_extended_picking_highlights()
     end
 
     vim.cmd("redraw!")
@@ -1121,6 +1523,9 @@ local function initialize_plugin()
     api.nvim_command("autocmd WinClosed * lua require('vertical-bufferline').check_quit_condition()")
     api.nvim_command("augroup END")
 
+    -- Setup extended picking mode hooks
+    setup_extended_picking_hooks()
+    
     -- Setup bufferline hooks
     setup_bufferline_hook()
 
@@ -1247,6 +1652,44 @@ function M.debug_highlights()
     for _, group in ipairs(test_groups) do
         local hl = api.nvim_get_hl(0, {name = group})
         print(string.format("Highlight group %s: %s", group, vim.inspect(hl)))
+    end
+end
+
+function M.debug_extended_picking()
+    local extended_picking = state_module.get_extended_picking_state()
+    print("Extended picking state:")
+    print("  is_active:", extended_picking.is_active)
+    print("  pick_mode:", extended_picking.pick_mode)
+    print("  line_hints:", vim.inspect(extended_picking.line_hints))
+    print("  hint_lines:", vim.inspect(extended_picking.hint_lines))
+    print("  bufferline_hints:", vim.inspect(extended_picking.bufferline_hints))
+    
+    print("\nOld extended_picking_state:")
+    print("  active:", extended_picking_state.active)
+    print("  mode_type:", extended_picking_state.mode_type)
+    print("  extended_hints:", vim.inspect(extended_picking_state.extended_hints))
+end
+
+function M.test_extended_picking()
+    print("Testing extended picking...")
+    start_extended_picking("switch")
+    M.debug_extended_picking()
+    exit_extended_picking()
+end
+
+function M.debug_hint_separation()
+    local extended_picking = state_module.get_extended_picking_state()
+    print("=== Hint Separation Debug ===")
+    print("Bufferline hints (current group):")
+    for buffer_id, hint_char in pairs(extended_picking.bufferline_hints or {}) do
+        print(string.format("  Buffer %d: %s", buffer_id, hint_char))
+    end
+    print("Extended hints (cross-group):")
+    for line_num, hint_char in pairs(extended_picking.line_hints or {}) do
+        local buffer_id = state_module.get_buffer_for_line(line_num)
+        local group_context = state_module.get_line_group_context()
+        local group_id = group_context[line_num]
+        print(string.format("  Line %d (Buffer %d, Group %s): %s", line_num, buffer_id or "nil", group_id or "nil", hint_char))
     end
 end
 

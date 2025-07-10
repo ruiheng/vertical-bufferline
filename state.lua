@@ -18,6 +18,15 @@ local state = {
     expand_all_groups = true, -- Default mode: show all groups expanded
     session_loading = false, -- Flag to prevent interference during session loading
     highlight_timer = nil, -- Timer for picking highlights
+    
+    -- Extended picking mode state
+    extended_picking = {
+        is_active = false,
+        pick_mode = nil,  -- "switch" or "close"
+        line_hints = {},  -- line_number -> hint_char
+        hint_lines = {},  -- hint_char -> line_number
+        bufferline_hints = {}  -- existing bufferline hints for reference
+    }
 }
 
 -- State validation functions
@@ -209,6 +218,32 @@ end
 
 function M.has_highlight_timer()
     return state.highlight_timer ~= nil
+end
+
+-- Extended picking mode state management
+function M.get_extended_picking_state()
+    return state.extended_picking
+end
+
+function M.set_extended_picking_active(is_active)
+    state.extended_picking.is_active = is_active
+    if not is_active then
+        -- Clear state when deactivating
+        state.extended_picking.pick_mode = nil
+        state.extended_picking.line_hints = {}
+        state.extended_picking.hint_lines = {}
+        state.extended_picking.bufferline_hints = {}
+    end
+end
+
+function M.set_extended_picking_mode(pick_mode)
+    state.extended_picking.pick_mode = pick_mode
+end
+
+function M.set_extended_picking_hints(line_hints, hint_lines, bufferline_hints)
+    state.extended_picking.line_hints = line_hints or {}
+    state.extended_picking.hint_lines = hint_lines or {}
+    state.extended_picking.bufferline_hints = bufferline_hints or {}
 end
 
 -- Composite state checks
