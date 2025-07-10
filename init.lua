@@ -1358,11 +1358,8 @@ local function open_sidebar()
     api.nvim_win_set_option(new_win_id, 'cursorline', false)
     api.nvim_win_set_option(new_win_id, 'cursorcolumn', false)
     
-    -- Protect sidebar from external buffer changes
-    if vim.fn.has('nvim-0.8') == 1 then
-        -- For Neovim 0.8+, use winfixbuf to prevent external tools from opening files in sidebar
-        pcall(api.nvim_win_set_option, new_win_id, 'winfixbuf', true)
-    end
+    -- Note: We don't use winfixbuf as it completely blocks file opening
+    -- Instead, we rely on autocmd protection below for smart handling
     
     -- Additional protection: monitor buffer changes in sidebar window
     local group_name = "VerticalBufferlineSidebarProtection"
@@ -1370,11 +1367,49 @@ local function open_sidebar()
     api.nvim_create_autocmd("BufWinEnter", {
         group = group_name,
         callback = function(ev)
-            local win_id = api.nvim_get_current_win()
-            if win_id == new_win_id and ev.buf ~= buf_id then
-                -- External tool tried to open a file in sidebar, restore sidebar content
-                api.nvim_win_set_buf(win_id, buf_id)
-                M.refresh()
+            -- Check if sidebar buffer was replaced with a real file
+            local sidebar_buf = api.nvim_win_get_buf(new_win_id)
+            local buf_name = api.nvim_buf_get_name(ev.buf)
+            local buf_type = api.nvim_buf_get_option(ev.buf, 'buftype')
+            local is_legitimate_file = buf_name ~= "" and vim.fn.filereadable(buf_name) == 1 and buf_type == ""
+            
+            
+            if sidebar_buf == ev.buf and is_legitimate_file then
+                -- User wants to open a file, help them by opening it in main window
+                local main_win_id = nil
+                for _, win in ipairs(api.nvim_list_wins()) do
+                    if win ~= new_win_id and api.nvim_win_is_valid(win) then
+                        local win_config = api.nvim_win_get_config(win)
+                        if win_config.relative == "" then  -- Not floating window
+                            main_win_id = win
+                            break
+                        end
+                    end
+                end
+                
+                if main_win_id then
+                    -- Open file in main window and restore sidebar
+                    api.nvim_win_set_buf(main_win_id, ev.buf)
+                    api.nvim_set_current_win(main_win_id)
+                    
+                    -- The original sidebar buffer was wiped, create a new one
+                    local new_sidebar_buf = api.nvim_create_buf(false, true)
+                    api.nvim_buf_set_option(new_sidebar_buf, 'bufhidden', 'wipe')
+                    api.nvim_win_set_buf(new_win_id, new_sidebar_buf)
+                    
+                    -- Update state with new buffer ID
+                    state_module.set_buf_id(new_sidebar_buf)
+                    
+                    M.refresh()
+                    vim.notify("File opened in main window", vim.log.levels.INFO)
+                else
+                    -- No main window available, restore sidebar
+                    local new_sidebar_buf = api.nvim_create_buf(false, true)
+                    api.nvim_buf_set_option(new_sidebar_buf, 'bufhidden', 'wipe')
+                    api.nvim_win_set_buf(new_win_id, new_sidebar_buf)
+                    state_module.set_buf_id(new_sidebar_buf)
+                    M.refresh()
+                end
             end
         end,
         desc = "Protect sidebar from external buffer changes"
