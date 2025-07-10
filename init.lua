@@ -1336,6 +1336,9 @@ function M.close_sidebar()
         end
     end
 
+    -- Clean up autocmd group for sidebar protection
+    pcall(api.nvim_del_augroup_by_name, "VerticalBufferlineSidebarProtection")
+    
     state_module.close_sidebar()
 end
 
@@ -1354,6 +1357,28 @@ local function open_sidebar()
     api.nvim_win_set_option(new_win_id, 'relativenumber', false)
     api.nvim_win_set_option(new_win_id, 'cursorline', false)
     api.nvim_win_set_option(new_win_id, 'cursorcolumn', false)
+    
+    -- Protect sidebar from external buffer changes
+    if vim.fn.has('nvim-0.8') == 1 then
+        -- For Neovim 0.8+, use winfixbuf to prevent external tools from opening files in sidebar
+        pcall(api.nvim_win_set_option, new_win_id, 'winfixbuf', true)
+    end
+    
+    -- Additional protection: monitor buffer changes in sidebar window
+    local group_name = "VerticalBufferlineSidebarProtection"
+    api.nvim_create_augroup(group_name, { clear = true })
+    api.nvim_create_autocmd("BufWinEnter", {
+        group = group_name,
+        callback = function(ev)
+            local win_id = api.nvim_get_current_win()
+            if win_id == new_win_id and ev.buf ~= buf_id then
+                -- External tool tried to open a file in sidebar, restore sidebar content
+                api.nvim_win_set_buf(win_id, buf_id)
+                M.refresh()
+            end
+        end,
+        desc = "Protect sidebar from external buffer changes"
+    })
     state_module.set_win_id(new_win_id)
     state_module.set_buf_id(buf_id)
     state_module.set_sidebar_open(true)
@@ -1364,7 +1389,7 @@ local function open_sidebar()
     api.nvim_buf_set_keymap(buf_id, "n", "<CR>", ":lua require('vertical-bufferline').handle_selection()<CR>", keymap_opts)
     api.nvim_buf_set_keymap(buf_id, "n", "d", ":lua require('vertical-bufferline').smart_close_buffer()<CR>", keymap_opts)
     api.nvim_buf_set_keymap(buf_id, "n", "x", ":lua require('vertical-bufferline').remove_from_group()<CR>", keymap_opts)
-    api.nvim_buf_set_keymap(buf_id, "n", "D", ":lua require('vertical-bufferline').close_buffer()<CR>", keymap_opts)
+    api.nvim_buf_set_keymap(buf_id, "n", "D", ":lua require('vertical-bufferline').smart_close_buffer()<CR>", keymap_opts)
     api.nvim_buf_set_keymap(buf_id, "n", "q", ":lua require('vertical-bufferline').close_sidebar()<CR>", keymap_opts)
     api.nvim_buf_set_keymap(buf_id, "n", "<Esc>", ":lua require('vertical-bufferline').close_sidebar()<CR>", keymap_opts)
 
@@ -1437,28 +1462,6 @@ function M.handle_selection()
     end
 end
 
---- Close the selected buffer from sidebar
-function M.close_buffer()
-    if not state_module.is_sidebar_open() then return end
-    local line_number = api.nvim_win_get_cursor(state_module.get_win_id())[1]
-    local bufnr = state_module.get_buffer_for_line(line_number)
-    if bufnr and api.nvim_buf_is_valid(bufnr) then
-        -- Check if buffer is modified
-        if api.nvim_buf_get_option(bufnr, "modified") then
-            vim.notify("Buffer is modified, use :bd! to force close", vim.log.levels.WARN)
-            return
-        end
-
-        local success, err = pcall(vim.cmd, "bd " .. bufnr)
-        if success then
-            vim.schedule(function()
-                M.refresh()
-            end)
-        else
-            vim.notify("Error closing buffer: " .. err, vim.log.levels.ERROR)
-        end
-    end
-end
 
 --- Remove buffer from current group via sidebar
 function M.remove_from_group()
@@ -1466,13 +1469,18 @@ function M.remove_from_group()
     local line_number = api.nvim_win_get_cursor(state_module.get_win_id())[1]
     local bufnr = state_module.get_buffer_for_line(line_number)
     if bufnr and api.nvim_buf_is_valid(bufnr) then
-        -- Call bufferline's close command directly, let bufferline handle buffer removal
-        -- This will automatically trigger our sync logic
-        local success, err = pcall(vim.cmd, "bd " .. bufnr)
-        if success then
-            vim.notify("Buffer closed", vim.log.levels.INFO)
+        local active_group = groups.get_active_group()
+        if active_group and vim.tbl_contains(active_group.buffers, bufnr) then
+            -- Remove buffer from current group only (don't close the buffer)
+            groups.remove_buffer_from_group(bufnr, active_group.id)
+            vim.notify("Buffer removed from group", vim.log.levels.INFO)
+            
+            -- Refresh display
+            vim.schedule(function()
+                M.refresh()
+            end)
         else
-            vim.notify("Error closing buffer: " .. (err or "unknown"), vim.log.levels.ERROR)
+            vim.notify("Buffer not found in current group", vim.log.levels.WARN)
         end
     end
 end
@@ -1483,7 +1491,34 @@ function M.smart_close_buffer()
     local line_number = api.nvim_win_get_cursor(state_module.get_win_id())[1]
     local bufnr = state_module.get_buffer_for_line(line_number)
     if bufnr and api.nvim_buf_is_valid(bufnr) then
+        -- Save current window before calling smart_close_buffer
+        local current_win = api.nvim_get_current_win()
+        local sidebar_win = state_module.get_win_id()
+        
+        -- Switch to main window before closing buffer to avoid sidebar buffer change
+        local main_win_id = nil
+        for _, win_id in ipairs(api.nvim_list_wins()) do
+            if win_id ~= sidebar_win and api.nvim_win_is_valid(win_id) then
+                local win_config = api.nvim_win_get_config(win_id)
+                if win_config.relative == "" then  -- Not a floating window
+                    main_win_id = win_id
+                    break
+                end
+            end
+        end
+        
+        if main_win_id then
+            api.nvim_set_current_win(main_win_id)
+        end
+        
+        -- Now safely call smart_close_buffer
         bufferline_integration.smart_close_buffer(bufnr)
+        
+        -- Restore original window (sidebar)
+        if api.nvim_win_is_valid(current_win) then
+            api.nvim_set_current_win(current_win)
+        end
+        
         -- Add delayed cleanup and refresh
         vim.schedule(function()
             groups.cleanup_invalid_buffers()
