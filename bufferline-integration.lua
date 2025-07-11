@@ -132,7 +132,7 @@ local function sync_bufferline_to_group()
             -- Actively refresh sidebar display
             local vbl = require('vertical-bufferline')
             if vbl.state and vbl.state.is_sidebar_open and vbl.refresh then
-                vbl.refresh()
+                vbl.refresh("bufferline_sync")
             end
         end
     end
@@ -265,7 +265,7 @@ function M.manual_sync()
 
     local vbl = require('vertical-bufferline')
     if vbl.state and vbl.state.is_sidebar_open and vbl.refresh then
-        vbl.refresh()
+        vbl.refresh("manual_sync")
     end
 
     vim.notify("Manual sync triggered", vim.log.levels.INFO)
@@ -384,7 +384,7 @@ function M.force_refresh()
         -- Refresh our sidebar
         local vbl = require('vertical-bufferline')
         if vbl.state and vbl.state.is_sidebar_open and vbl.refresh then
-            vbl.refresh()
+            vbl.refresh("force_refresh")
         end
     end)
 end

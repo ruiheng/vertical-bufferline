@@ -243,7 +243,7 @@ local function close_buffer_from_group(buffer_id, group_id)
     
     -- Refresh the display
     vim.schedule(function()
-        M.refresh()
+        M.refresh("buffer_close")
     end)
 end
 
@@ -869,6 +869,7 @@ local function render_group_header(group, i, is_active, buffer_count, lines_text
         line = #lines_text - config_module.SYSTEM.ZERO_BASED_OFFSET,  -- 0-based line number
         type = "header",
         is_active = is_active,
+        group_id = group.id,
         group_number = group.display_number
     })
 end
@@ -1038,11 +1039,12 @@ local function apply_group_highlights(group_header_lines, lines_text)
 end
 
 -- Finalize buffer display with lines and mapping
-local function finalize_buffer_display(lines_text, new_line_map, line_group_context)
+local function finalize_buffer_display(lines_text, new_line_map, line_group_context, group_header_lines)
     api.nvim_buf_set_option(state_module.get_buf_id(), "modifiable", true)
     api.nvim_buf_set_lines(state_module.get_buf_id(), 0, -1, false, lines_text)
     state_module.set_line_to_buffer_id(new_line_map)
     state_module.set_line_group_context(line_group_context or {})
+    state_module.set_group_header_lines(group_header_lines or {})
 end
 
 -- Complete buffer setup and make it read-only
@@ -1051,9 +1053,11 @@ local function complete_buffer_setup()
 end
 
 --- Refreshes the sidebar content with the current list of buffers.
-function M.refresh()
+function M.refresh(reason)
     local refresh_data = validate_and_initialize_refresh()
-    if not refresh_data then return end
+    if not refresh_data then 
+        return 
+    end
 
     local components = refresh_data.components
     local current_buffer_id = refresh_data.current_buffer_id
@@ -1074,7 +1078,7 @@ function M.refresh()
     local remaining_components = render_all_groups(active_group, components, current_buffer_id, is_picking, lines_text, new_line_map, group_header_lines, line_types, all_components, line_components, line_group_context)
 
     -- Finalize buffer display (set lines but keep modifiable) - this clears highlights
-    finalize_buffer_display(lines_text, new_line_map, line_group_context)
+    finalize_buffer_display(lines_text, new_line_map, line_group_context, group_header_lines)
     
     -- Clear old highlights and apply all highlights AFTER buffer content is set
     api.nvim_buf_clear_namespace(state_module.get_buf_id(), ns_id, 0, -1)
@@ -1367,6 +1371,12 @@ local function open_sidebar()
     api.nvim_create_autocmd("BufWinEnter", {
         group = group_name,
         callback = function(ev)
+            -- Only respond if the event is happening in the sidebar window specifically
+            local current_win = ev.buf and vim.fn.win_findbuf(ev.buf)[1]
+            if not current_win or current_win ~= new_win_id then
+                return -- Event not related to sidebar window
+            end
+            
             -- Check if sidebar buffer was replaced with a real file
             local sidebar_buf = api.nvim_win_get_buf(new_win_id)
             local buf_name = api.nvim_buf_get_name(ev.buf)
@@ -1400,14 +1410,41 @@ local function open_sidebar()
                     -- Update state with new buffer ID
                     state_module.set_buf_id(new_sidebar_buf)
                     
-                    M.refresh()
+                    -- CRITICAL: Re-setup keymaps for the new sidebar buffer
+                    local keymap_opts = { noremap = true, silent = true }
+                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "j", "j", keymap_opts)
+                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "k", "k", keymap_opts)
+                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "<CR>", ":lua require('vertical-bufferline').handle_selection()<CR>", keymap_opts)
+                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "d", ":lua require('vertical-bufferline').smart_close_buffer()<CR>", keymap_opts)
+                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "x", ":lua require('vertical-bufferline').remove_from_group()<CR>", keymap_opts)
+                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "D", ":lua require('vertical-bufferline').smart_close_buffer()<CR>", keymap_opts)
+                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "q", ":lua require('vertical-bufferline').close_sidebar()<CR>", keymap_opts)
+                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "<Esc>", ":lua require('vertical-bufferline').close_sidebar()<CR>", keymap_opts)
+                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "<C-W>o", "<Nop>", keymap_opts)
+                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "<C-W><C-O>", "<Nop>", keymap_opts)
+                    
+                    M.refresh("file_redirect")
                 else
                     -- No main window available, restore sidebar
                     local new_sidebar_buf = api.nvim_create_buf(false, true)
                     api.nvim_buf_set_option(new_sidebar_buf, 'bufhidden', 'wipe')
                     api.nvim_win_set_buf(new_win_id, new_sidebar_buf)
                     state_module.set_buf_id(new_sidebar_buf)
-                    M.refresh()
+                    
+                    -- CRITICAL: Re-setup keymaps for the new sidebar buffer
+                    local keymap_opts = { noremap = true, silent = true }
+                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "j", "j", keymap_opts)
+                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "k", "k", keymap_opts)
+                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "<CR>", ":lua require('vertical-bufferline').handle_selection()<CR>", keymap_opts)
+                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "d", ":lua require('vertical-bufferline').smart_close_buffer()<CR>", keymap_opts)
+                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "x", ":lua require('vertical-bufferline').remove_from_group()<CR>", keymap_opts)
+                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "D", ":lua require('vertical-bufferline').smart_close_buffer()<CR>", keymap_opts)
+                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "q", ":lua require('vertical-bufferline').close_sidebar()<CR>", keymap_opts)
+                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "<Esc>", ":lua require('vertical-bufferline').close_sidebar()<CR>", keymap_opts)
+                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "<C-W>o", "<Nop>", keymap_opts)
+                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "<C-W><C-O>", "<Nop>", keymap_opts)
+                    
+                    M.refresh("file_redirect")
                 end
             end
         end,
@@ -1431,18 +1468,53 @@ local function open_sidebar()
     api.nvim_buf_set_keymap(buf_id, "n", "<C-W><C-O>", "<Nop>", keymap_opts)
 
     api.nvim_set_current_win(current_win)
-    M.refresh()
+    M.refresh("sidebar_open")
 end
 
 --- Handle buffer selection from sidebar
 function M.handle_selection()
-    if not state_module.is_sidebar_open() then return end
+    if not state_module.is_sidebar_open() then 
+        return 
+    end
     local line_number = api.nvim_win_get_cursor(state_module.get_win_id())[1]
+    
+    -- Check if this is a group header line
+    local group_header_lines = state_module.get_group_header_lines()
+    
+    for i, header_info in ipairs(group_header_lines) do
+        if header_info and header_info.line == line_number - 1 then  -- Convert to 0-based
+            if header_info.group_id then
+                local target_group = groups.find_group_by_id(header_info.group_id)
+                local group_name = target_group and target_group.name or "Unknown"
+                
+                groups.set_active_group(header_info.group_id)
+                vim.notify("Switched to group: " .. group_name, vim.log.levels.INFO)
+                return
+            end
+        end
+    end
+    
+    -- Check if this is a buffer line
     local bufnr = state_module.get_buffer_for_line(line_number)
-    if bufnr and api.nvim_buf_is_valid(bufnr) and api.nvim_buf_is_loaded(bufnr) then
+    if bufnr and api.nvim_buf_is_valid(bufnr) then
+        -- Load buffer if not already loaded (for cross-group buffer access)
+        if not api.nvim_buf_is_loaded(bufnr) then
+            pcall(vim.fn.bufload, bufnr)
+        end
         -- Save current buffer state before switching (for within-group buffer state preservation)
         groups.save_current_buffer_state()
-        -- Find the main window (not the sidebar)
+        
+        -- STEP 1: Check if we need to switch active group first
+        local buffer_group = groups.find_buffer_group(bufnr)
+        if buffer_group then
+            local current_active_group = groups.get_active_group()
+            if not current_active_group or current_active_group.id ~= buffer_group.id then
+                -- Switch to the group containing this buffer first
+                groups.set_active_group(buffer_group.id)
+            end
+        end
+        
+        -- STEP 2: Find the main window (not the sidebar) and switch to buffer
         local main_win_id = nil
         for _, win_id in ipairs(api.nvim_list_wins()) do
             if win_id ~= state_module.get_win_id() and api.nvim_win_is_valid(win_id) then
@@ -1477,19 +1549,9 @@ function M.handle_selection()
             end
         end
 
-        -- After successfully switching buffer, check if we need to switch active group
-        local buffer_group = groups.find_buffer_group(bufnr)
+        -- STEP 3: Update group's current_buffer tracking
         if buffer_group then
-            local current_active_group = groups.get_active_group()
-            if not current_active_group or current_active_group.id ~= buffer_group.id then
-                -- Switch to the group containing this buffer
-                groups.set_active_group(buffer_group.id)
-            else
-                -- Buffer is in current group, update the group's current_buffer
-                if vim.tbl_contains(current_active_group.buffers, bufnr) then
-                    current_active_group.current_buffer = bufnr
-                end
-            end
+            buffer_group.current_buffer = bufnr
         end
         
         -- Restore buffer state for the newly selected buffer (for within-group state preservation)
@@ -1525,7 +1587,7 @@ function M.remove_from_group()
                 
                 -- Refresh display
                 vim.schedule(function()
-                    M.refresh()
+                    M.refresh("buffer_remove")
                 end)
             end
         else
@@ -1571,7 +1633,7 @@ function M.smart_close_buffer()
         -- Add delayed cleanup and refresh
         vim.schedule(function()
             groups.cleanup_invalid_buffers()
-            M.refresh()
+            M.refresh("buffer_cleanup")
         end)
     end
 end
@@ -1585,7 +1647,7 @@ function M.toggle_expand_all()
     -- Refresh display
     if state_module.is_sidebar_open() then
         vim.schedule(function()
-            M.refresh()
+            M.refresh("expand_toggle")
         end)
     end
 end
@@ -1603,7 +1665,7 @@ local function setup_bufferline_hook()
             local bufferline_state = require('bufferline.state')
             if bufferline_state.is_picking then
                 -- Force immediate refresh during picking mode
-                M.refresh()
+                M.refresh("picking_mode")
                 -- Apply highlights multiple times to fight bufferline's overwrites
                 vim.schedule(function()
                     M.apply_picking_highlights()
@@ -1612,7 +1674,7 @@ local function setup_bufferline_hook()
             else
                 -- Use schedule for normal updates
                 vim.schedule(function()
-                    M.refresh()
+                    M.refresh("bufferline_hook")
                 end)
             end
         end
@@ -1646,7 +1708,7 @@ local function initialize_plugin()
     -- Setup global autocmds (not dependent on sidebar state)
     api.nvim_command("augroup VerticalBufferlineGlobal")
     api.nvim_command("autocmd!")
-    api.nvim_command("autocmd BufEnter,BufDelete,BufWipeout * lua require('vertical-bufferline').refresh_if_open()")
+    -- TEMP DISABLED: api.nvim_command("autocmd BufEnter,BufDelete,BufWipeout * lua require('vertical-bufferline').refresh_if_open()")
     api.nvim_command("autocmd WinClosed * lua require('vertical-bufferline').check_quit_condition()")
     api.nvim_command("augroup END")
 
@@ -1664,7 +1726,7 @@ end
 --- Wrapper function to refresh only when sidebar is open
 function M.refresh_if_open()
     if state_module.is_sidebar_open() then
-        M.refresh()
+        M.refresh("autocmd_trigger")
     end
 end
 
@@ -1729,7 +1791,7 @@ function M.toggle()
                     end
                     if added_count > 0 then
                         -- Refresh interface
-                        M.refresh()
+                        M.refresh("auto_add_buffers")
                     end
                 end
             end, delay)
@@ -1737,7 +1799,7 @@ function M.toggle()
 
         -- Ensure initial state displays correctly
         vim.schedule(function()
-            M.refresh()
+            M.refresh("initialization")
         end)
     end
 end

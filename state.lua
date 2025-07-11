@@ -14,6 +14,7 @@ local state = {
     line_to_buffer_id = {}, -- Maps a line number in our window to a buffer ID
     hint_to_buffer_id = {}, -- Maps a hint character to a buffer ID
     line_group_context = {}, -- Maps a line number to the group ID it belongs to
+    group_header_lines = {}, -- Maps line numbers to group header information
     was_picking = false, -- Track picking mode state to avoid spam
     expand_all_groups = true, -- Default mode: show all groups expanded
     session_loading = false, -- Flag to prevent interference during session loading
@@ -154,6 +155,22 @@ end
 
 function M.clear_line_group_context()
     state.line_group_context = {}
+end
+
+-- Group header lines management
+function M.get_group_header_lines()
+    return state.group_header_lines
+end
+
+function M.set_group_header_lines(group_headers)
+    if type(group_headers) ~= "table" then
+        error("group_header_lines must be table, got: " .. type(group_headers))
+    end
+    state.group_header_lines = group_headers
+end
+
+function M.clear_group_header_lines()
+    state.group_header_lines = {}
 end
 
 -- Picking mode state

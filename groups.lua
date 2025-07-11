@@ -429,12 +429,7 @@ function M.set_active_group(group_id)
     -- Sync pointer to new group
     bufferline_integration.set_sync_target(group_id)
 
-    -- Immediately refresh UI
-    vim.schedule(function()
-        if require('vertical-bufferline').refresh then
-            require('vertical-bufferline').refresh()
-        end
-    end)
+    -- Note: Refresh will be triggered by the GROUP_CHANGED autocmd, no need for explicit refresh here
 
     -- Trigger event
     vim.api.nvim_exec_autocmds("User", {
@@ -742,7 +737,7 @@ function M.sync_active_group_with_bufferline(buffer_list)
 
     vim.schedule(function()
         if require('vertical-bufferline').refresh then
-            require('vertical-bufferline').refresh()
+            require('vertical-bufferline').refresh("group_buffers_update")
         end
     end)
 

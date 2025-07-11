@@ -115,7 +115,62 @@ api.nvim_create_autocmd("BufWinEnter", {
 })
 ```
 
-#### 4.5 **Function Call Order Dependencies**
+#### 4.5 **Autocmd Scope and Event Filtering** (CRITICAL - v1.1.1 BUG)
+**Problem**: Overly broad autocmd listeners respond to unrelated events, causing conflicts.
+
+**Case Study - Sidebar Protection Autocmd**:
+```lua
+-- WRONG - too broad, responds to all BufWinEnter events
+api.nvim_create_autocmd("BufWinEnter", {
+    callback = function(ev)
+        -- This fires during group switching and causes conflicts
+    end
+})
+
+-- BETTER - limited to specific buffer
+api.nvim_create_autocmd("BufWinEnter", {
+    buffer = buf_id,  -- Only when this buffer enters a window
+    callback = function(ev) -- ... end
+})
+
+-- BEST - window-specific filtering
+api.nvim_create_autocmd("BufWinEnter", {
+    callback = function(ev)
+        local current_win = vim.fn.win_findbuf(ev.buf)[1]
+        if current_win ~= sidebar_win_id then
+            return -- Ignore events not in sidebar window
+        end
+        -- Only process sidebar-specific events
+    end
+})
+```
+
+**Critical Insight**: Autocmds should be scoped as narrowly as possible to avoid interference with normal operations like group switching.
+
+#### 4.6 **Keymap Persistence After Buffer Recreation** (CRITICAL - v1.1.1 BUG)
+**Problem**: When sidebar protection recreates the sidebar buffer, keymaps are lost.
+
+**Root Cause**: 
+1. Sidebar protection detects external file opening
+2. Creates new sidebar buffer to replace the corrupted one
+3. Updates `state.buf_id` but forgets to re-setup keymaps
+4. Second keypress (like `<CR>`) has no effect because keymap is missing
+
+**Solution**: Always re-setup keymaps when creating replacement buffers:
+```lua
+-- After creating new sidebar buffer
+local new_sidebar_buf = api.nvim_create_buf(false, true)
+state_module.set_buf_id(new_sidebar_buf)
+
+-- CRITICAL: Must re-setup ALL keymaps
+local keymap_opts = { noremap = true, silent = true }
+api.nvim_buf_set_keymap(new_sidebar_buf, "n", "<CR>", ":lua require('vertical-bufferline').handle_selection()<CR>", keymap_opts)
+-- ... all other keymaps
+```
+
+**Lesson**: Buffer recreation requires complete state restoration, not just buffer ID updates.
+
+#### 4.7 **Function Call Order Dependencies**
 **Problem**: Functions must be called in specific order to work correctly.
 
 **Critical Order for Group Operations**:
@@ -216,6 +271,16 @@ print("DEBUG: sync_target:", bufferline_integration.get_sync_target())
 **Cause**: Using global current buffer instead of group-specific
 **Solution**: Use `group.current_buffer` in display logic
 
+#### 10.4 Group header clicks stop working after first use (v1.1.1)
+**Cause**: Sidebar protection recreates buffer but doesn't restore keymaps
+**Symptoms**: First `<CR>` on group header works, subsequent ones don't
+**Solution**: Always re-setup keymaps when recreating sidebar buffer
+
+#### 10.5 Autocmd interference with normal operations (v1.1.1)
+**Cause**: Overly broad autocmd scope responding to unrelated events
+**Symptoms**: Group switching triggers sidebar protection unnecessarily
+**Solution**: Use window-specific filtering in autocmd callbacks
+
 ### 11. Testing and Validation
 
 #### 11.1 Manual Test Cases
@@ -254,9 +319,12 @@ print("DEBUG: sync_target:", bufferline_integration.get_sync_target())
 5. **Buffer validation is essential** - invalid buffers cause crashes
 6. **Session persistence is complex** - handle missing files gracefully
 7. **Cross-group scenarios are the main source of bugs** - test thoroughly
+8. **Autocmd scope matters enormously** - narrow event filtering prevents conflicts (v1.1.1)
+9. **Buffer recreation requires complete state restoration** - don't forget keymaps (v1.1.1)
+10. **Window-specific event filtering is often better than buffer-specific** - more precise control (v1.1.1)
 
 ---
 
 **Author**: Claude (Anthropic AI Assistant)
-**Date**: 2025-07-10
-**Version**: Post-v1.1.0 with all major architectural fixes
+**Date**: 2025-07-11
+**Version**: Post-v1.1.1 with autocmd optimization and keymap persistence fixes
