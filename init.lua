@@ -1401,7 +1401,6 @@ local function open_sidebar()
                     state_module.set_buf_id(new_sidebar_buf)
                     
                     M.refresh()
-                    vim.notify("File opened in main window", vim.log.levels.INFO)
                 else
                     -- No main window available, restore sidebar
                     local new_sidebar_buf = api.nvim_create_buf(false, true)
