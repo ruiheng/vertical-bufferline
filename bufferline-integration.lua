@@ -12,6 +12,8 @@ local is_enabled = false
 local sync_target_group_id = nil
 -- Cache last buffer state for detecting buffer content changes
 local last_buffer_state = {}
+-- Cache last current buffer for detecting current buffer changes
+local last_current_buffer = nil
 
 -- Prevent reload protection
 if _G._vertical_bufferline_integration_loaded then
@@ -112,13 +114,16 @@ local function sync_bufferline_to_group()
             end
         end
 
-        -- Check for changes: buffer list changes or buffer name changes
+        -- Check for changes: buffer list changes, buffer name changes, or current buffer changes
         local buffers_changed = not vim.deep_equal(target_group.buffers, filtered_buffer_ids)
         local names_changed = not vim.deep_equal(last_buffer_state, current_buffer_state)
+        local current_buf = vim.api.nvim_get_current_buf()
+        local current_buffer_changed = last_current_buffer ~= current_buf
 
-        if buffers_changed or names_changed then
+        if buffers_changed or names_changed or current_buffer_changed then
             -- Update cached state
             last_buffer_state = current_buffer_state
+            last_current_buffer = current_buf
 
             -- Directly update the target group's buffer list
             target_group.buffers = filtered_buffer_ids

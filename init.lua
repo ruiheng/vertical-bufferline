@@ -1362,6 +1362,11 @@ local function open_sidebar()
     api.nvim_win_set_option(new_win_id, 'cursorline', false)
     api.nvim_win_set_option(new_win_id, 'cursorcolumn', false)
     
+    -- Ensure mouse support is enabled for this window
+    if vim.o.mouse == '' then
+        vim.notify("Mouse support disabled. Enable with :set mouse=a for sidebar mouse interaction", vim.log.levels.INFO)
+    end
+    
     -- Note: We don't use winfixbuf as it completely blocks file opening
     -- Instead, we rely on autocmd protection below for smart handling
     
@@ -1420,6 +1425,8 @@ local function open_sidebar()
                     api.nvim_buf_set_keymap(new_sidebar_buf, "n", "D", ":lua require('vertical-bufferline').smart_close_buffer()<CR>", keymap_opts)
                     api.nvim_buf_set_keymap(new_sidebar_buf, "n", "q", ":lua require('vertical-bufferline').close_sidebar()<CR>", keymap_opts)
                     api.nvim_buf_set_keymap(new_sidebar_buf, "n", "<Esc>", ":lua require('vertical-bufferline').close_sidebar()<CR>", keymap_opts)
+                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "<LeftRelease>", ":lua require('vertical-bufferline').handle_mouse_click()<CR>", keymap_opts)
+                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "<LeftMouse>", "<LeftMouse>", keymap_opts)
                     api.nvim_buf_set_keymap(new_sidebar_buf, "n", "<C-W>o", "<Nop>", keymap_opts)
                     api.nvim_buf_set_keymap(new_sidebar_buf, "n", "<C-W><C-O>", "<Nop>", keymap_opts)
                     
@@ -1441,6 +1448,8 @@ local function open_sidebar()
                     api.nvim_buf_set_keymap(new_sidebar_buf, "n", "D", ":lua require('vertical-bufferline').smart_close_buffer()<CR>", keymap_opts)
                     api.nvim_buf_set_keymap(new_sidebar_buf, "n", "q", ":lua require('vertical-bufferline').close_sidebar()<CR>", keymap_opts)
                     api.nvim_buf_set_keymap(new_sidebar_buf, "n", "<Esc>", ":lua require('vertical-bufferline').close_sidebar()<CR>", keymap_opts)
+                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "<LeftRelease>", ":lua require('vertical-bufferline').handle_mouse_click()<CR>", keymap_opts)
+                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "<LeftMouse>", "<LeftMouse>", keymap_opts)
                     api.nvim_buf_set_keymap(new_sidebar_buf, "n", "<C-W>o", "<Nop>", keymap_opts)
                     api.nvim_buf_set_keymap(new_sidebar_buf, "n", "<C-W><C-O>", "<Nop>", keymap_opts)
                     
@@ -1463,12 +1472,43 @@ local function open_sidebar()
     api.nvim_buf_set_keymap(buf_id, "n", "D", ":lua require('vertical-bufferline').smart_close_buffer()<CR>", keymap_opts)
     api.nvim_buf_set_keymap(buf_id, "n", "q", ":lua require('vertical-bufferline').close_sidebar()<CR>", keymap_opts)
     api.nvim_buf_set_keymap(buf_id, "n", "<Esc>", ":lua require('vertical-bufferline').close_sidebar()<CR>", keymap_opts)
+    -- Mouse support: use LeftRelease for more reliable clicking
+    api.nvim_buf_set_keymap(buf_id, "n", "<LeftRelease>", ":lua require('vertical-bufferline').handle_mouse_click()<CR>", keymap_opts)
+    -- Keep LeftMouse for immediate feedback
+    api.nvim_buf_set_keymap(buf_id, "n", "<LeftMouse>", "<LeftMouse>", keymap_opts)
     -- Disable Ctrl-W o in sidebar to prevent unwanted nvim exit
     api.nvim_buf_set_keymap(buf_id, "n", "<C-W>o", "<Nop>", keymap_opts)
     api.nvim_buf_set_keymap(buf_id, "n", "<C-W><C-O>", "<Nop>", keymap_opts)
 
     api.nvim_set_current_win(current_win)
     M.refresh("sidebar_open")
+end
+
+--- Handle mouse click in sidebar
+function M.handle_mouse_click()
+    if not state_module.is_sidebar_open() then 
+        return 
+    end
+    
+    -- Get mouse position
+    local mouse_pos = vim.fn.getmousepos()
+    if not mouse_pos or mouse_pos.winid ~= state_module.get_win_id() then
+        return -- Click not in sidebar window
+    end
+    
+    -- Ensure we're in the sidebar window and set cursor position
+    local sidebar_win = state_module.get_win_id()
+    local was_in_sidebar = api.nvim_get_current_win() == sidebar_win
+    
+    if not was_in_sidebar then
+        api.nvim_set_current_win(sidebar_win)
+    end
+    
+    -- Set cursor to click position
+    api.nvim_win_set_cursor(sidebar_win, {mouse_pos.line, 0})
+    
+    -- Direct call - no delay needed after fixing keymap consistency
+    M.handle_selection()
 end
 
 --- Handle buffer selection from sidebar
