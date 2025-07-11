@@ -1426,6 +1426,9 @@ local function open_sidebar()
     api.nvim_buf_set_keymap(buf_id, "n", "D", ":lua require('vertical-bufferline').smart_close_buffer()<CR>", keymap_opts)
     api.nvim_buf_set_keymap(buf_id, "n", "q", ":lua require('vertical-bufferline').close_sidebar()<CR>", keymap_opts)
     api.nvim_buf_set_keymap(buf_id, "n", "<Esc>", ":lua require('vertical-bufferline').close_sidebar()<CR>", keymap_opts)
+    -- Disable Ctrl-W o in sidebar to prevent unwanted nvim exit
+    api.nvim_buf_set_keymap(buf_id, "n", "<C-W>o", "<Nop>", keymap_opts)
+    api.nvim_buf_set_keymap(buf_id, "n", "<C-W><C-O>", "<Nop>", keymap_opts)
 
     api.nvim_set_current_win(current_win)
     M.refresh()
