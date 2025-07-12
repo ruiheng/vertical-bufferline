@@ -378,6 +378,37 @@ function M.get_sorted_buffers()
     return get_bufferline_sorted_buffers()
 end
 
+--- Get buffer position information for dual numbering display
+--- @return table Buffer position mapping {buffer_id -> {local_pos = N or nil, global_pos = M}}
+function M.get_buffer_position_info()
+    local state = require('bufferline.state')
+    local all_buffers = state.components or {}
+    local visible_buffers = state.visible_components or {}
+    
+    local position_info = {}
+    
+    -- Build visible buffer ID to local position mapping
+    local visible_positions = {}
+    for local_idx, component in ipairs(visible_buffers) do
+        if component and component.id then
+            visible_positions[component.id] = local_idx
+        end
+    end
+    
+    -- Build complete position info for all buffers
+    for global_idx, component in ipairs(all_buffers) do
+        if component and component.id then
+            local local_pos = visible_positions[component.id]
+            position_info[component.id] = {
+                global_pos = global_idx,
+                local_pos = local_pos  -- nil if not visible in bufferline
+            }
+        end
+    end
+    
+    return position_info
+end
+
 --- Force refresh (for compatibility with session.lua)
 function M.force_refresh()
     vim.schedule(function()

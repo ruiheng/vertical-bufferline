@@ -604,7 +604,16 @@ end
 -- Create individual buffer line with proper formatting and highlights
 local function create_buffer_line(component, j, total_components, current_buffer_id, is_picking, line_number)
     local is_last = (j == total_components)
-    local tree_prefix = is_last and (" " .. config_module.UI.TREE_LAST) or (" " .. config_module.UI.TREE_BRANCH)
+    local is_current = (component.id == current_buffer_id)
+    
+    -- Choose tree prefix based on position and current buffer status
+    local tree_prefix
+    if is_current then
+        tree_prefix = is_last and (" " .. config_module.UI.TREE_LAST_CURRENT) or (" " .. config_module.UI.TREE_BRANCH_CURRENT)
+    else
+        tree_prefix = is_last and (" " .. config_module.UI.TREE_LAST) or (" " .. config_module.UI.TREE_BRANCH)
+    end
+    
     local modified_indicator = ""
 
     -- Check if buffer is modified
@@ -640,13 +649,18 @@ local function create_buffer_line(component, j, total_components, current_buffer
         end
     end
 
-    local number_display = tostring(j)
-
-    -- Add arrow marker for current buffer
-    local current_marker = ""
-    if component.id == current_buffer_id then
-        current_marker = config_module.UI.CURRENT_BUFFER_MARKER
+    -- Get dual numbering: local|global format
+    local number_display = tostring(j)  -- fallback to local numbering
+    local bl_integration = require('vertical-bufferline.bufferline-integration')
+    local ok, position_info = pcall(bl_integration.get_buffer_position_info)
+    if ok and position_info and position_info[component.id] then
+        local info = position_info[component.id]
+        local local_num = info.local_pos and tostring(info.local_pos) or "-"
+        local global_num = tostring(info.global_pos)
+        number_display = local_num .. "|" .. global_num
     end
+
+    -- Current buffer marker is now integrated into tree_prefix, no separate marker needed
 
     local line_text
     local pick_highlight_group = nil
@@ -654,7 +668,7 @@ local function create_buffer_line(component, j, total_components, current_buffer
 
     if letter and is_picking then
         -- In picking mode: show hint character + buffer name with tree structure
-        line_text = tree_prefix .. letter .. " " .. current_marker .. number_display .. " " .. modified_indicator .. icon .. " " .. component.name
+        line_text = tree_prefix .. letter .. " " .. number_display .. " " .. modified_indicator .. icon .. " " .. component.name
         pick_highlight_end = #tree_prefix + 1  -- Only highlight the letter character
 
         -- Choose appropriate pick highlight based on buffer state
@@ -666,8 +680,8 @@ local function create_buffer_line(component, j, total_components, current_buffer
             pick_highlight_group = config_module.HIGHLIGHTS.PICK
         end
     else
-        -- Normal mode: regular display with tree structure, current marker and number
-        line_text = tree_prefix .. current_marker .. number_display .. " " .. modified_indicator .. icon .. " " .. component.name
+        -- Normal mode: regular display with tree structure and number (current buffer indicated by tree prefix)
+        line_text = tree_prefix .. number_display .. " " .. modified_indicator .. icon .. " " .. component.name
     end
 
     -- Extract path information for multi-line display
@@ -690,9 +704,9 @@ local function create_buffer_line(component, j, total_components, current_buffer
     -- Replace component.name with prefixed filename in the line text
     local name_in_line = display_with_prefix
     if letter and is_picking then
-        line_text = tree_prefix .. letter .. " " .. current_marker .. number_display .. " " .. modified_indicator .. icon .. " " .. name_in_line
+        line_text = tree_prefix .. letter .. " " .. number_display .. " " .. modified_indicator .. icon .. " " .. name_in_line
     else
-        line_text = tree_prefix .. current_marker .. number_display .. " " .. modified_indicator .. icon .. " " .. name_in_line
+        line_text = tree_prefix .. number_display .. " " .. modified_indicator .. icon .. " " .. name_in_line
     end
     
     -- Create path line if path exists and path display is enabled

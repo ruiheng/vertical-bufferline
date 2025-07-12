@@ -22,8 +22,10 @@ M.UI = {
     -- Tree display characters
     TREE_BRANCH = "├─ ",
     TREE_LAST = "└─ ",
+    TREE_BRANCH_CURRENT = "├► ",  -- Current buffer tree branch
+    TREE_LAST_CURRENT = "└► ",    -- Current buffer tree last
     TREE_EMPTY = "(empty)",
-    CURRENT_BUFFER_MARKER = "► ",
+    CURRENT_BUFFER_MARKER = "► ",  -- Keep for backward compatibility
     
     -- Path display formatting
     PATH_CONTINUATION = "│     ",  -- For tree visual continuity
