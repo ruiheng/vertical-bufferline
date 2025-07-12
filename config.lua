@@ -87,6 +87,12 @@ M.HIGHLIGHTS = {
     PREFIX = "VBufferLinePrefix",
     PREFIX_CURRENT = "VBufferLinePrefixCurrent",
     PREFIX_VISIBLE = "VBufferLinePrefixVisible",
+    
+    -- Dual numbering highlights for local|global format
+    NUMBER_LOCAL = "VBufferLineNumberLocal",    -- Local position (for <leader>1 style)
+    NUMBER_GLOBAL = "VBufferLineNumberGlobal",  -- Global position (for <leader>b1 style)
+    NUMBER_SEPARATOR = "VBufferLineNumberSep",  -- The "|" separator
+    NUMBER_HIDDEN = "VBufferLineNumberHidden",  -- The "-" when not visible
 }
 
 -- Event names for autocmds

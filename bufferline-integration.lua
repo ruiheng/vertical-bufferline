@@ -14,6 +14,8 @@ local sync_target_group_id = nil
 local last_buffer_state = {}
 -- Cache last current buffer for detecting current buffer changes
 local last_current_buffer = nil
+-- Cache bufferline position info for consistent dual numbering
+local cached_position_info = {}
 
 -- Prevent reload protection
 if _G._vertical_bufferline_integration_loaded then
@@ -72,6 +74,49 @@ local function get_bufferline_sorted_buffers()
     return all_valid_buffers
 end
 
+--- Get real buffer position information from bufferline state
+--- @return table Buffer position mapping {buffer_id -> {local_pos = N or nil, global_pos = M}}
+local function get_real_position_info()
+    local state = require('bufferline.state')
+    local all_buffers = state.components or {}
+    local visible_buffers = state.visible_components or {}
+    
+    local position_info = {}
+    
+    -- Build visible buffer ID to local position mapping
+    local visible_positions = {}
+    for local_idx, component in ipairs(visible_buffers) do
+        if component and component.id then
+            visible_positions[component.id] = local_idx
+        end
+    end
+    
+    -- Build complete position info for all buffers
+    for global_idx, component in ipairs(all_buffers) do
+        if component and component.id then
+            local local_pos = visible_positions[component.id]
+            position_info[component.id] = {
+                global_pos = global_idx,
+                local_pos = local_pos  -- nil if not visible in bufferline
+            }
+        end
+    end
+    
+    return position_info
+end
+
+--- Update position cache when cursor is in a normal file buffer
+local function update_position_cache()
+    local current_buf = vim.api.nvim_get_current_buf()
+    local state_module = require('vertical-bufferline.state')
+    
+    -- Only update cache when current buffer is not sidebar and is a normal file buffer
+    if state_module.get_buf_id and current_buf ~= state_module.get_buf_id() and not is_special_buffer(current_buf) then
+        cached_position_info = get_real_position_info()
+        -- Note: simplified cache logic - no time-based expiry
+    end
+end
+
 -- Direction 1: bufferline → current group (timer, 99% of the time)
 local function sync_bufferline_to_group()
     if not is_enabled then
@@ -124,6 +169,9 @@ local function sync_bufferline_to_group()
             -- Update cached state
             last_buffer_state = current_buffer_state
             last_current_buffer = current_buf
+
+            -- Update position cache when we're not in sidebar
+            update_position_cache()
 
             -- Directly update the target group's buffer list
             target_group.buffers = filtered_buffer_ids
@@ -302,6 +350,9 @@ function M.enable()
         sync_target_group_id = active_group.id
     end
 
+    -- Initialize position cache
+    update_position_cache()
+
     is_enabled = true
     return true
 end
@@ -379,31 +430,32 @@ function M.get_sorted_buffers()
 end
 
 --- Get buffer position information for dual numbering display
+--- Uses cache when cursor is in sidebar to maintain consistency
 --- @return table Buffer position mapping {buffer_id -> {local_pos = N or nil, global_pos = M}}
 function M.get_buffer_position_info()
-    local state = require('bufferline.state')
-    local all_buffers = state.components or {}
-    local visible_buffers = state.visible_components or {}
+    local current_buf = vim.api.nvim_get_current_buf()
+    local state_module = require('vertical-bufferline.state')
     
-    local position_info = {}
-    
-    -- Build visible buffer ID to local position mapping
-    local visible_positions = {}
-    for local_idx, component in ipairs(visible_buffers) do
-        if component and component.id then
-            visible_positions[component.id] = local_idx
+    -- Check if current buffer is the sidebar
+    if state_module.get_buf_id and current_buf == state_module.get_buf_id() then
+        -- Always use cached position info when in sidebar, never get fresh data
+        -- This prevents sidebar from affecting bufferline state
+        if next(cached_position_info) then
+            return cached_position_info
+        else
+            -- If no cache available, try to get fresh data but don't update cache
+            -- This is better than returning empty table which breaks highlighting
+            return get_real_position_info()
         end
     end
     
-    -- Build complete position info for all buffers
-    for global_idx, component in ipairs(all_buffers) do
-        if component and component.id then
-            local local_pos = visible_positions[component.id]
-            position_info[component.id] = {
-                global_pos = global_idx,
-                local_pos = local_pos  -- nil if not visible in bufferline
-            }
-        end
+    -- We're in a normal file buffer - get fresh position info
+    local position_info = get_real_position_info()
+    
+    -- Always update cache when we're in a real file buffer (not sidebar, not special)
+    if not is_special_buffer(current_buf) then
+        cached_position_info = position_info
+        -- Note: removed last_position_update since we're not using time-based cache expiry anymore
     end
     
     return position_info

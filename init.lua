@@ -56,6 +56,12 @@ local function setup_highlights()
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.FILENAME, { link = "Normal" })
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.FILENAME_CURRENT, { link = "Title", bold = true })
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.FILENAME_VISIBLE, { link = "String", bold = true })
+    
+    -- Dual numbering highlights - different styles for easy distinction
+    api.nvim_set_hl(0, config_module.HIGHLIGHTS.NUMBER_LOCAL, { link = "Number", bold = true })      -- Local: bright, bold
+    api.nvim_set_hl(0, config_module.HIGHLIGHTS.NUMBER_GLOBAL, { link = "Comment" })                -- Global: subdued
+    api.nvim_set_hl(0, config_module.HIGHLIGHTS.NUMBER_SEPARATOR, { link = "Operator" })            -- Separator: distinct
+    api.nvim_set_hl(0, config_module.HIGHLIGHTS.NUMBER_HIDDEN, { link = "NonText" })                -- Hidden: very subtle
 end
 
 -- Call setup function immediately
@@ -601,45 +607,33 @@ local function get_buffer_path_info(component)
     return relative_dir, filename
 end
 
+local renderer = require('vertical-bufferline.renderer')
+local components = require('vertical-bufferline.components')
+
 -- Create individual buffer line with proper formatting and highlights
 local function create_buffer_line(component, j, total_components, current_buffer_id, is_picking, line_number)
     local is_last = (j == total_components)
     local is_current = (component.id == current_buffer_id)
+    local is_visible = component.focused or false  -- Assuming focused means visible
     
-    -- Choose tree prefix based on position and current buffer status
-    local tree_prefix
-    if is_current then
-        tree_prefix = is_last and (" " .. config_module.UI.TREE_LAST_CURRENT) or (" " .. config_module.UI.TREE_BRANCH_CURRENT)
-    else
-        tree_prefix = is_last and (" " .. config_module.UI.TREE_LAST) or (" " .. config_module.UI.TREE_BRANCH)
+    -- Build line parts using component system
+    local parts = {}
+    
+    -- 1. Tree prefix
+    local tree_parts = components.create_tree_prefix(is_last, is_current)
+    for _, part in ipairs(tree_parts) do
+        table.insert(parts, part)
     end
     
-    local modified_indicator = ""
-
-    -- Check if buffer is modified
-    if api.nvim_buf_is_valid(component.id) and api.nvim_buf_get_option(component.id, "modified") then
-        modified_indicator = "● "
-    end
-
-    local icon = component.icon or ""
-    if icon == "" then
-        -- Fallback to basic file type detection
-        local extension = component.name:match("%.([^%.]+)$")
-        if extension then
-            icon = config_module.ICONS[extension] or config_module.ICONS.default
-        end
-    end
-
-    -- Get letter for picking mode
-    local letter = nil
+    -- 2. Pick letter (if in picking mode)
     if is_picking then
+        local letter = nil
         -- Check if we're in extended picking mode
         local extended_picking = state_module.get_extended_picking_state()
         if extended_picking.is_active and line_number and extended_picking.line_hints[line_number] then
-            -- Use extended hint for this line
             letter = extended_picking.line_hints[line_number]
         else
-            -- Fallback to bufferline hints (for active group)
+            -- Fallback to bufferline hints
             local ok, element = pcall(function() return component:as_element() end)
             if ok and element and element.letter then
                 letter = element.letter
@@ -647,97 +641,116 @@ local function create_buffer_line(component, j, total_components, current_buffer
                 letter = component.letter
             end
         end
+        
+        if letter then
+            local pick_parts = components.create_pick_letter(letter, is_current, is_visible)
+            for _, part in ipairs(pick_parts) do
+                table.insert(parts, part)
+            end
+        end
     end
-
-    -- Get dual numbering: local|global format
-    local number_display = tostring(j)  -- fallback to local numbering
+    
+    -- 3. Numbering (dual or simple)
     local bl_integration = require('vertical-bufferline.bufferline-integration')
     local ok, position_info = pcall(bl_integration.get_buffer_position_info)
     if ok and position_info and position_info[component.id] then
         local info = position_info[component.id]
-        local local_num = info.local_pos and tostring(info.local_pos) or "-"
-        local global_num = tostring(info.global_pos)
-        number_display = local_num .. "|" .. global_num
-    end
-
-    -- Current buffer marker is now integrated into tree_prefix, no separate marker needed
-
-    local line_text
-    local pick_highlight_group = nil
-    local pick_highlight_end = 0
-
-    if letter and is_picking then
-        -- In picking mode: show hint character + buffer name with tree structure
-        line_text = tree_prefix .. letter .. " " .. number_display .. " " .. modified_indicator .. icon .. " " .. component.name
-        pick_highlight_end = #tree_prefix + 1  -- Only highlight the letter character
-
-        -- Choose appropriate pick highlight based on buffer state
-        if component.id == current_buffer_id then
-            pick_highlight_group = config_module.HIGHLIGHTS.PICK_SELECTED
-        elseif component.focused then
-            pick_highlight_group = config_module.HIGHLIGHTS.PICK_VISIBLE
-        else
-            pick_highlight_group = config_module.HIGHLIGHTS.PICK
+        local numbering_parts = components.create_dual_numbering(info.local_pos, info.global_pos)
+        for _, part in ipairs(numbering_parts) do
+            table.insert(parts, part)
         end
     else
-        -- Normal mode: regular display with tree structure and number (current buffer indicated by tree prefix)
-        line_text = tree_prefix .. number_display .. " " .. modified_indicator .. icon .. " " .. component.name
+        -- Fallback to simple numbering
+        local numbering_parts = components.create_simple_numbering(j)
+        for _, part in ipairs(numbering_parts) do
+            table.insert(parts, part)
+        end
     end
-
-    -- Extract path information for multi-line display
-    local path_dir, display_name = get_buffer_path_info(component)
     
-    -- Use extracted filename or fallback to original name
+    -- 4. Space after numbering
+    local space_parts = components.create_space(1)
+    for _, part in ipairs(space_parts) do
+        table.insert(parts, part)
+    end
+    
+    -- 5. Modified indicator
+    local is_modified = api.nvim_buf_is_valid(component.id) and api.nvim_buf_get_option(component.id, "modified")
+    local modified_parts = components.create_modified_indicator(is_modified)
+    for _, part in ipairs(modified_parts) do
+        table.insert(parts, part)
+    end
+    
+    -- 6. Icon
+    local icon = component.icon or ""
+    if icon == "" then
+        local extension = component.name:match("%.([^%.]+)$")
+        if extension then
+            icon = config_module.ICONS[extension] or config_module.ICONS.default
+        end
+    end
+    local icon_parts = components.create_icon(icon)
+    for _, part in ipairs(icon_parts) do
+        table.insert(parts, part)
+    end
+    
+    -- 7. Filename with optional prefix
+    local path_dir, display_name = get_buffer_path_info(component)
     local final_name = display_name or component.name
     
-    -- Build display name with minimal prefix if available
-    local display_with_prefix = final_name
     local prefix_info = nil
     if component.minimal_prefix and component.minimal_prefix.prefix and component.minimal_prefix.prefix ~= "" then
-        display_with_prefix = component.minimal_prefix.prefix .. component.minimal_prefix.filename
         prefix_info = {
             prefix = component.minimal_prefix.prefix,
             filename = component.minimal_prefix.filename
         }
+        final_name = prefix_info.prefix .. prefix_info.filename
     end
     
-    -- Replace component.name with prefixed filename in the line text
-    local name_in_line = display_with_prefix
-    if letter and is_picking then
-        line_text = tree_prefix .. letter .. " " .. number_display .. " " .. modified_indicator .. icon .. " " .. name_in_line
-    else
-        line_text = tree_prefix .. number_display .. " " .. modified_indicator .. icon .. " " .. name_in_line
+    local filename_parts = components.create_filename(prefix_info, final_name, is_current, is_visible)
+    for _, part in ipairs(filename_parts) do
+        table.insert(parts, part)
     end
     
-    -- Create path line if path exists and path display is enabled
+    -- Render the complete line
+    local rendered_line = renderer.render_line(parts)
+    
+    -- Create path line if needed
     local path_line = nil
     local should_show_path = should_show_path_for_buffer(component.id)
     if path_dir and should_show_path then
-        -- In "yes" mode, show all paths including current directory
-        -- In "auto" mode, only show when path_dir ~= "." (to avoid redundant current dir display)
         local show_path_setting = config_module.DEFAULTS.show_path
         if show_path_setting == "yes" or path_dir ~= "." then
-            -- Tree continuation should match the tree structure: use spaces for last item, vertical line for others
-            local tree_continuation = is_last and "       " or " │     "  -- Match tree structure indentation
+            local tree_continuation = is_last and "       " or " │     "
             local display_path = path_dir == "." and "./" or path_dir .. "/"
             path_line = tree_continuation .. display_path
         end
     end
     
     return {
-        text = line_text,
+        text = rendered_line.text,
+        rendered_line = rendered_line,  -- Store the complete rendered line
         path_line = path_line,
-        tree_prefix = tree_prefix,
-        pick_highlight_group = pick_highlight_group,
-        pick_highlight_end = pick_highlight_end,
         has_path = path_line ~= nil,
-        prefix_info = prefix_info
+        prefix_info = prefix_info,
+        -- Legacy fields for compatibility
+        tree_prefix = parts[1] and parts[1].text or "",
+        pick_highlight_group = nil,  -- Now handled by renderer
+        pick_highlight_end = 0,
+        number_highlights = nil  -- Now handled by renderer
     }
 end
 
 -- Apply all highlighting for a single buffer line (unified highlighting function)
 local function apply_buffer_highlighting(line_info, component, actual_line_number, current_buffer_id, is_picking, is_in_active_group)
     if not line_info or not component then return end
+    
+    -- Use new renderer system if available
+    if line_info.rendered_line then
+        renderer.apply_highlights(state_module.get_buf_id(), ns_id, actual_line_number - 1, line_info.rendered_line)
+        return
+    end
+    
+    -- Legacy highlighting fallback (can be removed later)
     
     local line_text = line_info.text
     local tree_prefix = line_info.tree_prefix or ""
@@ -812,6 +825,38 @@ local function apply_buffer_highlighting(line_info, component, actual_line_numbe
         api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, config_module.HIGHLIGHTS.MODIFIED, actual_line_number - 1, modified_pos - 1, modified_pos)
     end
     
+    -- Apply dual numbering highlighting by parsing the line text
+    -- Look for dual numbering pattern like "3|5" in the line
+    local number_start = #tree_prefix  -- Numbers come right after tree prefix
+    local number_pattern = "([-%d]+)|([%d]+)"  -- Match "3|5" or "-|5" patterns
+    local line_substr = line_text:sub(number_start + 1)  -- Get text after tree prefix
+    local local_num, global_num = line_substr:match("^%s*" .. number_pattern)
+    
+    if local_num and global_num then
+        -- Found dual numbering pattern, apply highlighting
+        local pattern_start = line_text:find(number_pattern, number_start + 1)
+        if pattern_start then
+            -- Highlight local number
+            if local_num == "-" then
+                api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, config_module.HIGHLIGHTS.NUMBER_HIDDEN, 
+                                           actual_line_number - 1, pattern_start - 1, pattern_start - 1 + #local_num)
+            else
+                api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, config_module.HIGHLIGHTS.NUMBER_LOCAL, 
+                                           actual_line_number - 1, pattern_start - 1, pattern_start - 1 + #local_num)
+            end
+            
+            -- Highlight separator "|"
+            local separator_pos = pattern_start - 1 + #local_num
+            api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, config_module.HIGHLIGHTS.NUMBER_SEPARATOR, 
+                                       actual_line_number - 1, separator_pos, separator_pos + 1)
+            
+            -- Highlight global number
+            local global_pos = separator_pos + 1
+            api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, config_module.HIGHLIGHTS.NUMBER_GLOBAL, 
+                                       actual_line_number - 1, global_pos, global_pos + #global_num)
+        end
+    end
+    
     -- Apply filename highlighting (from filename_start_pos to end of line)
     if filename_start_pos and filename_start_pos <= #line_text then
         if prefix_info and prefix_info.prefix and prefix_info.prefix ~= "" then
@@ -863,7 +908,7 @@ local function apply_path_highlighting(component, path_line_number, current_buff
 end
 
 -- Render buffers within a single group
-local function render_group_buffers(group_components, current_buffer_id, is_picking, lines_text, new_line_map, line_types, line_components, line_group_context)
+local function render_group_buffers(group_components, current_buffer_id, is_picking, lines_text, new_line_map, line_types, line_components, line_group_context, line_infos)
     for j, component in ipairs(group_components) do
         if component.id and component.name and api.nvim_buf_is_valid(component.id) then
             -- Calculate the line number this buffer will be on
@@ -875,6 +920,7 @@ local function render_group_buffers(group_components, current_buffer_id, is_pick
             new_line_map[main_line_number] = component.id
             line_types[main_line_number] = "buffer"  -- Record this as a buffer line
             line_components[main_line_number] = component  -- Store specific component for this line
+            line_infos[main_line_number] = line_info  -- Store complete line_info for highlighting
             line_group_context[main_line_number] = line_group_context.current_group_id  -- Store which group this line belongs to
 
             -- Note: Buffer highlighting will be applied later in the main refresh loop
@@ -924,7 +970,7 @@ local function render_group_header(group, i, is_active, buffer_count, lines_text
 end
 
 -- Render all groups with their buffers
-local function render_all_groups(active_group, components, current_buffer_id, is_picking, lines_text, new_line_map, group_header_lines, line_types, all_components, line_components, line_group_context)
+local function render_all_groups(active_group, components, current_buffer_id, is_picking, lines_text, new_line_map, group_header_lines, line_types, all_components, line_components, line_group_context, line_infos)
     if not active_group then
         return components
     end
@@ -1046,7 +1092,7 @@ local function render_all_groups(active_group, components, current_buffer_id, is
                 end
             end
             
-            render_group_buffers(group_components, group_current_buffer_id, is_picking, lines_text, new_line_map, line_types, line_components, line_group_context)
+            render_group_buffers(group_components, group_current_buffer_id, is_picking, lines_text, new_line_map, line_types, line_components, line_group_context, line_infos)
             
             -- Collect all components for highlighting
             for _, comp in ipairs(group_components) do
@@ -1121,10 +1167,11 @@ function M.refresh(reason)
     local line_types = {}  -- Record what type each line is: "buffer", "path", "group_header", "group_separator"
     local all_components = {}  -- Collect all components from all groups for highlighting
     local line_components = {}  -- Store specific component for each line (handles multi-group buffers)
+    local line_infos = {}  -- Store complete line_info for each line (includes number_highlights)
     local line_group_context = {}  -- Store which group each line belongs to
 
     -- Render all groups with their buffers (without applying highlights yet)
-    local remaining_components = render_all_groups(active_group, components, current_buffer_id, is_picking, lines_text, new_line_map, group_header_lines, line_types, all_components, line_components, line_group_context)
+    local remaining_components = render_all_groups(active_group, components, current_buffer_id, is_picking, lines_text, new_line_map, group_header_lines, line_types, all_components, line_components, line_group_context, line_infos)
 
     -- Finalize buffer display (set lines but keep modifiable) - this clears highlights
     finalize_buffer_display(lines_text, new_line_map, line_group_context, group_header_lines)
@@ -1190,14 +1237,18 @@ function M.refresh(reason)
                 apply_path_highlighting(component, line_num, group_current_buffer_id, is_in_active_group)
             elseif line_type == "buffer" then
                 -- This is a main buffer line - apply buffer highlighting
-                local line_text = api.nvim_buf_get_lines(state_module.get_buf_id(), line_num - 1, line_num, false)[1] or ""
+                -- Use the stored line_info that contains number_highlights
+                local line_info = line_infos[line_num]
                 
-                -- Create a minimal line_info for highlighting (consistent with path line approach)
-                local line_info = {
-                    text = line_text,  -- Use original line text
-                    tree_prefix = " ├─ ",  -- Use consistent tree prefix
-                    prefix_info = component.minimal_prefix  -- This contains prefix information if available
-                }
+                if not line_info then
+                    -- Fallback: create a minimal line_info if not found
+                    local line_text = api.nvim_buf_get_lines(state_module.get_buf_id(), line_num - 1, line_num, false)[1] or ""
+                    line_info = {
+                        text = line_text,
+                        tree_prefix = " ├─ ",
+                        prefix_info = component.minimal_prefix
+                    }
+                end
                 
                 -- Apply highlighting with group context
                 apply_buffer_highlighting(line_info, component, line_num, group_current_buffer_id, is_picking, is_in_active_group)
