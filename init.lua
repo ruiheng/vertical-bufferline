@@ -536,6 +536,47 @@ local function detect_and_manage_picking_mode(bufferline_state, components)
     return is_picking
 end
 
+-- Determine if path should be shown for a buffer based on configuration
+local function should_show_path_for_buffer(buffer_id)
+    local show_path_setting = config_module.DEFAULTS.show_path
+    
+    if show_path_setting == "no" then
+        return false
+    elseif show_path_setting == "yes" then
+        return true
+    elseif show_path_setting == "auto" then
+        -- Auto mode: show path only when there are filename conflicts
+        if not buffer_id or not api.nvim_buf_is_valid(buffer_id) then
+            return false
+        end
+        
+        local current_filename = vim.fn.fnamemodify(api.nvim_buf_get_name(buffer_id), ":t")
+        if current_filename == "" then
+            return false
+        end
+        
+        -- Check if there are other buffers in the current group with the same filename
+        local active_group = groups.get_active_group()
+        if not active_group then
+            return false
+        end
+        
+        local conflicts = 0
+        for _, other_buffer_id in ipairs(active_group.buffers) do
+            if other_buffer_id ~= buffer_id and api.nvim_buf_is_valid(other_buffer_id) then
+                local other_filename = vim.fn.fnamemodify(api.nvim_buf_get_name(other_buffer_id), ":t")
+                if other_filename == current_filename then
+                    conflicts = conflicts + 1
+                end
+            end
+        end
+        
+        return conflicts > 0
+    end
+    
+    return false
+end
+
 -- Extract and format path information for buffer display
 local function get_buffer_path_info(component)
     if not api.nvim_buf_is_valid(component.id) then
@@ -669,7 +710,8 @@ local function create_buffer_line(component, j, total_components, current_buffer
     
     -- Create path line if path exists and path display is enabled
     local path_line = nil
-    if path_dir and config_module.DEFAULTS.show_path and path_dir ~= "." then
+    local should_show_path = should_show_path_for_buffer(component.id)
+    if path_dir and should_show_path and path_dir ~= "." then
         -- Tree continuation should match the tree structure: use spaces for last item, vertical line for others
         local tree_continuation = is_last and "       " or " │     "  -- Match tree structure indentation
         path_line = tree_continuation .. path_dir .. "/"

@@ -310,7 +310,42 @@ print("DEBUG: sync_target:", bufferline_integration.get_sync_target())
 3. Verify the fix doesn't break existing functionality
 4. Test with edge cases (empty groups, invalid buffers)
 
-### 13. Key Takeaways for New Maintainers
+### 13. Code Quality and Development Tools
+
+#### 13.1 Luacheck Configuration
+This project uses `luacheck` for code quality analysis. A `.luacheckrc` file is provided with optimized settings for Neovim plugin development.
+
+**Usage**:
+```bash
+# Check a single file
+luacheck init.lua
+
+# Check all Lua files in the project
+luacheck *.lua
+
+# The .luacheckrc file automatically applies these optimizations:
+# - Treats 'vim' as a read-only global variable
+# - Ignores whitespace-only warnings (611, 612, 613, 614, 621, 631)
+# - Sets reasonable line length limit (150 chars)
+```
+
+**Manual Command (if .luacheckrc is not available)**:
+```bash
+luacheck init.lua --read-globals vim --ignore 611 612 613 614 621 631 --max-line-length 150
+```
+
+**Key Benefits**:
+- Eliminates false positives for Neovim-specific globals
+- Focuses on actual code issues rather than formatting
+- Provides consistent code quality standards across the project
+
+#### 13.2 Common Luacheck Warning Types
+- **Unused variables**: Often indicates dead code or missing functionality
+- **Undefined globals**: May indicate typos or missing requires
+- **Line length**: Consider readability when lines are very long
+- **Shadowing**: Be careful when reusing variable names in nested scopes
+
+### 14. Key Takeaways for New Maintainers
 
 1. **The sync system is the heart of this plugin** - understand it deeply
 2. **Always pause sync during manual operations** - this cannot be overstated
@@ -322,9 +357,10 @@ print("DEBUG: sync_target:", bufferline_integration.get_sync_target())
 8. **Autocmd scope matters enormously** - narrow event filtering prevents conflicts (v1.1.1)
 9. **Buffer recreation requires complete state restoration** - don't forget keymaps (v1.1.1)
 10. **Window-specific event filtering is often better than buffer-specific** - more precise control (v1.1.1)
+11. **Use luacheck for code quality** - the .luacheckrc file is configured for this project's needs
 
 ---
 
 **Author**: Claude (Anthropic AI Assistant)
-**Date**: 2025-07-11
-**Version**: Post-v1.1.1 with autocmd optimization and keymap persistence fixes
+**Date**: 2025-07-12
+**Version**: Post-v1.1.1 with mouse click support, show_path configuration, and luacheck optimization

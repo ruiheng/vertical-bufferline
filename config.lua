@@ -115,7 +115,7 @@ M.DEFAULTS = {
     expand_all_groups = true,
     
     -- Path display settings
-    show_path = true,
+    show_path = "auto", -- "yes", "no", "auto"
     path_style = "relative", -- "relative", "absolute", "smart"
     path_max_length = M.UI.PATH_MAX_LENGTH,
     
@@ -181,6 +181,10 @@ end
 
 function M.validate_delay(delay)
     return type(delay) == "number" and delay >= 0 and delay <= 10000
+end
+
+function M.validate_show_path(show_path)
+    return show_path == "yes" or show_path == "no" or show_path == "auto"
 end
 
 return M
