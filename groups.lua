@@ -63,7 +63,8 @@ local function init_default_group()
             created_at = os.time(),
             color = config_module.COLORS.BLUE,
             display_number = groups_data.next_display_number,
-            buffer_states = {}  -- Store per-buffer window states (cursor, scroll, etc.)
+            buffer_states = {},  -- Store per-buffer window states (cursor, scroll, etc.)
+            position_info = {}   -- Store bufferline position info {buffer_id -> local_pos}
         }
         groups_data.next_display_number = groups_data.next_display_number + 1
         table.insert(groups_data.groups, default_group)
@@ -227,7 +228,8 @@ function M.create_group(name, color)
         created_at = os.time(),
         color = color or config_module.COLORS.GREEN,
         display_number = groups_data.next_display_number,
-        buffer_states = {}  -- Store per-buffer window states (cursor, scroll, etc.)
+        buffer_states = {},  -- Store per-buffer window states (cursor, scroll, etc.)
+        position_info = {}   -- Store bufferline position info {buffer_id -> local_pos}
     }
     groups_data.next_display_number = groups_data.next_display_number + 1
 
@@ -375,6 +377,27 @@ function M.set_active_group(group_id)
             -- Save comprehensive window state for current buffer
             save_buffer_state(old_group, current_buf)
         end
+        
+        -- Save current group's position info before switching (only local positions)
+        local ok, position_info = pcall(function()
+            -- Get fresh position info from bufferline for the current group
+            local state = require('bufferline.state')
+            local visible_buffers = state.visible_components or {}
+            
+            local info = {}
+            
+            -- Build visible buffer ID to local position mapping
+            for local_idx, component in ipairs(visible_buffers) do
+                if component and component.id then
+                    info[component.id] = local_idx
+                end
+            end
+            
+            return info
+        end)
+        if ok and position_info then
+            old_group.position_info = position_info
+        end
     end
 
     -- disable copying bufferline buffer list to group
@@ -429,7 +452,22 @@ function M.set_active_group(group_id)
     -- Sync pointer to new group
     bufferline_integration.set_sync_target(group_id)
 
-    -- Note: Refresh will be triggered by the GROUP_CHANGED autocmd, no need for explicit refresh here
+    -- Initialize position info for the new active group after bufferline sync
+    vim.schedule(function()
+        -- Force refresh bufferline first
+        local bufferline_ui = require('bufferline.ui')
+        if bufferline_ui.refresh then
+            bufferline_ui.refresh()
+        end
+        
+        -- Then update position info for new active group
+        vim.defer_fn(function()
+            local position_info = bufferline_integration.get_buffer_position_info(group_id)
+            M.update_group_position_info(group_id, position_info)
+        end, 50)  -- Small delay to ensure bufferline is updated
+    end)
+
+    -- Note: Additional refresh will be triggered by the GROUP_CHANGED autocmd
 
     -- Trigger event
     vim.api.nvim_exec_autocmds("User", {
@@ -720,6 +758,7 @@ function M.is_auto_add_disabled()
     return groups_data.auto_add_disabled
 end
 
+
 -- Sync update current group's buffer list through bufferline
 function M.sync_active_group_with_bufferline(buffer_list)
     local active_group_id = M.get_active_group_id()
@@ -769,6 +808,27 @@ function M.get_group_stats()
         total_buffers = vim.tbl_count(vim.api.nvim_list_bufs()),
         managed_buffers = vim.tbl_count(vim.iter(groups_data.groups):map(function(group) return group.buffers end):flatten():totable())
     }
+end
+
+--- Update position info for a specific group
+--- @param group_id string Group ID to update
+--- @param position_info table Buffer position mapping {buffer_id -> local_pos (number or nil)}
+function M.update_group_position_info(group_id, position_info)
+    local group = find_group_by_id(group_id)
+    if group then
+        group.position_info = position_info or {}
+    end
+end
+
+--- Get position info for a specific group
+--- @param group_id string Group ID to get position info for
+--- @return table Buffer position mapping {buffer_id -> local_pos (number or nil)}
+function M.get_group_position_info(group_id)
+    local group = find_group_by_id(group_id)
+    if group then
+        return group.position_info or {}
+    end
+    return {}
 end
 
 --- Initialize module

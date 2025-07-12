@@ -611,7 +611,7 @@ local renderer = require('vertical-bufferline.renderer')
 local components = require('vertical-bufferline.components')
 
 -- Create individual buffer line with proper formatting and highlights
-local function create_buffer_line(component, j, total_components, current_buffer_id, is_picking, line_number)
+local function create_buffer_line(component, j, total_components, current_buffer_id, is_picking, line_number, group_id)
     local is_last = (j == total_components)
     local is_current = (component.id == current_buffer_id)
     local is_visible = component.focused or false  -- Assuming focused means visible
@@ -652,10 +652,11 @@ local function create_buffer_line(component, j, total_components, current_buffer
     
     -- 3. Numbering (dual or simple)
     local bl_integration = require('vertical-bufferline.bufferline-integration')
-    local ok, position_info = pcall(bl_integration.get_buffer_position_info)
-    if ok and position_info and position_info[component.id] then
-        local info = position_info[component.id]
-        local numbering_parts = components.create_dual_numbering(info.local_pos, info.global_pos)
+    local ok, position_info = pcall(bl_integration.get_buffer_position_info, group_id)
+    if ok and position_info then
+        local local_pos = position_info[component.id]  -- nil if not visible in bufferline
+        local global_pos = j  -- Global position is just the index in current group
+        local numbering_parts = components.create_dual_numbering(local_pos, global_pos)
         for _, part in ipairs(numbering_parts) do
             table.insert(parts, part)
         end
@@ -913,7 +914,7 @@ local function render_group_buffers(group_components, current_buffer_id, is_pick
         if component.id and component.name and api.nvim_buf_is_valid(component.id) then
             -- Calculate the line number this buffer will be on
             local main_line_number = #lines_text + 1
-            local line_info = create_buffer_line(component, j, #group_components, current_buffer_id, is_picking, main_line_number)
+            local line_info = create_buffer_line(component, j, #group_components, current_buffer_id, is_picking, main_line_number, line_group_context.current_group_id)
 
             -- Add main buffer line
             table.insert(lines_text, line_info.text)

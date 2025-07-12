@@ -478,6 +478,7 @@ function M.load_session(filename)
 
     -- Temporarily disable bufferline sync during loading
     local bufferline_integration = require('vertical-bufferline.bufferline-integration')
+    local groups = require('vertical-bufferline.groups')
     bufferline_integration.set_sync_target(nil)
 
     -- Step 1: Handle existing buffers
@@ -492,20 +493,40 @@ function M.load_session(filename)
     -- Step 4: Rebuild group structure
     rebuild_groups(session_data, buffer_mappings)
 
-    -- Step 5: Restore expand mode if available
+    -- Step 5: Common finalization
+    finalize_session_restore(session_data, opened_count, #session_data.groups)
+
+    vim.notify(string.format("Session loaded: %s (%d buffers, %d groups)",
+        vim.fn.fnamemodify(filename, ":t"), opened_count, #session_data.groups), vim.log.levels.INFO)
+
+    return true
+end
+
+-- Common session restore finalization
+local function finalize_session_restore(session_data, opened_count, total_groups)
+    local groups = require('vertical-bufferline.groups')
+    local bufferline_integration = require('vertical-bufferline.bufferline-integration')
+    
+    -- Restore expand mode if available
     if session_data.expand_all_groups ~= nil then
         local vbl = require('vertical-bufferline')
         if vbl.state then
             vbl.state.expand_all_groups = session_data.expand_all_groups
+        else
+            local state_module = require('vertical-bufferline.state')
+            state_module.set_expand_all_groups(session_data.expand_all_groups)
         end
     end
 
-    -- Step 6: Final sync to bufferline (rebuild_groups already set active group)
-    local groups = require('vertical-bufferline.groups')
+    -- Clear all position info from all groups after session restore
+    local all_groups = groups.get_all_groups()
+    for _, group in ipairs(all_groups) do
+        groups.update_group_position_info(group.id, {})
+    end
+    
+    -- Final sync to bufferline
     local active_group = groups.get_active_group()
-
     if active_group then
-        -- Ensure bufferline is synced with the restored active group
         bufferline_integration.set_bufferline_buffers(active_group.buffers)
         bufferline_integration.set_sync_target(active_group.id)
 
@@ -523,18 +544,13 @@ function M.load_session(filename)
         bufferline_integration.set_sync_target("default")
     end
 
-    -- Step 7: Refresh UI
+    -- Refresh UI
     vim.schedule(function()
         local vbl = require('vertical-bufferline')
         if vbl.state and vbl.state.is_sidebar_open then
             vbl.refresh()
         end
     end)
-
-    vim.notify(string.format("Session loaded: %s (%d buffers, %d groups)",
-        vim.fn.fnamemodify(filename, ":t"), opened_count, #session_data.groups), vim.log.levels.INFO)
-
-    return true
 end
 
 --- Check if session exists for current working directory
@@ -797,21 +813,8 @@ local function restore_state_from_global()
     -- Basic group restoration with existing buffers
     rebuild_groups(session_data, buffer_mappings)
     
-    -- Restore expand mode if available
-    if session_data.expand_all_groups ~= nil then
-        local state_module = require('vertical-bufferline.state')
-        state_module.set_expand_all_groups(session_data.expand_all_groups)
-    end
-    
-    -- Final sync to bufferline
-    local active_group = groups.get_active_group()
-    if active_group then
-        bufferline_integration.set_sync_target(active_group.id)
-    else
-        bufferline_integration.set_sync_target("default")
-    end
-
-    bufferline_integration.set_bufferline_buffers(active_group.buffers)
+    -- Common finalization
+    finalize_session_restore(session_data, vim.tbl_count(buffer_mappings), #session_data.groups)
     
     vim.notify(string.format("VBL state restored (%d groups)", #session_data.groups), vim.log.levels.INFO)
     

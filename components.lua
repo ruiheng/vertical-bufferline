@@ -29,7 +29,7 @@ end
 
 -- Create dual numbering component
 ---@param local_pos number|nil Local position in bufferline (nil if not visible)
----@param global_pos number Global position in buffer list
+---@param global_pos number Global position in current group (calculated from group buffer list)
 ---@return LinePart[]
 function M.create_dual_numbering(local_pos, global_pos)
     local local_num = local_pos and tostring(local_pos) or "-"

@@ -14,8 +14,7 @@ local sync_target_group_id = nil
 local last_buffer_state = {}
 -- Cache last current buffer for detecting current buffer changes
 local last_current_buffer = nil
--- Cache bufferline position info for consistent dual numbering
-local cached_position_info = {}
+-- No longer need global cache - position info is stored in each group
 
 -- Prevent reload protection
 if _G._vertical_bufferline_integration_loaded then
@@ -91,29 +90,26 @@ local function get_real_position_info()
         end
     end
     
-    -- Build complete position info for all buffers
-    for global_idx, component in ipairs(all_buffers) do
-        if component and component.id then
-            local local_pos = visible_positions[component.id]
-            position_info[component.id] = {
-                global_pos = global_idx,
-                local_pos = local_pos  -- nil if not visible in bufferline
-            }
-        end
+    -- Build position info for visible buffers only (local positions)
+    for buffer_id, local_pos in pairs(visible_positions) do
+        position_info[buffer_id] = local_pos
     end
     
     return position_info
 end
 
---- Update position cache when cursor is in a normal file buffer
-local function update_position_cache()
+--- Update position info for current active group when cursor is in a normal file buffer
+local function update_active_group_position_info()
     local current_buf = vim.api.nvim_get_current_buf()
     local state_module = require('vertical-bufferline.state')
     
-    -- Only update cache when current buffer is not sidebar and is a normal file buffer
+    -- Only update when current buffer is not sidebar and is a normal file buffer
     if state_module.get_buf_id and current_buf ~= state_module.get_buf_id() and not is_special_buffer(current_buf) then
-        cached_position_info = get_real_position_info()
-        -- Note: simplified cache logic - no time-based expiry
+        local active_group = groups.get_active_group()
+        if active_group then
+            local position_info = get_real_position_info()
+            groups.update_group_position_info(active_group.id, position_info)
+        end
     end
 end
 
@@ -170,8 +166,8 @@ local function sync_bufferline_to_group()
             last_buffer_state = current_buffer_state
             last_current_buffer = current_buf
 
-            -- Update position cache when we're not in sidebar
-            update_position_cache()
+            -- Update position info for active group when we're not in sidebar
+            update_active_group_position_info()
 
             -- Directly update the target group's buffer list
             target_group.buffers = filtered_buffer_ids
@@ -350,8 +346,8 @@ function M.enable()
         sync_target_group_id = active_group.id
     end
 
-    -- Initialize position cache
-    update_position_cache()
+    -- Initialize position info for current active group
+    update_active_group_position_info()
 
     is_enabled = true
     return true
@@ -430,35 +426,39 @@ function M.get_sorted_buffers()
 end
 
 --- Get buffer position information for dual numbering display
---- Uses cache when cursor is in sidebar to maintain consistency
+--- For current group: get fresh data from bufferline
+--- For other groups: use saved data to maintain consistency
+--- @param group_id string|nil Group ID to get position info for (nil = current active group)
 --- @return table Buffer position mapping {buffer_id -> {local_pos = N or nil, global_pos = M}}
-function M.get_buffer_position_info()
-    local current_buf = vim.api.nvim_get_current_buf()
-    local state_module = require('vertical-bufferline.state')
-    
-    -- Check if current buffer is the sidebar
-    if state_module.get_buf_id and current_buf == state_module.get_buf_id() then
-        -- Always use cached position info when in sidebar, never get fresh data
-        -- This prevents sidebar from affecting bufferline state
-        if next(cached_position_info) then
-            return cached_position_info
-        else
-            -- If no cache available, try to get fresh data but don't update cache
-            -- This is better than returning empty table which breaks highlighting
-            return get_real_position_info()
-        end
+function M.get_buffer_position_info(group_id)
+    -- Default to active group if no group_id specified
+    if not group_id then
+        local active_group = groups.get_active_group()
+        group_id = active_group and active_group.id
     end
     
-    -- We're in a normal file buffer - get fresh position info
-    local position_info = get_real_position_info()
-    
-    -- Always update cache when we're in a real file buffer (not sidebar, not special)
-    if not is_special_buffer(current_buf) then
-        cached_position_info = position_info
-        -- Note: removed last_position_update since we're not using time-based cache expiry anymore
+    if not group_id then
+        return {}
     end
     
-    return position_info
+    local active_group = groups.get_active_group()
+    local is_current_group = active_group and (group_id == active_group.id)
+    
+    if is_current_group then
+        -- For current group: always get fresh position info from bufferline
+        local position_info = get_real_position_info()
+        
+        -- Update group's position info
+        groups.update_group_position_info(group_id, position_info)
+        
+        return position_info
+    else
+        -- For other groups: use saved position info to maintain consistency
+        local saved_info = groups.get_group_position_info(group_id)
+        -- If no saved info (e.g., newly loaded session), return empty table
+        -- This will cause all local positions to be nil, showing as "-"
+        return saved_info
+    end
 end
 
 --- Force refresh (for compatibility with session.lua)
