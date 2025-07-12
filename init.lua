@@ -711,10 +711,16 @@ local function create_buffer_line(component, j, total_components, current_buffer
     -- Create path line if path exists and path display is enabled
     local path_line = nil
     local should_show_path = should_show_path_for_buffer(component.id)
-    if path_dir and should_show_path and path_dir ~= "." then
-        -- Tree continuation should match the tree structure: use spaces for last item, vertical line for others
-        local tree_continuation = is_last and "       " or " │     "  -- Match tree structure indentation
-        path_line = tree_continuation .. path_dir .. "/"
+    if path_dir and should_show_path then
+        -- In "yes" mode, show all paths including current directory
+        -- In "auto" mode, only show when path_dir ~= "." (to avoid redundant current dir display)
+        local show_path_setting = config_module.DEFAULTS.show_path
+        if show_path_setting == "yes" or path_dir ~= "." then
+            -- Tree continuation should match the tree structure: use spaces for last item, vertical line for others
+            local tree_continuation = is_last and "       " or " │     "  -- Match tree structure indentation
+            local display_path = path_dir == "." and "./" or path_dir .. "/"
+            path_line = tree_continuation .. display_path
+        end
     end
     
     return {
@@ -1467,6 +1473,7 @@ local function open_sidebar()
                     api.nvim_buf_set_keymap(new_sidebar_buf, "n", "D", ":lua require('vertical-bufferline').smart_close_buffer()<CR>", keymap_opts)
                     api.nvim_buf_set_keymap(new_sidebar_buf, "n", "q", ":lua require('vertical-bufferline').close_sidebar()<CR>", keymap_opts)
                     api.nvim_buf_set_keymap(new_sidebar_buf, "n", "<Esc>", ":lua require('vertical-bufferline').close_sidebar()<CR>", keymap_opts)
+                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "p", ":lua require('vertical-bufferline').cycle_show_path_setting()<CR>", keymap_opts)
                     api.nvim_buf_set_keymap(new_sidebar_buf, "n", "<LeftRelease>", ":lua require('vertical-bufferline').handle_mouse_click()<CR>", keymap_opts)
                     api.nvim_buf_set_keymap(new_sidebar_buf, "n", "<LeftMouse>", "<LeftMouse>", keymap_opts)
                     api.nvim_buf_set_keymap(new_sidebar_buf, "n", "<C-W>o", "<Nop>", keymap_opts)
@@ -1490,6 +1497,7 @@ local function open_sidebar()
                     api.nvim_buf_set_keymap(new_sidebar_buf, "n", "D", ":lua require('vertical-bufferline').smart_close_buffer()<CR>", keymap_opts)
                     api.nvim_buf_set_keymap(new_sidebar_buf, "n", "q", ":lua require('vertical-bufferline').close_sidebar()<CR>", keymap_opts)
                     api.nvim_buf_set_keymap(new_sidebar_buf, "n", "<Esc>", ":lua require('vertical-bufferline').close_sidebar()<CR>", keymap_opts)
+                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "p", ":lua require('vertical-bufferline').cycle_show_path_setting()<CR>", keymap_opts)
                     api.nvim_buf_set_keymap(new_sidebar_buf, "n", "<LeftRelease>", ":lua require('vertical-bufferline').handle_mouse_click()<CR>", keymap_opts)
                     api.nvim_buf_set_keymap(new_sidebar_buf, "n", "<LeftMouse>", "<LeftMouse>", keymap_opts)
                     api.nvim_buf_set_keymap(new_sidebar_buf, "n", "<C-W>o", "<Nop>", keymap_opts)
@@ -1514,6 +1522,8 @@ local function open_sidebar()
     api.nvim_buf_set_keymap(buf_id, "n", "D", ":lua require('vertical-bufferline').smart_close_buffer()<CR>", keymap_opts)
     api.nvim_buf_set_keymap(buf_id, "n", "q", ":lua require('vertical-bufferline').close_sidebar()<CR>", keymap_opts)
     api.nvim_buf_set_keymap(buf_id, "n", "<Esc>", ":lua require('vertical-bufferline').close_sidebar()<CR>", keymap_opts)
+    -- Path display cycling
+    api.nvim_buf_set_keymap(buf_id, "n", "p", ":lua require('vertical-bufferline').cycle_show_path_setting()<CR>", keymap_opts)
     -- Mouse support: use LeftRelease for more reliable clicking
     api.nvim_buf_set_keymap(buf_id, "n", "<LeftRelease>", ":lua require('vertical-bufferline').handle_mouse_click()<CR>", keymap_opts)
     -- Keep LeftMouse for immediate feedback
@@ -1551,6 +1561,39 @@ function M.handle_mouse_click()
     
     -- Direct call - no delay needed after fixing keymap consistency
     M.handle_selection()
+end
+
+--- Cycle through show_path settings (yes -> no -> auto -> yes)
+function M.cycle_show_path_setting()
+    if not state_module.is_sidebar_open() then 
+        return 
+    end
+    
+    local current_setting = config_module.DEFAULTS.show_path
+    local next_setting
+    
+    if current_setting == "yes" then
+        next_setting = "no"
+    elseif current_setting == "no" then
+        next_setting = "auto"
+    else -- "auto" or any other value
+        next_setting = "yes"
+    end
+    
+    -- Update the configuration
+    config_module.DEFAULTS.show_path = next_setting
+    
+    -- Provide visual feedback
+    local mode_descriptions = {
+        yes = "Always show paths",
+        no = "Never show paths", 
+        auto = "Show paths only for conflicts"
+    }
+    
+    vim.notify(string.format("Path display: %s (%s)", next_setting, mode_descriptions[next_setting] or "Unknown"), vim.log.levels.INFO)
+    
+    -- Refresh sidebar to show immediate changes
+    M.refresh("path_display_cycle")
 end
 
 --- Handle buffer selection from sidebar
