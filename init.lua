@@ -98,19 +98,6 @@ end
 -- Extended picking mode implementation
 local PICK_ALPHABET = "asdfjkl;ghqwertyuiopzxcvbnm1234567890ASDFJKL;GHQWERTYUIOPZXCVBNM"
 
--- Helper function to get main window current buffer
-local function get_main_window_current_buffer()
-    for _, win_id in ipairs(api.nvim_list_wins()) do
-        if win_id ~= state_module.get_win_id() and api.nvim_win_is_valid(win_id) then
-            -- Check if this window is not a floating window
-            local win_config = api.nvim_win_get_config(win_id)
-            if win_config.relative == "" then  -- Not a floating window
-                return api.nvim_win_get_buf(win_id)
-            end
-        end
-    end
-    return api.nvim_get_current_buf()
-end
 
 -- Generate extended hints for all sidebar buffers
 local function generate_extended_hints(bufferline_components, line_to_buffer, line_group_context, active_group_id)
