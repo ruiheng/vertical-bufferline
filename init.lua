@@ -611,16 +611,21 @@ local renderer = require('vertical-bufferline.renderer')
 local components = require('vertical-bufferline.components')
 
 -- Create individual buffer line with proper formatting and highlights
-local function create_buffer_line(component, j, total_components, current_buffer_id, is_picking, line_number, group_id)
+local function create_buffer_line(component, j, total_components, current_buffer_id, is_picking, line_number, group_id, max_local_digits, max_global_digits)
     local is_last = (j == total_components)
     local is_current = (component.id == current_buffer_id)
     local is_visible = component.focused or false  -- Assuming focused means visible
+    
+    -- Check if this buffer is in the currently active group
+    local groups = require('vertical-bufferline.groups')
+    local active_group = groups.get_active_group()
+    local is_in_active_group = active_group and (group_id == active_group.id)
     
     -- Build line parts using component system
     local parts = {}
     
     -- 1. Tree prefix
-    local tree_parts = components.create_tree_prefix(is_last, is_current)
+    local tree_parts = components.create_tree_prefix(is_last, is_current, is_in_active_group)
     for _, part in ipairs(tree_parts) do
         table.insert(parts, part)
     end
@@ -650,19 +655,19 @@ local function create_buffer_line(component, j, total_components, current_buffer
         end
     end
     
-    -- 3. Numbering (dual or simple)
+    -- 3. Numbering (dual or simple) with alignment
     local bl_integration = require('vertical-bufferline.bufferline-integration')
     local ok, position_info = pcall(bl_integration.get_buffer_position_info, group_id)
     if ok and position_info then
         local local_pos = position_info[component.id]  -- nil if not visible in bufferline
         local global_pos = j  -- Global position is just the index in current group
-        local numbering_parts = components.create_dual_numbering(local_pos, global_pos)
+        local numbering_parts = components.create_dual_numbering(local_pos, global_pos, max_local_digits or 1, max_global_digits or 1)
         for _, part in ipairs(numbering_parts) do
             table.insert(parts, part)
         end
     else
         -- Fallback to simple numbering
-        local numbering_parts = components.create_simple_numbering(j)
+        local numbering_parts = components.create_simple_numbering(j, max_global_digits or 1)
         for _, part in ipairs(numbering_parts) do
             table.insert(parts, part)
         end
@@ -674,14 +679,7 @@ local function create_buffer_line(component, j, total_components, current_buffer
         table.insert(parts, part)
     end
     
-    -- 5. Modified indicator
-    local is_modified = api.nvim_buf_is_valid(component.id) and api.nvim_buf_get_option(component.id, "modified")
-    local modified_parts = components.create_modified_indicator(is_modified)
-    for _, part in ipairs(modified_parts) do
-        table.insert(parts, part)
-    end
-    
-    -- 6. Icon
+    -- 5. Icon (moved before filename)
     local icon = component.icon or ""
     if icon == "" then
         local extension = component.name:match("%.([^%.]+)$")
@@ -694,7 +692,7 @@ local function create_buffer_line(component, j, total_components, current_buffer
         table.insert(parts, part)
     end
     
-    -- 7. Filename with optional prefix
+    -- 6. Filename with optional prefix
     local path_dir, display_name = get_buffer_path_info(component)
     local final_name = display_name or component.name
     
@@ -712,6 +710,13 @@ local function create_buffer_line(component, j, total_components, current_buffer
         table.insert(parts, part)
     end
     
+    -- 7. Modified indicator (moved to end)
+    local is_modified = api.nvim_buf_is_valid(component.id) and api.nvim_buf_get_option(component.id, "modified")
+    local modified_parts = components.create_modified_indicator(is_modified)
+    for _, part in ipairs(modified_parts) do
+        table.insert(parts, part)
+    end
+    
     -- Render the complete line
     local rendered_line = renderer.render_line(parts)
     
@@ -721,7 +726,25 @@ local function create_buffer_line(component, j, total_components, current_buffer
     if path_dir and should_show_path then
         local show_path_setting = config_module.DEFAULTS.show_path
         if show_path_setting == "yes" or path_dir ~= "." then
-            local tree_continuation = is_last and "       " or " │     "
+            -- Calculate dynamic indentation to align with filename
+            -- Tree prefix width varies: "├─ " (3) vs "┣━ " (3) - same width, good
+            local base_indent = 3  -- Tree prefix: "├─ " or "┣━ "
+            
+            -- Add pick letter space if in picking mode
+            if is_picking then
+                base_indent = base_indent + 2  -- "a "
+            end
+            
+            -- Add numbering width
+            local numbering_width = (max_local_digits or 1) + 1 + (max_global_digits or 1) + 1  -- "local|global "
+            base_indent = base_indent + numbering_width
+            
+            -- Add icon width (assuming 2 characters for emoji + space)
+            base_indent = base_indent + 2  -- "🌙 "
+            
+            -- Use different continuation character for active vs inactive groups
+            local continuation_char = is_in_active_group and "┃" or "│"
+            local tree_continuation = is_last and string.rep(" ", base_indent) or (" " .. continuation_char .. string.rep(" ", base_indent - 2))
             local display_path = path_dir == "." and "./" or path_dir .. "/"
             path_line = tree_continuation .. display_path
         end
@@ -910,11 +933,30 @@ end
 
 -- Render buffers within a single group
 local function render_group_buffers(group_components, current_buffer_id, is_picking, lines_text, new_line_map, line_types, line_components, line_group_context, line_infos)
+    -- Calculate max digits for alignment
+    local max_global_digits = string.len(tostring(#group_components))
+    
+    -- Calculate max local digits by checking all position info
+    local max_local_digits = 1  -- At least 1 for "-"
+    local bl_integration = require('vertical-bufferline.bufferline-integration')
+    local ok, position_info = pcall(bl_integration.get_buffer_position_info, line_group_context.current_group_id)
+    if ok and position_info then
+        for _, component in ipairs(group_components) do
+            local local_pos = position_info[component.id]
+            if local_pos then
+                local digits = string.len(tostring(local_pos))
+                if digits > max_local_digits then
+                    max_local_digits = digits
+                end
+            end
+        end
+    end
+    
     for j, component in ipairs(group_components) do
         if component.id and component.name and api.nvim_buf_is_valid(component.id) then
             -- Calculate the line number this buffer will be on
             local main_line_number = #lines_text + 1
-            local line_info = create_buffer_line(component, j, #group_components, current_buffer_id, is_picking, main_line_number, line_group_context.current_group_id)
+            local line_info = create_buffer_line(component, j, #group_components, current_buffer_id, is_picking, main_line_number, line_group_context.current_group_id, max_local_digits, max_global_digits)
 
             -- Add main buffer line
             table.insert(lines_text, line_info.text)
@@ -952,7 +994,9 @@ local function render_group_header(group, i, is_active, buffer_count, lines_text
     if i > config_module.SYSTEM.FIRST_INDEX then
         table.insert(lines_text, "")  -- Empty line separator
         local separator_line_num = #lines_text
-        table.insert(lines_text, config_module.UI.GROUP_SEPARATOR)  -- Separator line
+        -- Use different separator for active group
+        local separator = is_active and config_module.UI.ACTIVE_GROUP_SEPARATOR or config_module.UI.GROUP_SEPARATOR
+        table.insert(lines_text, separator)  -- Separator line
         table.insert(group_header_lines, {line = separator_line_num, type = "separator"})
     end
 

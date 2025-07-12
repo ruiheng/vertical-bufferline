@@ -27,15 +27,23 @@ M.UI = {
     TREE_EMPTY = "(empty)",
     CURRENT_BUFFER_MARKER = "► ",  -- Keep for backward compatibility
     
+    -- Active group tree characters (more prominent)
+    ACTIVE_TREE_BRANCH = "┣━ ",      -- Thicker branch for active group
+    ACTIVE_TREE_LAST = "┗━ ",        -- Thicker last for active group
+    ACTIVE_TREE_BRANCH_CURRENT = "┣► ", -- Active group current buffer
+    ACTIVE_TREE_LAST_CURRENT = "┗► ",   -- Active group current buffer last
+    
     -- Path display formatting
-    PATH_CONTINUATION = "│     ",  -- For tree visual continuity
+    PATH_CONTINUATION = "│     ",  -- For tree visual continuity (inactive groups)
+    ACTIVE_PATH_CONTINUATION = "┃     ",  -- For tree visual continuity (active group)
     PATH_PREFIX = "~/",
     PATH_MAX_LENGTH = 50,
 
     -- Group display
-    ACTIVE_GROUP_MARKER = "●",
+    ACTIVE_GROUP_MARKER = "●●",        -- Double marker for more prominence
     INACTIVE_GROUP_MARKER = "○",
     GROUP_SEPARATOR = "────────────────────────────────────",
+    ACTIVE_GROUP_SEPARATOR = "════════════════════════════════════",  -- Different separator for active group
     UNNAMED_GROUP_DISPLAY = "(unnamed)",
 }
 
