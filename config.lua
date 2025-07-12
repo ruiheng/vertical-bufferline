@@ -129,6 +129,7 @@ M.DEFAULTS = {
     -- UI settings
     width = M.UI.DEFAULT_WIDTH,
     expand_all_groups = true,
+    show_icons = false,  -- Show file type icons (emoji)
     
     -- Path display settings
     show_path = "auto", -- "yes", "no", "auto"

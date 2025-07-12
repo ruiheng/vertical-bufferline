@@ -679,17 +679,19 @@ local function create_buffer_line(component, j, total_components, current_buffer
         table.insert(parts, part)
     end
     
-    -- 5. Icon (moved before filename)
-    local icon = component.icon or ""
-    if icon == "" then
-        local extension = component.name:match("%.([^%.]+)$")
-        if extension then
-            icon = config_module.ICONS[extension] or config_module.ICONS.default
+    -- 5. Icon (moved before filename) - only if enabled
+    if config_module.DEFAULTS.show_icons then
+        local icon = component.icon or ""
+        if icon == "" then
+            local extension = component.name:match("%.([^%.]+)$")
+            if extension then
+                icon = config_module.ICONS[extension] or config_module.ICONS.default
+            end
         end
-    end
-    local icon_parts = components.create_icon(icon)
-    for _, part in ipairs(icon_parts) do
-        table.insert(parts, part)
+        local icon_parts = components.create_icon(icon)
+        for _, part in ipairs(icon_parts) do
+            table.insert(parts, part)
+        end
     end
     
     -- 6. Filename with optional prefix
@@ -746,8 +748,10 @@ local function create_buffer_line(component, j, total_components, current_buffer
             end
             base_indent = base_indent + numbering_width
             
-            -- Add icon width (assuming 2 characters for emoji + space)
-            base_indent = base_indent + 2  -- "🌙 "
+            -- Add icon width if icons are enabled (assuming 2 characters for emoji + space)
+            if config_module.DEFAULTS.show_icons then
+                base_indent = base_indent + 2  -- "🌙 "
+            end
             
             -- Use different continuation character for active vs inactive groups
             local continuation_char = is_in_active_group and "┃" or "│"
@@ -1951,6 +1955,7 @@ local function initialize_plugin()
     api.nvim_command("augroup VerticalBufferlineGlobal")
     api.nvim_command("autocmd!")
     -- TEMP DISABLED: api.nvim_command("autocmd BufEnter,BufDelete,BufWipeout * lua require('vertical-bufferline').refresh_if_open()")
+    api.nvim_command("autocmd BufWritePost * lua require('vertical-bufferline').refresh_if_open()")
     api.nvim_command("autocmd WinClosed * lua require('vertical-bufferline').check_quit_condition()")
     api.nvim_command("augroup END")
 
