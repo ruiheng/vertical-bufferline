@@ -199,21 +199,79 @@ The algorithm automatically determines the minimal path suffix needed to uniquel
 
 ## Configuration
 
-The plugin initializes automatically when the sidebar is first opened. Default settings:
+### Lazy.nvim Setup
+
+For lazy.nvim users, you can configure the plugin with custom options:
 
 ```lua
 {
-    max_buffers_per_group = 10,     -- Recommended buffer limit per group
+  "your-username/vertical-bufferline",
+  opts = {
+    -- UI settings
+    width = 40,                     -- Sidebar width
+    expand_all_groups = true,       -- Default to expand all groups mode
+    show_icons = false,             -- Show file type emoji icons
+    position = "left",              -- Sidebar position: "left" or "right"
+    
+    -- Group management  
     auto_create_groups = true,      -- Enable automatic group creation
     auto_add_new_buffers = true,    -- Auto-add new buffers to active group
-    expand_all_groups = true,       -- Default to expand all groups mode
+    
+    -- Path display settings
+    show_path = "auto",             -- "yes", "no", "auto"
+    path_style = "relative",        -- "relative", "absolute", "smart"
+    path_max_length = 50,           -- Maximum path display length
     
     -- Session persistence settings
+    auto_save = false,              -- Auto-save session on Neovim exit
+    auto_load = false,              -- Auto-load session on startup
+    session_name_strategy = "cwd_hash", -- "cwd_hash", "cwd_path", "manual"
+    
     session = {
-        auto_save = true,           -- Auto-save session on Neovim exit
-        auto_load = true,           -- Auto-load session on startup
-        session_dir = vim.fn.stdpath("data") .. "/vertical-bufferline-sessions"
+        mini_sessions_integration = true,    -- Integrate with mini.sessions
+        auto_serialize = true,               -- Auto-serialize to global variable
+        serialize_interval = 3000,           -- Serialization interval (ms)
+        optimize_serialize = true,           -- Only serialize when state changes
+        auto_restore_prompt = true,          -- Show restore prompt for session changes
+        confirm_restore = true,              -- Ask confirmation before restoring
+        global_variable = "VerticalBufferlineSession"  -- Global variable name
     }
+  },
+  keys = {
+    { "<leader>vb", "<cmd>lua require('vertical-bufferline').toggle()<cr>", desc = "Toggle vertical bufferline" },
+    { "<leader>ve", "<cmd>lua require('vertical-bufferline').toggle_expand_all()<cr>", desc = "Toggle expand all groups" },
+    { "<leader>gc", "<cmd>lua require('vertical-bufferline').create_group()<cr>", desc = "Create new group" },
+    { "<leader>gn", "<cmd>lua require('vertical-bufferline').switch_to_next_group()<cr>", desc = "Next group" },
+    { "<leader>gp", "<cmd>lua require('vertical-bufferline').switch_to_prev_group()<cr>", desc = "Previous group" },
+  }
+}
+```
+
+### Manual Configuration
+
+If you prefer manual setup, the plugin initializes automatically when the sidebar is first opened. Default settings:
+
+```lua
+{
+    -- UI settings
+    width = 40,                     -- Sidebar width  
+    expand_all_groups = true,       -- Default to expand all groups mode
+    show_icons = false,             -- Show file type emoji icons
+    position = "left",              -- Sidebar position: "left" or "right"
+    
+    -- Group management
+    auto_create_groups = true,      -- Enable automatic group creation
+    auto_add_new_buffers = true,    -- Auto-add new buffers to active group
+    
+    -- Path display settings
+    show_path = "auto",             -- "yes", "no", "auto" 
+    path_style = "relative",        -- "relative", "absolute", "smart"
+    path_max_length = 50,           -- Maximum path display length
+    
+    -- Session persistence settings
+    auto_save = false,              -- Auto-save session on Neovim exit
+    auto_load = false,              -- Auto-load session on startup
+    session_name_strategy = "cwd_hash", -- "cwd_hash", "cwd_path", "manual"
 }
 ```
 

@@ -1521,7 +1521,12 @@ local function open_sidebar()
     local buf_id = api.nvim_create_buf(false, true)
     api.nvim_buf_set_option(buf_id, 'bufhidden', 'wipe')
     local current_win = api.nvim_get_current_win()
-    vim.cmd("botright vsplit")
+    -- Create sidebar window based on configured position
+    if config_module.DEFAULTS.position == "left" then
+        vim.cmd("topleft vsplit")
+    else
+        vim.cmd("botright vsplit")
+    end
     local new_win_id = api.nvim_get_current_win()
     api.nvim_win_set_buf(new_win_id, buf_id)
     api.nvim_win_set_width(new_win_id, config.width)
@@ -2126,6 +2131,27 @@ function M.debug_hint_separation()
         local group_context = state_module.get_line_group_context()
         local group_id = group_context[line_num]
         print(string.format("  Line %d (Buffer %d, Group %s): %s", line_num, buffer_id or "nil", group_id or "nil", hint_char))
+    end
+end
+
+--- Setup function for user configuration (e.g., from lazy.nvim)
+function M.setup(user_config)
+    if user_config then
+        -- Merge user configuration with defaults
+        for key, value in pairs(user_config) do
+            if config_module.DEFAULTS[key] ~= nil then
+                config_module.DEFAULTS[key] = value
+            end
+        end
+        
+        -- Handle nested session configuration
+        if user_config.session then
+            for key, value in pairs(user_config.session) do
+                if config_module.DEFAULTS.session[key] ~= nil then
+                    config_module.DEFAULTS.session[key] = value
+                end
+            end
+        end
     end
 end
 

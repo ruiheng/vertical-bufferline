@@ -130,6 +130,7 @@ M.DEFAULTS = {
     width = M.UI.DEFAULT_WIDTH,
     expand_all_groups = true,
     show_icons = false,  -- Show file type icons (emoji)
+    position = "left",  -- Sidebar position: "left" or "right"
     
     -- Path display settings
     show_path = "auto", -- "yes", "no", "auto"
@@ -202,6 +203,10 @@ end
 
 function M.validate_show_path(show_path)
     return show_path == "yes" or show_path == "no" or show_path == "auto"
+end
+
+function M.validate_position(position)
+    return position == "left" or position == "right"
 end
 
 return M
