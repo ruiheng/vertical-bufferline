@@ -36,7 +36,47 @@ function M.create_tree_prefix(is_last, is_current, is_in_active_group)
     }
 end
 
--- Create dual numbering component with alignment
+-- Create smart numbering component with intelligent display logic
+---@param local_pos number|nil Local position in bufferline (nil if not visible)
+---@param global_pos number Global position in current group (calculated from group buffer list)
+---@param max_local_digits number Maximum digits in local positions for alignment
+---@param max_global_digits number Maximum digits in global positions for alignment
+---@param has_any_local_info boolean Whether any buffer in group has local position info
+---@param should_hide_local_numbering boolean Whether to hide local numbering for entire group
+---@return LinePart[]
+function M.create_smart_numbering(local_pos, global_pos, max_local_digits, max_global_digits, has_any_local_info, should_hide_local_numbering)
+    local global_num = tostring(global_pos)
+    local global_padding = max_global_digits - #global_num
+    local padded_global_num = string.rep(" ", global_padding) .. global_num
+    
+    -- Case 1: No local info exists for any buffer in group - show only global
+    if not has_any_local_info then
+        return {
+            renderer.create_part(padded_global_num, config_module.HIGHLIGHTS.NUMBER_GLOBAL)
+        }
+    end
+    
+    -- Case 2: Should hide local numbering for entire group - show only global
+    if should_hide_local_numbering then
+        return {
+            renderer.create_part(padded_global_num, config_module.HIGHLIGHTS.NUMBER_GLOBAL)
+        }
+    end
+    
+    -- Case 3: Show dual numbering
+    local local_num = local_pos and tostring(local_pos) or "-"
+    local local_padding = max_local_digits - #local_num
+    local padded_local_num = string.rep(" ", local_padding) .. local_num
+    
+    return {
+        renderer.create_part(padded_local_num, 
+            local_num == "-" and config_module.HIGHLIGHTS.NUMBER_HIDDEN or config_module.HIGHLIGHTS.NUMBER_LOCAL),
+        renderer.create_part("|", config_module.HIGHLIGHTS.NUMBER_SEPARATOR),
+        renderer.create_part(padded_global_num, config_module.HIGHLIGHTS.NUMBER_GLOBAL)
+    }
+end
+
+-- Create dual numbering component with alignment (legacy for compatibility)
 ---@param local_pos number|nil Local position in bufferline (nil if not visible)
 ---@param global_pos number Global position in current group (calculated from group buffer list)
 ---@param max_local_digits number Maximum digits in local positions for alignment

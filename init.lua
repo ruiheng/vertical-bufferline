@@ -611,7 +611,7 @@ local renderer = require('vertical-bufferline.renderer')
 local components = require('vertical-bufferline.components')
 
 -- Create individual buffer line with proper formatting and highlights
-local function create_buffer_line(component, j, total_components, current_buffer_id, is_picking, line_number, group_id, max_local_digits, max_global_digits)
+local function create_buffer_line(component, j, total_components, current_buffer_id, is_picking, line_number, group_id, max_local_digits, max_global_digits, has_any_local_info, should_hide_local_numbering)
     local is_last = (j == total_components)
     local is_current = (component.id == current_buffer_id)
     local is_visible = component.focused or false  -- Assuming focused means visible
@@ -655,13 +655,13 @@ local function create_buffer_line(component, j, total_components, current_buffer
         end
     end
     
-    -- 3. Numbering (dual or simple) with alignment
+    -- 3. Smart numbering (intelligent display logic)
     local bl_integration = require('vertical-bufferline.bufferline-integration')
     local ok, position_info = pcall(bl_integration.get_buffer_position_info, group_id)
     if ok and position_info then
         local local_pos = position_info[component.id]  -- nil if not visible in bufferline
         local global_pos = j  -- Global position is just the index in current group
-        local numbering_parts = components.create_dual_numbering(local_pos, global_pos, max_local_digits or 1, max_global_digits or 1)
+        local numbering_parts = components.create_smart_numbering(local_pos, global_pos, max_local_digits or 1, max_global_digits or 1, has_any_local_info, should_hide_local_numbering)
         for _, part in ipairs(numbering_parts) do
             table.insert(parts, part)
         end
@@ -735,8 +735,15 @@ local function create_buffer_line(component, j, total_components, current_buffer
                 base_indent = base_indent + 2  -- "a "
             end
             
-            -- Add numbering width
-            local numbering_width = (max_local_digits or 1) + 1 + (max_global_digits or 1) + 1  -- "local|global "
+            -- Add numbering width - calculate actual width based on smart numbering logic
+            local numbering_width
+            if not has_any_local_info or should_hide_local_numbering then
+                -- Case 1 & 2: Only global number shown
+                numbering_width = (max_global_digits or 1) + 1  -- "global "
+            else
+                -- Case 3: Dual numbering shown
+                numbering_width = (max_local_digits or 1) + 1 + (max_global_digits or 1) + 1  -- "local|global "
+            end
             base_indent = base_indent + numbering_width
             
             -- Add icon width (assuming 2 characters for emoji + space)
@@ -936,14 +943,27 @@ local function render_group_buffers(group_components, current_buffer_id, is_pick
     -- Calculate max digits for alignment
     local max_global_digits = string.len(tostring(#group_components))
     
-    -- Calculate max local digits by checking all position info
+    -- Calculate max local digits and analyze if local numbering should be shown
     local max_local_digits = 1  -- At least 1 for "-"
+    local has_any_local_info = false
+    local should_hide_local_numbering = false  -- Hide local if first local equals 1
     local bl_integration = require('vertical-bufferline.bufferline-integration')
     local ok, position_info = pcall(bl_integration.get_buffer_position_info, line_group_context.current_group_id)
     if ok and position_info then
+        -- Check first component to determine if local numbering should be hidden
+        if #group_components > 0 then
+            local first_component = group_components[1]
+            local first_local_pos = position_info[first_component.id]
+            if first_local_pos and first_local_pos == 1 then
+                should_hide_local_numbering = true
+            end
+        end
+        
+        -- Calculate max digits for all components
         for _, component in ipairs(group_components) do
             local local_pos = position_info[component.id]
             if local_pos then
+                has_any_local_info = true
                 local digits = string.len(tostring(local_pos))
                 if digits > max_local_digits then
                     max_local_digits = digits
@@ -956,7 +976,7 @@ local function render_group_buffers(group_components, current_buffer_id, is_pick
         if component.id and component.name and api.nvim_buf_is_valid(component.id) then
             -- Calculate the line number this buffer will be on
             local main_line_number = #lines_text + 1
-            local line_info = create_buffer_line(component, j, #group_components, current_buffer_id, is_picking, main_line_number, line_group_context.current_group_id, max_local_digits, max_global_digits)
+            local line_info = create_buffer_line(component, j, #group_components, current_buffer_id, is_picking, main_line_number, line_group_context.current_group_id, max_local_digits, max_global_digits, has_any_local_info, should_hide_local_numbering)
 
             -- Add main buffer line
             table.insert(lines_text, line_info.text)
