@@ -774,7 +774,8 @@ local function collect_current_state()
             created_at = group.created_at,
             color = group.color,
             buffers = {},
-            current_buffer_path = nil  -- Will be set below if valid
+            current_buffer_path = nil,  -- Will be set below if valid
+            history = {}  -- Will be set below if valid
         }
         
         -- Save buffer information using current group buffers
@@ -800,6 +801,19 @@ local function collect_current_state()
                 group_data.current_buffer_path = normalize_buffer_path(current_buffer_path)
             end
         end
+        
+        -- Save history for this group (always save history field, even if empty)
+        if group.history then
+            for _, buffer_id in ipairs(group.history) do
+                if api.nvim_buf_is_valid(buffer_id) then
+                    local buffer_path = api.nvim_buf_get_name(buffer_id)
+                    if buffer_path ~= "" then
+                        table.insert(group_data.history, normalize_buffer_path(buffer_path))
+                    end
+                end
+            end
+        end
+        -- Note: group_data.history is always initialized as {} above, so it will be saved even if empty
         
         table.insert(session_data.groups, group_data)
     end
