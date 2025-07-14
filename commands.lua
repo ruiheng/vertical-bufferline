@@ -539,11 +539,14 @@ function M.setup()
 
     -- Debug information
     vim.api.nvim_create_user_command("VBufferLineDebug", function()
-        local debug_info = groups.debug_info()
         vim.notify("=== Debug Info ===", vim.log.levels.INFO)
-        vim.notify("Groups: " .. vim.inspect(debug_info.groups_data.groups), vim.log.levels.INFO)
-        vim.notify("Active group: " .. (debug_info.groups_data.active_group_id or "none"), vim.log.levels.INFO)
-        vim.notify("Stats: " .. vim.inspect(debug_info.stats), vim.log.levels.INFO)
+        local all_groups = groups.get_all_groups()
+        local active_group = groups.get_active_group()
+        local stats = groups.get_group_stats()
+        
+        vim.notify("Groups count: " .. #all_groups, vim.log.levels.INFO)
+        vim.notify("Active group: " .. (active_group and active_group.name or "none"), vim.log.levels.INFO)
+        vim.notify("Stats: " .. vim.inspect(stats), vim.log.levels.INFO)
 
         -- Add bufferline integration status information
         local bufferline_integration = require('vertical-bufferline.bufferline-integration')

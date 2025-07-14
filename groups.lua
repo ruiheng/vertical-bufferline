@@ -50,6 +50,9 @@ local groups_data = {
 
     -- Flag to temporarily disable auto-adding
     auto_add_disabled = false,
+    
+    -- Flag to temporarily disable history sync (when clicking history items)
+    history_sync_disabled = false,
 }
 
 -- Initialize default group
@@ -229,7 +232,9 @@ function M.create_group(name, color)
         color = color or config_module.COLORS.GREEN,
         display_number = groups_data.next_display_number,
         buffer_states = {},  -- Store per-buffer window states (cursor, scroll, etc.)
-        position_info = {}   -- Store bufferline position info {buffer_id -> local_pos}
+        position_info = {},  -- Store bufferline position info {buffer_id -> local_pos}
+        history = {},        -- Store recent file access history {buffer_id, ...} (newest first, excludes current)
+        last_current_buffer = nil  -- Track previous current buffer for history updates
     }
     groups_data.next_display_number = groups_data.next_display_number + 1
 
@@ -758,6 +763,15 @@ function M.is_auto_add_disabled()
     return groups_data.auto_add_disabled
 end
 
+-- History sync control
+function M.set_history_sync_disabled(disabled)
+    groups_data.history_sync_disabled = disabled
+end
+
+function M.is_history_sync_disabled()
+    return groups_data.history_sync_disabled
+end
+
 
 -- Sync update current group's buffer list through bufferline
 function M.sync_active_group_with_bufferline(buffer_list)
@@ -867,14 +881,6 @@ function M.setup(opts)
     end, config_module.UI.AUTO_SAVE_DELAY)
 end
 
--- Export debug information
-function M.debug_info()
-    return {
-        groups_data = groups_data,
-        stats = M.get_group_stats()
-    }
-end
-
 --- Switch to group by display number (for quick switch shortcuts)
 --- @param display_number number Display number shown in UI (1, 2, 3, etc.)
 --- @return boolean success
@@ -915,6 +921,148 @@ function M.restore_buffer_state_for_current_group(buffer_id)
     return false
 end
 
+
+--- Sync group history with current buffer (called during bufferline sync)
+--- @param group_id string Group ID to sync history for
+--- @param current_buffer_id number|nil Current buffer ID in this group (nil if no current buffer)
+function M.sync_group_history_with_current(group_id, current_buffer_id)
+    local group = find_group_by_id(group_id)
+    if not group then
+        return
+    end
+    
+    -- Skip history sync if temporarily disabled (e.g., when clicking history items)
+    if groups_data.history_sync_disabled then
+        return
+    end
+    
+    -- Helper function to check if buffer is a normal file (not special buffer)
+    local function is_normal_file_buffer(buf_id)
+        if not buf_id or not vim.api.nvim_buf_is_valid(buf_id) then
+            return false
+        end
+        
+        local buftype = vim.api.nvim_buf_get_option(buf_id, 'buftype')
+        -- Only normal files (empty buftype) should be in history
+        return buftype == ''
+    end
+    
+    -- UNIFIED FILTER: Skip if current_buffer_id is a non-normal file buffer (but allow nil)
+    if current_buffer_id and not is_normal_file_buffer(current_buffer_id) then
+        return
+    end
+    
+    -- Initialize fields if not exists (for groups created before history feature or during session loading)
+    if not group.history then
+        group.history = {}
+    end
+    if group.last_current_buffer == nil then
+        group.last_current_buffer = nil
+    end
+    
+    local old_current = group.last_current_buffer
+    local new_current = current_buffer_id
+    
+    -- Remove new current buffer from history (current buffer should not be in history)
+    if new_current then
+        for i, hist_buf_id in ipairs(group.history) do
+            if hist_buf_id == new_current then
+                table.remove(group.history, i)
+                break
+            end
+        end
+    end
+    
+    -- If current buffer changed and old current is valid AND is a normal file, add old current to history front
+    if new_current ~= old_current and old_current and 
+       vim.api.nvim_buf_is_valid(old_current) and 
+       vim.tbl_contains(group.buffers, old_current) and
+       is_normal_file_buffer(old_current) then
+        
+        -- Remove old current from history if it exists
+        for i, hist_buf_id in ipairs(group.history) do
+            if hist_buf_id == old_current then
+                table.remove(group.history, i)
+                break
+            end
+        end
+        
+        -- Add old current to front of history
+        table.insert(group.history, 1, old_current)
+        
+        -- Limit history size
+        local max_size = config_module.DEFAULTS.history_size
+        while #group.history > max_size do
+            table.remove(group.history)
+        end
+    end
+    
+    -- Update last current buffer tracker
+    group.last_current_buffer = new_current
+end
+
+--- Get history for a group
+--- @param group_id string Group ID to get history for
+--- @return table Array of buffer IDs in access order (newest first)
+function M.get_group_history(group_id)
+    local group = find_group_by_id(group_id)
+    if not group then
+        return {}
+    end
+    
+    -- Initialize history if not exists
+    if not group.history then
+        group.history = {}
+        return {}
+    end
+    
+    -- Filter out invalid buffers from history
+    local valid_history = {}
+    for _, buffer_id in ipairs(group.history) do
+        if vim.api.nvim_buf_is_valid(buffer_id) and vim.tbl_contains(group.buffers, buffer_id) then
+            table.insert(valid_history, buffer_id)
+        end
+    end
+    
+    -- Update group history with filtered list
+    group.history = valid_history
+    
+    return valid_history
+end
+
+--- Remove buffer from history of all groups
+--- @param buffer_id number Buffer ID to remove
+function M.remove_buffer_from_history(buffer_id)
+    for _, group in ipairs(groups_data.groups) do
+        -- Initialize history if not exists
+        if not group.history then
+            group.history = {}
+        else
+            for i, hist_buf_id in ipairs(group.history) do
+                if hist_buf_id == buffer_id then
+                    table.remove(group.history, i)
+                    break
+                end
+            end
+        end
+    end
+end
+
+--- Check if history should be shown for a group based on configuration
+--- @param group_id string Group ID to check
+--- @return boolean Whether to show history for this group
+function M.should_show_history(group_id)
+    local show_history = config_module.DEFAULTS.show_history
+    
+    if show_history == "no" then
+        return false
+    elseif show_history == "yes" then
+        return true
+    else -- "auto"
+        local history = M.get_group_history(group_id)
+        return #history >= config_module.DEFAULTS.history_auto_threshold
+    end
+end
 
 M.find_group_by_id = find_group_by_id
 

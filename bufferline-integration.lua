@@ -171,6 +171,12 @@ local function sync_bufferline_to_group()
 
             -- Directly update the target group's buffer list
             target_group.buffers = filtered_buffer_ids
+            
+            -- Sync group history with current buffer (only when current buffer is actually in the group)
+            local current_buffer_in_group = vim.tbl_contains(filtered_buffer_ids, current_buf) and current_buf or nil
+            if current_buffer_in_group then
+                groups.sync_group_history_with_current(sync_target_group_id, current_buffer_in_group)
+            end
 
             -- Trigger event to notify that group content has been updated
             vim.api.nvim_exec_autocmds("User", {

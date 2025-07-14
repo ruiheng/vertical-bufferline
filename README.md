@@ -45,6 +45,9 @@ A Neovim plugin that provides a vertical sidebar displaying buffer groups with e
 - `<leader>0` - Switch to 10th buffer in current group
 - `<leader>p` - BufferLine picking mode (shows only current group buffers)
 
+### History Quick Access
+- `<leader>h1` to `<leader>h9` - Quick switch to recent files 1-9 in current group history
+
 ## Commands
 
 ### Group Operations
@@ -222,6 +225,11 @@ For lazy.nvim users, you can configure the plugin with custom options:
     path_style = "relative",        -- "relative", "absolute", "smart"
     path_max_length = 50,           -- Maximum path display length
     
+    -- History settings
+    show_history = "auto",          -- "yes", "no", "auto" - show recent files history per group
+    history_size = 10,              -- Maximum number of recent files to track per group
+    history_auto_threshold = 3,     -- Minimum files needed for auto mode to show history
+    
     -- Session persistence settings
     auto_save = false,              -- Auto-save session on Neovim exit
     auto_load = false,              -- Auto-load session on startup
@@ -267,6 +275,11 @@ If you prefer manual setup, the plugin initializes automatically when the sideba
     show_path = "auto",             -- "yes", "no", "auto" 
     path_style = "relative",        -- "relative", "absolute", "smart"
     path_max_length = 50,           -- Maximum path display length
+    
+    -- History settings
+    show_history = "auto",          -- "yes", "no", "auto" - show recent files history per group
+    history_size = 10,              -- Maximum number of recent files to track per group
+    history_auto_threshold = 3,     -- Minimum files needed for auto mode to show history
     
     -- Session persistence settings
     auto_save = false,              -- Auto-save session on Neovim exit

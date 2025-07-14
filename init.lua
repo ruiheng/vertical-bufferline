@@ -944,6 +944,46 @@ end
 
 -- Render buffers within a single group
 local function render_group_buffers(group_components, current_buffer_id, is_picking, lines_text, new_line_map, line_types, line_components, line_group_context, line_infos)
+    -- Render history section if enabled and has content
+    local group_id = line_group_context.current_group_id
+    if group_id and groups.should_show_history(group_id) then
+        local history = groups.get_group_history(group_id)
+        if #history > 0 then
+            -- Add "Recent Files" header
+            table.insert(lines_text, "    📋 Recent Files")
+            local history_header_line = #lines_text
+            line_types[history_header_line] = "history_header"
+            
+            -- Render each history item
+            for i, buffer_id in ipairs(history) do
+                if api.nvim_buf_is_valid(buffer_id) then
+                    local buf_name = api.nvim_buf_get_name(buffer_id)
+                    local filename = vim.fn.fnamemodify(buf_name, ":t")
+                    local history_line = string.format("    ├─ %d %s", i, filename)
+                    if i == #history then
+                        history_line = string.format("    └─ %d %s", i, filename)
+                    end
+                    
+                    table.insert(lines_text, history_line)
+                    local line_num = #lines_text
+                    new_line_map[line_num] = buffer_id
+                    line_types[line_num] = "history"
+                    line_components[line_num] = {id = buffer_id, name = filename}
+                    line_group_context[line_num] = group_id
+                end
+                
+                -- Limit display to avoid cluttering
+                if i >= 5 then break end
+            end
+            
+            -- Add empty line after history
+            table.insert(lines_text, "")
+            local empty_line_num = #lines_text
+            -- Mark empty line as non-clickable
+            line_types[empty_line_num] = "empty"
+        end
+    end
+    
     -- Calculate max digits for alignment
     local max_global_digits = string.len(tostring(#group_components))
     
@@ -1021,7 +1061,9 @@ local function render_group_header(group, i, is_active, buffer_count, lines_text
         -- Use different separator for active group
         local separator = is_active and config_module.UI.ACTIVE_GROUP_SEPARATOR or config_module.UI.GROUP_SEPARATOR
         table.insert(lines_text, separator)  -- Separator line
+        local separator_visual_line_num = #lines_text
         table.insert(group_header_lines, {line = separator_line_num, type = "separator"})
+        table.insert(group_header_lines, {line = separator_visual_line_num, type = "separator_visual"})
     end
 
     local group_line = string.format("[%d] %s %s (%d buffers)",
@@ -1139,6 +1181,8 @@ local function render_all_groups(active_group, components, current_buffer_id, is
             -- If group is empty, show clean empty group hint
             if #group_components == 0 then
                 table.insert(lines_text, "  " .. config_module.UI.TREE_LAST .. config_module.UI.TREE_EMPTY)
+                local empty_group_line = #lines_text
+                line_types[empty_group_line] = "empty_group"
             end
 
             -- Render group buffers
@@ -1206,6 +1250,7 @@ end
 local function finalize_buffer_display(lines_text, new_line_map, line_group_context, group_header_lines)
     api.nvim_buf_set_option(state_module.get_buf_id(), "modifiable", true)
     api.nvim_buf_set_lines(state_module.get_buf_id(), 0, -1, false, lines_text)
+    
     state_module.set_line_to_buffer_id(new_line_map)
     state_module.set_line_group_context(line_group_context or {})
     state_module.set_group_header_lines(group_header_lines or {})
@@ -1321,6 +1366,14 @@ function M.refresh(reason)
                 
                 -- Apply highlighting with group context
                 apply_buffer_highlighting(line_info, component, line_num, group_current_buffer_id, is_picking, is_in_active_group)
+            elseif line_type == "history" then
+                -- This is a history line - apply history-specific highlighting
+                local highlight_group = config_module.HIGHLIGHTS.INACTIVE  -- Subtle highlighting for history
+                api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, highlight_group, line_num - 1, 0, -1)
+            elseif line_type == "history_header" then
+                -- This is a history header line - apply header highlighting
+                local highlight_group = config_module.HIGHLIGHTS.GROUP_NUMBER  -- Same as group number
+                api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, highlight_group, line_num - 1, 0, -1)
             end
             -- Note: group headers and separators are handled by apply_group_highlights above
         end
@@ -1515,6 +1568,34 @@ function M.close_sidebar()
     state_module.close_sidebar()
 end
 
+--- Setup standard keymaps for sidebar buffer
+local function setup_sidebar_keymaps(buf_id)
+    local keymap_opts = { noremap = true, silent = true }
+    
+    -- Navigation
+    api.nvim_buf_set_keymap(buf_id, "n", "j", "j", keymap_opts)
+    api.nvim_buf_set_keymap(buf_id, "n", "k", "k", keymap_opts)
+    
+    -- Actions
+    api.nvim_buf_set_keymap(buf_id, "n", "<CR>", ":lua require('vertical-bufferline').handle_selection()<CR>", keymap_opts)
+    api.nvim_buf_set_keymap(buf_id, "n", "d", ":lua require('vertical-bufferline').smart_close_buffer()<CR>", keymap_opts)
+    api.nvim_buf_set_keymap(buf_id, "n", "x", ":lua require('vertical-bufferline').remove_from_group()<CR>", keymap_opts)
+    api.nvim_buf_set_keymap(buf_id, "n", "D", ":lua require('vertical-bufferline').smart_close_buffer()<CR>", keymap_opts)
+    api.nvim_buf_set_keymap(buf_id, "n", "q", ":lua require('vertical-bufferline').close_sidebar()<CR>", keymap_opts)
+    api.nvim_buf_set_keymap(buf_id, "n", "<Esc>", ":lua require('vertical-bufferline').close_sidebar()<CR>", keymap_opts)
+    
+    -- Settings
+    api.nvim_buf_set_keymap(buf_id, "n", "p", ":lua require('vertical-bufferline').cycle_show_path_setting()<CR>", keymap_opts)
+    
+    -- Mouse support
+    api.nvim_buf_set_keymap(buf_id, "n", "<LeftRelease>", ":lua require('vertical-bufferline').handle_mouse_click()<CR>", keymap_opts)
+    api.nvim_buf_set_keymap(buf_id, "n", "<LeftMouse>", "<LeftMouse>", keymap_opts)
+    
+    -- Disable problematic keymaps
+    api.nvim_buf_set_keymap(buf_id, "n", "<C-W>o", "<Nop>", keymap_opts)
+    api.nvim_buf_set_keymap(buf_id, "n", "<C-W><C-O>", "<Nop>", keymap_opts)
+end
+
 --- Opens the sidebar window.
 local function open_sidebar()
     if state_module.is_sidebar_open() then return end
@@ -1590,20 +1671,7 @@ local function open_sidebar()
                     state_module.set_buf_id(new_sidebar_buf)
                     
                     -- CRITICAL: Re-setup keymaps for the new sidebar buffer
-                    local keymap_opts = { noremap = true, silent = true }
-                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "j", "j", keymap_opts)
-                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "k", "k", keymap_opts)
-                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "<CR>", ":lua require('vertical-bufferline').handle_selection()<CR>", keymap_opts)
-                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "d", ":lua require('vertical-bufferline').smart_close_buffer()<CR>", keymap_opts)
-                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "x", ":lua require('vertical-bufferline').remove_from_group()<CR>", keymap_opts)
-                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "D", ":lua require('vertical-bufferline').smart_close_buffer()<CR>", keymap_opts)
-                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "q", ":lua require('vertical-bufferline').close_sidebar()<CR>", keymap_opts)
-                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "<Esc>", ":lua require('vertical-bufferline').close_sidebar()<CR>", keymap_opts)
-                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "p", ":lua require('vertical-bufferline').cycle_show_path_setting()<CR>", keymap_opts)
-                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "<LeftRelease>", ":lua require('vertical-bufferline').handle_mouse_click()<CR>", keymap_opts)
-                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "<LeftMouse>", "<LeftMouse>", keymap_opts)
-                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "<C-W>o", "<Nop>", keymap_opts)
-                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "<C-W><C-O>", "<Nop>", keymap_opts)
+                    setup_sidebar_keymaps(new_sidebar_buf)
                     
                     M.refresh("file_redirect")
                 else
@@ -1614,20 +1682,7 @@ local function open_sidebar()
                     state_module.set_buf_id(new_sidebar_buf)
                     
                     -- CRITICAL: Re-setup keymaps for the new sidebar buffer
-                    local keymap_opts = { noremap = true, silent = true }
-                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "j", "j", keymap_opts)
-                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "k", "k", keymap_opts)
-                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "<CR>", ":lua require('vertical-bufferline').handle_selection()<CR>", keymap_opts)
-                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "d", ":lua require('vertical-bufferline').smart_close_buffer()<CR>", keymap_opts)
-                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "x", ":lua require('vertical-bufferline').remove_from_group()<CR>", keymap_opts)
-                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "D", ":lua require('vertical-bufferline').smart_close_buffer()<CR>", keymap_opts)
-                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "q", ":lua require('vertical-bufferline').close_sidebar()<CR>", keymap_opts)
-                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "<Esc>", ":lua require('vertical-bufferline').close_sidebar()<CR>", keymap_opts)
-                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "p", ":lua require('vertical-bufferline').cycle_show_path_setting()<CR>", keymap_opts)
-                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "<LeftRelease>", ":lua require('vertical-bufferline').handle_mouse_click()<CR>", keymap_opts)
-                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "<LeftMouse>", "<LeftMouse>", keymap_opts)
-                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "<C-W>o", "<Nop>", keymap_opts)
-                    api.nvim_buf_set_keymap(new_sidebar_buf, "n", "<C-W><C-O>", "<Nop>", keymap_opts)
+                    setup_sidebar_keymaps(new_sidebar_buf)
                     
                     M.refresh("file_redirect")
                 end
@@ -1639,24 +1694,7 @@ local function open_sidebar()
     state_module.set_buf_id(buf_id)
     state_module.set_sidebar_open(true)
 
-    local keymap_opts = { noremap = true, silent = true }
-    api.nvim_buf_set_keymap(buf_id, "n", "j", "j", keymap_opts)
-    api.nvim_buf_set_keymap(buf_id, "n", "k", "k", keymap_opts)
-    api.nvim_buf_set_keymap(buf_id, "n", "<CR>", ":lua require('vertical-bufferline').handle_selection()<CR>", keymap_opts)
-    api.nvim_buf_set_keymap(buf_id, "n", "d", ":lua require('vertical-bufferline').smart_close_buffer()<CR>", keymap_opts)
-    api.nvim_buf_set_keymap(buf_id, "n", "x", ":lua require('vertical-bufferline').remove_from_group()<CR>", keymap_opts)
-    api.nvim_buf_set_keymap(buf_id, "n", "D", ":lua require('vertical-bufferline').smart_close_buffer()<CR>", keymap_opts)
-    api.nvim_buf_set_keymap(buf_id, "n", "q", ":lua require('vertical-bufferline').close_sidebar()<CR>", keymap_opts)
-    api.nvim_buf_set_keymap(buf_id, "n", "<Esc>", ":lua require('vertical-bufferline').close_sidebar()<CR>", keymap_opts)
-    -- Path display cycling
-    api.nvim_buf_set_keymap(buf_id, "n", "p", ":lua require('vertical-bufferline').cycle_show_path_setting()<CR>", keymap_opts)
-    -- Mouse support: use LeftRelease for more reliable clicking
-    api.nvim_buf_set_keymap(buf_id, "n", "<LeftRelease>", ":lua require('vertical-bufferline').handle_mouse_click()<CR>", keymap_opts)
-    -- Keep LeftMouse for immediate feedback
-    api.nvim_buf_set_keymap(buf_id, "n", "<LeftMouse>", "<LeftMouse>", keymap_opts)
-    -- Disable Ctrl-W o in sidebar to prevent unwanted nvim exit
-    api.nvim_buf_set_keymap(buf_id, "n", "<C-W>o", "<Nop>", keymap_opts)
-    api.nvim_buf_set_keymap(buf_id, "n", "<C-W><C-O>", "<Nop>", keymap_opts)
+    setup_sidebar_keymaps(buf_id)
 
     api.nvim_set_current_win(current_win)
     M.refresh("sidebar_open")
@@ -1685,7 +1723,7 @@ function M.handle_mouse_click()
     -- Set cursor to click position
     api.nvim_win_set_cursor(sidebar_win, {mouse_pos.line, 0})
     
-    -- Direct call - no delay needed after fixing keymap consistency
+    -- Call handle_selection normally
     M.handle_selection()
 end
 
@@ -1723,13 +1761,23 @@ function M.cycle_show_path_setting()
 end
 
 --- Handle buffer selection from sidebar
-function M.handle_selection()
+function M.handle_selection(captured_buffer_id, captured_line_number)
     if not state_module.is_sidebar_open() then 
         return 
     end
-    local line_number = api.nvim_win_get_cursor(state_module.get_win_id())[1]
     
-    -- Check if this is a group header line
+    -- Use passed parameters if available, otherwise fallback to cursor position
+    local line_number = captured_line_number or api.nvim_win_get_cursor(state_module.get_win_id())[1]
+    local bufnr = captured_buffer_id
+    
+    -- If no captured buffer ID provided, get it from current mapping (fallback for backwards compatibility)
+    if not bufnr then
+        local line_to_buffer = state_module.get_line_to_buffer_id()
+        bufnr = line_to_buffer[line_number]
+    end
+    
+    
+    -- Check if this is a group header line or separator
     local group_header_lines = state_module.get_group_header_lines()
     
     for i, header_info in ipairs(group_header_lines) do
@@ -1741,75 +1789,117 @@ function M.handle_selection()
                 groups.set_active_group(header_info.group_id)
                 vim.notify("Switched to group: " .. group_name, vim.log.levels.INFO)
                 return
+            elseif header_info.type == "separator" or header_info.type == "separator_visual" then
+                -- Ignore clicks on separator lines
+                return
             end
         end
     end
     
-    -- Check if this is a buffer line
-    local bufnr = state_module.get_buffer_for_line(line_number)
-    if bufnr and api.nvim_buf_is_valid(bufnr) then
-        -- Load buffer if not already loaded (for cross-group buffer access)
-        if not api.nvim_buf_is_loaded(bufnr) then
-            pcall(vim.fn.bufload, bufnr)
-        end
-        -- Save current buffer state before switching (for within-group buffer state preservation)
-        groups.save_current_buffer_state()
-        
-        -- STEP 1: Check if we need to switch active group first
-        local buffer_group = groups.find_buffer_group(bufnr)
-        if buffer_group then
-            local current_active_group = groups.get_active_group()
-            if not current_active_group or current_active_group.id ~= buffer_group.id then
-                -- Switch to the group containing this buffer first
-                groups.set_active_group(buffer_group.id)
-            end
-        end
-        
-        -- STEP 2: Find the main window (not the sidebar) and switch to buffer
-        local main_win_id = nil
-        for _, win_id in ipairs(api.nvim_list_wins()) do
-            if win_id ~= state_module.get_win_id() and api.nvim_win_is_valid(win_id) then
-                -- Check if this window is not a floating window or special window
-                local win_config = api.nvim_win_get_config(win_id)
-                if win_config.relative == "" then  -- Not a floating window
-                    main_win_id = win_id
-                    break
-                end
-            end
-        end
-
-        if main_win_id then
-            -- Switch to the main window and set the buffer there
-            local success, err = pcall(function()
-                api.nvim_set_current_win(main_win_id)
-                api.nvim_set_current_buf(bufnr)
-            end)
-            if not success then
-                vim.notify("Error switching to buffer: " .. err, vim.log.levels.ERROR)
-                return
-            end
-        else
-            -- Fallback: if no main window found, create a new split
-            local success, err = pcall(function()
-                vim.cmd("wincmd p")  -- Go to previous window
-                api.nvim_set_current_buf(bufnr)
-            end)
-            if not success then
-                vim.notify("Error switching to buffer: " .. err, vim.log.levels.ERROR)
-                return
-            end
-        end
-
-        -- STEP 3: Update group's current_buffer tracking
-        if buffer_group then
-            buffer_group.current_buffer = bufnr
-        end
-        
-        -- Restore buffer state for the newly selected buffer (for within-group state preservation)
-        vim.schedule(function()
-            groups.restore_buffer_state_for_current_group(bufnr)
-        end)
+    -- If no buffer mapping found, this might be a non-clickable line
+    if not bufnr then
+        return
     end
+    
+    -- Load buffer if not already loaded (for cross-group buffer access)
+    if not api.nvim_buf_is_loaded(bufnr) then
+        pcall(vim.fn.bufload, bufnr)
+    end
+    
+    -- Check if this is a history line click for visual feedback
+    local line_group_context = state_module.get_line_group_context()
+    local clicked_group_id = line_group_context[line_number]
+    local current_active_group = groups.get_active_group()
+    local is_history_click = false
+    
+    if clicked_group_id and current_active_group and clicked_group_id == current_active_group.id then
+        -- Check if this buffer is in the history
+        local history = groups.get_group_history(current_active_group.id)
+        for _, hist_buf_id in ipairs(history) do
+            if hist_buf_id == bufnr then
+                is_history_click = true
+                break
+            end
+        end
+    end
+    
+    -- Save current buffer state before switching (for within-group buffer state preservation)
+    groups.save_current_buffer_state()
+    
+    -- STEP 1: Determine buffer group management
+    local buffer_group = groups.find_buffer_group(bufnr)
+    
+    if clicked_group_id and current_active_group and clicked_group_id == current_active_group.id then
+        -- Clicking within current active group - ensure buffer is in the group
+        if not buffer_group or buffer_group.id ~= current_active_group.id then
+            -- Add the buffer to current active group (useful for history items)
+            groups.add_buffer_to_group(bufnr, current_active_group.id)
+        end
+    elseif buffer_group then
+        -- Switch to the group containing this buffer
+        if not current_active_group or current_active_group.id ~= buffer_group.id then
+            groups.set_active_group(buffer_group.id)
+        end
+    else
+        -- Buffer doesn't belong to any group - add it to current active group
+        if current_active_group then
+            groups.add_buffer_to_group(bufnr, current_active_group.id)
+        end
+    end
+    
+    -- STEP 2: Find the main window (not the sidebar) and switch to buffer
+    local main_win_id = nil
+    for _, win_id in ipairs(api.nvim_list_wins()) do
+        if win_id ~= state_module.get_win_id() and api.nvim_win_is_valid(win_id) then
+            -- Check if this window is not a floating window or special window
+            local win_config = api.nvim_win_get_config(win_id)
+            if win_config.relative == "" then  -- Not a floating window
+                main_win_id = win_id
+                break
+            end
+        end
+    end
+
+    if main_win_id then
+        -- Switch to the main window and set the buffer there
+        local success, err = pcall(function()
+            api.nvim_set_current_win(main_win_id)
+            api.nvim_set_current_buf(bufnr)
+        end)
+        if not success then
+            vim.notify("Error switching to buffer: " .. err, vim.log.levels.ERROR)
+            return
+        end
+    else
+        -- Fallback: if no main window found, create a new split
+        local success, err = pcall(function()
+            vim.cmd("wincmd p")  -- Go to previous window
+            api.nvim_set_current_buf(bufnr)
+        end)
+        if not success then
+            vim.notify("Error switching to buffer: " .. err, vim.log.levels.ERROR)
+            return
+        end
+    end
+
+    -- STEP 3: Update group's current_buffer tracking
+    -- Get the updated active group (might have changed after group switching)
+    local updated_active_group = groups.get_active_group()
+    if updated_active_group then
+        updated_active_group.current_buffer = bufnr
+    end
+    
+    -- Provide visual feedback for history clicks
+    if is_history_click then
+        local buf_name = api.nvim_buf_get_name(bufnr)
+        local filename = vim.fn.fnamemodify(buf_name, ":t")
+        vim.notify("Switched to recent file: " .. filename, vim.log.levels.INFO)
+    end
+    
+    -- Restore buffer state for the newly selected buffer (for within-group state preservation)
+    vim.schedule(function()
+        groups.restore_buffer_state_for_current_group(bufnr)
+    end)
 end
 
 
@@ -2076,64 +2166,6 @@ end
 M.move_group_up = function() commands.move_group_up() end
 M.move_group_down = function() commands.move_group_down() end
 
--- Debug function to test highlights
-function M.debug_highlights()
-    print("Testing highlights...")
-    
-    -- Test if highlight groups exist
-    local test_groups = {
-        config_module.HIGHLIGHTS.FILENAME,
-        config_module.HIGHLIGHTS.FILENAME_CURRENT,
-        config_module.HIGHLIGHTS.FILENAME_VISIBLE,
-        config_module.HIGHLIGHTS.PATH,
-        config_module.HIGHLIGHTS.PATH_CURRENT,
-        config_module.HIGHLIGHTS.PATH_VISIBLE,
-    }
-    
-    for _, group in ipairs(test_groups) do
-        local hl = api.nvim_get_hl(0, {name = group})
-        print(string.format("Highlight group %s: %s", group, vim.inspect(hl)))
-    end
-end
-
-function M.debug_extended_picking()
-    local extended_picking = state_module.get_extended_picking_state()
-    print("Extended picking state:")
-    print("  is_active:", extended_picking.is_active)
-    print("  pick_mode:", extended_picking.pick_mode)
-    print("  line_hints:", vim.inspect(extended_picking.line_hints))
-    print("  hint_lines:", vim.inspect(extended_picking.hint_lines))
-    print("  bufferline_hints:", vim.inspect(extended_picking.bufferline_hints))
-    
-    print("\nOld extended_picking_state:")
-    print("  active:", extended_picking_state.active)
-    print("  mode_type:", extended_picking_state.mode_type)
-    print("  extended_hints:", vim.inspect(extended_picking_state.extended_hints))
-end
-
-function M.test_extended_picking()
-    print("Testing extended picking...")
-    start_extended_picking("switch")
-    M.debug_extended_picking()
-    exit_extended_picking()
-end
-
-function M.debug_hint_separation()
-    local extended_picking = state_module.get_extended_picking_state()
-    print("=== Hint Separation Debug ===")
-    print("Bufferline hints (current group):")
-    for buffer_id, hint_char in pairs(extended_picking.bufferline_hints or {}) do
-        print(string.format("  Buffer %d: %s", buffer_id, hint_char))
-    end
-    print("Extended hints (cross-group):")
-    for line_num, hint_char in pairs(extended_picking.line_hints or {}) do
-        local buffer_id = state_module.get_buffer_for_line(line_num)
-        local group_context = state_module.get_line_group_context()
-        local group_id = group_context[line_num]
-        print(string.format("  Line %d (Buffer %d, Group %s): %s", line_num, buffer_id or "nil", group_id or "nil", hint_char))
-    end
-end
-
 --- Setup function for user configuration (e.g., from lazy.nvim)
 function M.setup(user_config)
     if user_config then
@@ -2153,6 +2185,79 @@ function M.setup(user_config)
             end
         end
     end
+end
+
+--- Switch to history file by position (1-9)
+--- @param position number History position (1-9)
+--- @return boolean success
+function M.switch_to_history_file(position)
+    local groups = require('vertical-bufferline.groups')
+    local active_group = groups.get_active_group()
+    if not active_group then
+        vim.notify("No active group", vim.log.levels.WARN)
+        return false
+    end
+    
+    local history = groups.get_group_history(active_group.id)
+    if not history or #history == 0 then
+        vim.notify("No history available in current group", vim.log.levels.WARN)
+        return false
+    end
+    
+    if position < 1 or position > #history then
+        vim.notify(string.format("History position %d not available (1-%d)", position, #history), vim.log.levels.WARN)
+        return false
+    end
+    
+    local buffer_id = history[position]
+    if not buffer_id or not api.nvim_buf_is_valid(buffer_id) then
+        vim.notify("History buffer is no longer valid", vim.log.levels.WARN)
+        return false
+    end
+    
+    -- Load buffer if not already loaded
+    if not api.nvim_buf_is_loaded(buffer_id) then
+        pcall(vim.fn.bufload, buffer_id)
+    end
+    
+    -- Save current buffer state before switching
+    groups.save_current_buffer_state()
+    
+    -- Find the main window and switch to buffer
+    local main_win_id = nil
+    for _, win_id in ipairs(api.nvim_list_wins()) do
+        if win_id ~= state_module.get_win_id() and api.nvim_win_is_valid(win_id) then
+            local win_config = api.nvim_win_get_config(win_id)
+            if win_config.relative == "" then  -- Not a floating window
+                main_win_id = win_id
+                break
+            end
+        end
+    end
+    
+    if main_win_id then
+        local success, err = pcall(function()
+            api.nvim_set_current_win(main_win_id)
+            api.nvim_set_current_buf(buffer_id)
+        end)
+        if not success then
+            vim.notify("Error switching to history buffer: " .. err, vim.log.levels.ERROR)
+            return false
+        end
+    else
+        vim.notify("No main window found", vim.log.levels.ERROR)
+        return false
+    end
+    
+    -- Update group's current_buffer tracking
+    active_group.current_buffer = buffer_id
+    
+    -- Restore buffer state
+    vim.schedule(function()
+        groups.restore_buffer_state_for_current_group(buffer_id)
+    end)
+    
+    return true
 end
 
 -- Initialize immediately on plugin load

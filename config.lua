@@ -132,6 +132,11 @@ M.DEFAULTS = {
     show_icons = false,  -- Show file type icons (emoji)
     position = "left",  -- Sidebar position: "left" or "right"
     
+    -- History settings
+    show_history = "auto",  -- "yes", "no", "auto" - show recent files history per group
+    history_size = 10,      -- Maximum number of recent files to track per group
+    history_auto_threshold = 3,  -- Minimum files needed for auto mode to show history
+    
     -- Path display settings
     show_path = "auto", -- "yes", "no", "auto"
     path_style = "relative", -- "relative", "absolute", "smart"
@@ -207,6 +212,14 @@ end
 
 function M.validate_position(position)
     return position == "left" or position == "right"
+end
+
+function M.validate_show_history(show_history)
+    return show_history == "yes" or show_history == "no" or show_history == "auto"
+end
+
+function M.validate_history_size(size)
+    return type(size) == "number" and size > 0 and size <= 50
 end
 
 return M

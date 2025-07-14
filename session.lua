@@ -20,6 +20,65 @@ local config = {
 -- Auto-save debounce timer
 local auto_save_timer = nil
 
+-- Common session restore finalization
+local function finalize_session_restore(session_data, opened_count, total_groups)
+    local groups = require('vertical-bufferline.groups')
+    local bufferline_integration = require('vertical-bufferline.bufferline-integration')
+    
+    -- Restore expand mode if available
+    if session_data.expand_all_groups ~= nil then
+        local vbl = require('vertical-bufferline')
+        if vbl.state then
+            vbl.state.expand_all_groups = session_data.expand_all_groups
+        else
+            local state_module = require('vertical-bufferline.state')
+            state_module.set_expand_all_groups(session_data.expand_all_groups)
+        end
+    end
+
+    -- Clear all position info from all groups after session restore
+    local all_groups = groups.get_all_groups()
+    for _, group in ipairs(all_groups) do
+        groups.update_group_position_info(group.id, {})
+        
+        -- Initialize history fields for backward compatibility with old sessions
+        if not group.history then
+            group.history = {}
+        end
+        if group.last_current_buffer == nil then
+            group.last_current_buffer = nil
+        end
+    end
+    
+    -- Final sync to bufferline
+    local active_group = groups.get_active_group()
+    if active_group then
+        bufferline_integration.set_bufferline_buffers(active_group.buffers)
+        bufferline_integration.set_sync_target(active_group.id)
+
+        -- Switch to first buffer in active group if available
+        if #active_group.buffers > 0 then
+            for _, buf_id in ipairs(active_group.buffers) do
+                if vim.api.nvim_buf_is_valid(buf_id) and vim.api.nvim_buf_is_loaded(buf_id) then
+                    vim.api.nvim_set_current_buf(buf_id)
+                    break
+                end
+            end
+        end
+    else
+        -- Fallback: ensure sync is enabled even if no active group
+        bufferline_integration.set_sync_target("default")
+    end
+
+    -- Refresh UI
+    vim.schedule(function()
+        local vbl = require('vertical-bufferline')
+        if vbl.state and vbl.state.is_sidebar_open then
+            vbl.refresh()
+        end
+    end)
+end
+
 -- Ensure session directory exists
 local function ensure_session_dir()
     local session_dir = config.session_dir
@@ -500,57 +559,6 @@ function M.load_session(filename)
         vim.fn.fnamemodify(filename, ":t"), opened_count, #session_data.groups), vim.log.levels.INFO)
 
     return true
-end
-
--- Common session restore finalization
-local function finalize_session_restore(session_data, opened_count, total_groups)
-    local groups = require('vertical-bufferline.groups')
-    local bufferline_integration = require('vertical-bufferline.bufferline-integration')
-    
-    -- Restore expand mode if available
-    if session_data.expand_all_groups ~= nil then
-        local vbl = require('vertical-bufferline')
-        if vbl.state then
-            vbl.state.expand_all_groups = session_data.expand_all_groups
-        else
-            local state_module = require('vertical-bufferline.state')
-            state_module.set_expand_all_groups(session_data.expand_all_groups)
-        end
-    end
-
-    -- Clear all position info from all groups after session restore
-    local all_groups = groups.get_all_groups()
-    for _, group in ipairs(all_groups) do
-        groups.update_group_position_info(group.id, {})
-    end
-    
-    -- Final sync to bufferline
-    local active_group = groups.get_active_group()
-    if active_group then
-        bufferline_integration.set_bufferline_buffers(active_group.buffers)
-        bufferline_integration.set_sync_target(active_group.id)
-
-        -- Switch to first buffer in active group if available
-        if #active_group.buffers > 0 then
-            for _, buf_id in ipairs(active_group.buffers) do
-                if vim.api.nvim_buf_is_valid(buf_id) and vim.api.nvim_buf_is_loaded(buf_id) then
-                    vim.api.nvim_set_current_buf(buf_id)
-                    break
-                end
-            end
-        end
-    else
-        -- Fallback: ensure sync is enabled even if no active group
-        bufferline_integration.set_sync_target("default")
-    end
-
-    -- Refresh UI
-    vim.schedule(function()
-        local vbl = require('vertical-bufferline')
-        if vbl.state and vbl.state.is_sidebar_open then
-            vbl.refresh()
-        end
-    end)
 end
 
 --- Check if session exists for current working directory
