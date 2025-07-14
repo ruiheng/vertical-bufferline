@@ -328,6 +328,18 @@ local function find_existing_buffers(session_data)
                 found_count = found_count + 1
             end
         end
+        
+        -- Also look for history files
+        for _, history_path in ipairs(group_data.history or {}) do
+            local file_path = expand_buffer_path(history_path)
+            
+            -- Only look for existing buffers, don't create new ones
+            local existing_buf = vim.fn.bufnr(file_path, false)
+            if existing_buf > 0 and vim.api.nvim_buf_is_valid(existing_buf) then
+                buffer_mappings[file_path] = existing_buf
+                found_count = found_count + 1
+            end
+        end
     end
 
     -- If session data contains buffers not found in existing buffers,
@@ -336,6 +348,32 @@ local function find_existing_buffers(session_data)
     for _, group_data in ipairs(session_data.groups) do
         for _, buffer_info in ipairs(group_data.buffers or {}) do
             local file_path = expand_buffer_path(buffer_info.path)
+            
+            -- If not found in existing buffers, try to preload safely
+            if not buffer_mappings[file_path] and vim.fn.filereadable(file_path) == 1 then
+                -- Use safe buffer creation without triggering swap file dialogs
+                local buf_id = vim.fn.bufnr(file_path, true)  -- Create if not exists
+                
+                if vim.api.nvim_buf_is_valid(buf_id) then
+                    -- Set buffer properties safely
+                    pcall(vim.api.nvim_buf_set_option, buf_id, 'buflisted', true)
+                    pcall(vim.api.nvim_buf_set_option, buf_id, 'buftype', '')
+                    
+                    -- Load buffer content if not already loaded
+                    if not vim.api.nvim_buf_is_loaded(buf_id) then
+                        pcall(vim.fn.bufload, buf_id)
+                    end
+                    
+                    buffer_mappings[file_path] = buf_id
+                    found_count = found_count + 1
+                    preloaded_count = preloaded_count + 1
+                end
+            end
+        end
+        
+        -- Also preload history files if not found
+        for _, history_path in ipairs(group_data.history or {}) do
+            local file_path = expand_buffer_path(history_path)
             
             -- If not found in existing buffers, try to preload safely
             if not buffer_mappings[file_path] and vim.fn.filereadable(file_path) == 1 then
