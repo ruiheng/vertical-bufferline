@@ -184,7 +184,7 @@ function M.save_session(filename)
             end
         end
 
-        -- Save history for this group if available
+        -- Save history for this group (always save history field, even if empty)
         if group.history then
             for _, buffer_id in ipairs(group.history) do
                 if api.nvim_buf_is_valid(buffer_id) then
@@ -195,6 +195,7 @@ function M.save_session(filename)
                 end
             end
         end
+        -- Note: group_data.history is always initialized as {} above, so it will be saved even if empty
 
         table.insert(session_data.groups, group_data)
     end
