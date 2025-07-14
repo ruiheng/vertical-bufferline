@@ -938,6 +938,37 @@ function M.setup()
         nargs = 0,
         desc = "Manually refresh and add current buffers to active group"
     })
+
+    -- Clear history command
+    vim.api.nvim_create_user_command("VBufferLineClearHistory", function(opts)
+        local groups = require('vertical-bufferline.groups')
+        local target_group = opts.args and opts.args ~= "" and opts.args or nil
+        
+        if target_group then
+            -- Clear history for specific group
+            local success = groups.clear_group_history(target_group)
+            if success then
+                vim.notify("History cleared for group: " .. target_group, vim.log.levels.INFO)
+            else
+                vim.notify("Group not found: " .. target_group, vim.log.levels.ERROR)
+                return
+            end
+        else
+            -- Clear history for all groups
+            groups.clear_group_history()
+            vim.notify("History cleared for all groups", vim.log.levels.INFO)
+        end
+
+        -- Refresh interface to update display
+        vim.schedule(function()
+            if require('vertical-bufferline').refresh then
+                require('vertical-bufferline').refresh("clear_history")
+            end
+        end)
+    end, {
+        nargs = "?",
+        desc = "Clear history for specific group or all groups (no args = all groups)"
+    })
 end
 
 -- Export functions for use by other modules

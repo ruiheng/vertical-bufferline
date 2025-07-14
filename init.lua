@@ -2165,6 +2165,14 @@ M.add_current_buffer_to_group = function(group_name)
 end
 M.move_group_up = function() commands.move_group_up() end
 M.move_group_down = function() commands.move_group_down() end
+M.clear_history = function(group_id) 
+    local groups = require('vertical-bufferline.groups')
+    local success = groups.clear_group_history(group_id)
+    if success then
+        M.refresh("clear_history")
+    end
+    return success
+end
 
 --- Setup function for user configuration (e.g., from lazy.nvim)
 function M.setup(user_config)

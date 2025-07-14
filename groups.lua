@@ -1065,6 +1065,27 @@ function M.should_show_history(group_id)
     end
 end
 
+--- Clear history for a specific group or all groups
+--- @param group_id string|nil Group ID to clear history for (nil = clear all groups)
+--- @return boolean success
+function M.clear_group_history(group_id)
+    if group_id then
+        -- Clear history for specific group
+        local group = find_group_by_id(group_id)
+        if group then
+            group.history = {}
+            return true
+        end
+        return false
+    else
+        -- Clear history for all groups
+        for _, group in ipairs(groups_data.groups) do
+            group.history = {}
+        end
+        return true
+    end
+end
+
 M.find_group_by_id = find_group_by_id
 
 -- Save global instance and set flag
