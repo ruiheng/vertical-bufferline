@@ -1086,6 +1086,24 @@ function M.clear_group_history(group_id)
     end
 end
 
+--- Cycle through show_history settings: auto -> yes -> no -> auto
+--- @return string new_setting The new show_history setting
+function M.cycle_show_history()
+    local current = config_module.DEFAULTS.show_history
+    local new_setting
+    
+    if current == "auto" then
+        new_setting = "yes"
+    elseif current == "yes" then
+        new_setting = "no"
+    else -- "no"
+        new_setting = "auto"
+    end
+    
+    config_module.DEFAULTS.show_history = new_setting
+    return new_setting
+end
+
 M.find_group_by_id = find_group_by_id
 
 -- Save global instance and set flag

@@ -1586,6 +1586,7 @@ local function setup_sidebar_keymaps(buf_id)
     
     -- Settings
     api.nvim_buf_set_keymap(buf_id, "n", "p", ":lua require('vertical-bufferline').cycle_show_path_setting()<CR>", keymap_opts)
+    api.nvim_buf_set_keymap(buf_id, "n", "h", ":lua require('vertical-bufferline').cycle_show_history_setting()<CR>", keymap_opts)
     
     -- Mouse support
     api.nvim_buf_set_keymap(buf_id, "n", "<LeftRelease>", ":lua require('vertical-bufferline').handle_mouse_click()<CR>", keymap_opts)
@@ -1758,6 +1759,28 @@ function M.cycle_show_path_setting()
     
     -- Refresh sidebar to show immediate changes
     M.refresh("path_display_cycle")
+end
+
+--- Cycle through show_history settings (auto -> yes -> no -> auto)
+function M.cycle_show_history_setting()
+    if not state_module.is_sidebar_open() then 
+        return 
+    end
+    
+    local groups = require('vertical-bufferline.groups')
+    local new_setting = groups.cycle_show_history()
+    
+    -- Provide visual feedback
+    local mode_descriptions = {
+        auto = "Auto show history (≥3 files)",
+        yes = "Always show history",
+        no = "Never show history"
+    }
+    
+    vim.notify(string.format("History display: %s (%s)", new_setting, mode_descriptions[new_setting] or "Unknown"), vim.log.levels.INFO)
+    
+    -- Refresh sidebar to show immediate changes
+    M.refresh("history_display_cycle")
 end
 
 --- Handle buffer selection from sidebar
@@ -2173,6 +2196,8 @@ M.clear_history = function(group_id)
     end
     return success
 end
+M.cycle_show_path = M.cycle_show_path_setting
+M.cycle_show_history = M.cycle_show_history_setting
 
 --- Setup function for user configuration (e.g., from lazy.nvim)
 function M.setup(user_config)
