@@ -154,7 +154,8 @@ function M.save_session(filename)
             created_at = group.created_at,
             color = group.color,
             buffers = {},
-            current_buffer_path = nil  -- Will be set below if valid
+            current_buffer_path = nil,  -- Will be set below if valid
+            history = {}  -- Will be set below if valid
         }
 
         -- Save buffer information using the cleaned group buffers
@@ -180,6 +181,18 @@ function M.save_session(filename)
             local current_buffer_path = api.nvim_buf_get_name(group.current_buffer)
             if current_buffer_path ~= "" then
                 group_data.current_buffer_path = normalize_buffer_path(current_buffer_path)
+            end
+        end
+
+        -- Save history for this group if available
+        if group.history then
+            for _, buffer_id in ipairs(group.history) do
+                if api.nvim_buf_is_valid(buffer_id) then
+                    local buffer_path = api.nvim_buf_get_name(buffer_id)
+                    if buffer_path ~= "" then
+                        table.insert(group_data.history, normalize_buffer_path(buffer_path))
+                    end
+                end
             end
         end
 
@@ -453,6 +466,19 @@ local function rebuild_groups(session_data, buffer_mappings)
                 local restored_group = groups.find_group_by_id(new_group_id)
                 if restored_group then
                     restored_group.current_buffer = current_buf_id
+                end
+            end
+        end
+        
+        -- Restore history for this group if available
+        local restored_group = groups.find_group_by_id(new_group_id)
+        if restored_group and group_data.history then
+            restored_group.history = {}
+            for _, history_path in ipairs(group_data.history) do
+                local history_file_path = expand_buffer_path(history_path)
+                local history_buf_id = buffer_mappings[history_file_path]
+                if history_buf_id and vim.api.nvim_buf_is_valid(history_buf_id) then
+                    table.insert(restored_group.history, history_buf_id)
                 end
             end
         end

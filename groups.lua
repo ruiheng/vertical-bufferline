@@ -67,7 +67,8 @@ local function init_default_group()
             color = config_module.COLORS.BLUE,
             display_number = groups_data.next_display_number,
             buffer_states = {},  -- Store per-buffer window states (cursor, scroll, etc.)
-            position_info = {}   -- Store bufferline position info {buffer_id -> local_pos}
+            position_info = {},   -- Store bufferline position info {buffer_id -> local_pos}
+            history = {}  -- Store recent file access history
         }
         groups_data.next_display_number = groups_data.next_display_number + 1
         table.insert(groups_data.groups, default_group)
