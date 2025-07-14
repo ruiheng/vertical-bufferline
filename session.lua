@@ -56,14 +56,21 @@ local function finalize_session_restore(session_data, opened_count, total_groups
         bufferline_integration.set_bufferline_buffers(active_group.buffers)
         bufferline_integration.set_sync_target(active_group.id)
 
-        -- Switch to first buffer in active group if available
-        if #active_group.buffers > 0 then
+        -- Switch to the group's current buffer if available, otherwise first buffer
+        local target_buf = nil
+        if active_group.current_buffer and vim.api.nvim_buf_is_valid(active_group.current_buffer) and vim.api.nvim_buf_is_loaded(active_group.current_buffer) then
+            target_buf = active_group.current_buffer
+        elseif #active_group.buffers > 0 then
             for _, buf_id in ipairs(active_group.buffers) do
                 if vim.api.nvim_buf_is_valid(buf_id) and vim.api.nvim_buf_is_loaded(buf_id) then
-                    vim.api.nvim_set_current_buf(buf_id)
+                    target_buf = buf_id
                     break
                 end
             end
+        end
+        
+        if target_buf then
+            vim.api.nvim_set_current_buf(target_buf)
         end
     else
         -- Fallback: ensure sync is enabled even if no active group
@@ -168,17 +175,32 @@ function M.save_session(filename)
                     -- Normalize paths to be relative when possible
                     local normalized_path = normalize_buffer_path(buffer_path)
                     table.insert(group_data.buffers, {
-                        path = normalized_path,
-                        -- Save additional buffer metadata if needed
-                        modified = api.nvim_buf_get_option(buffer_id, "modified")
+                        path = normalized_path
                     })
                 end
             end
         end
 
-        -- Save current buffer for this group if available
-        if group.current_buffer and api.nvim_buf_is_valid(group.current_buffer) then
-            local current_buffer_path = api.nvim_buf_get_name(group.current_buffer)
+        -- Save current buffer for this group
+        -- If this is the active group, use the actual current buffer
+        -- Otherwise, use the group's recorded current buffer
+        local current_buf_for_group = nil
+        if group.id == active_group_id then
+            -- For active group, use the actual current buffer
+            local actual_current_buf = api.nvim_get_current_buf()
+            if vim.tbl_contains(current_group_buffers, actual_current_buf) then
+                current_buf_for_group = actual_current_buf
+            end
+        else
+            -- For other groups, use the recorded current buffer if valid
+            if group.current_buffer and api.nvim_buf_is_valid(group.current_buffer) and 
+               vim.tbl_contains(current_group_buffers, group.current_buffer) then
+                current_buf_for_group = group.current_buffer
+            end
+        end
+        
+        if current_buf_for_group then
+            local current_buffer_path = api.nvim_buf_get_name(current_buf_for_group)
             if current_buffer_path ~= "" then
                 group_data.current_buffer_path = normalize_buffer_path(current_buffer_path)
             end
@@ -825,16 +847,32 @@ local function collect_current_state()
                     -- Normalize paths to be relative when possible
                     local normalized_path = normalize_buffer_path(buffer_path)
                     table.insert(group_data.buffers, {
-                        path = normalized_path,
-                        modified = api.nvim_buf_get_option(buffer_id, "modified")
+                        path = normalized_path
                     })
                 end
             end
         end
         
-        -- Save current buffer for this group if available
-        if group.current_buffer and api.nvim_buf_is_valid(group.current_buffer) then
-            local current_buffer_path = api.nvim_buf_get_name(group.current_buffer)
+        -- Save current buffer for this group
+        -- If this is the active group, use the actual current buffer
+        -- Otherwise, use the group's recorded current buffer
+        local current_buf_for_group = nil
+        if group.id == active_group_id then
+            -- For active group, use the actual current buffer
+            local actual_current_buf = api.nvim_get_current_buf()
+            if vim.tbl_contains(current_group_buffers, actual_current_buf) then
+                current_buf_for_group = actual_current_buf
+            end
+        else
+            -- For other groups, use the recorded current buffer if valid
+            if group.current_buffer and api.nvim_buf_is_valid(group.current_buffer) and 
+               vim.tbl_contains(current_group_buffers, group.current_buffer) then
+                current_buf_for_group = group.current_buffer
+            end
+        end
+        
+        if current_buf_for_group then
+            local current_buffer_path = api.nvim_buf_get_name(current_buf_for_group)
             if current_buffer_path ~= "" then
                 group_data.current_buffer_path = normalize_buffer_path(current_buffer_path)
             end
