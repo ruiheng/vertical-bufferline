@@ -1,0 +1,267 @@
+*vertical-bufferline.txt*           Vertical sidebar for buffer group management
+
+==============================================================================
+CONTENTS                                           *vertical-bufferline-contents*
+
+1. Introduction ...................... |vertical-bufferline-introduction|
+2. Installation ...................... |vertical-bufferline-installation|
+3. Configuration ..................... |vertical-bufferline-configuration|
+4. Usage ............................. |vertical-bufferline-usage|
+5. Commands .......................... |vertical-bufferline-commands|
+6. Keymaps ........................... |vertical-bufferline-keymaps|
+7. History Feature ................... |vertical-bufferline-history|
+8. Session Management ................ |vertical-bufferline-sessions|
+9. Integration ....................... |vertical-bufferline-integration|
+10. Troubleshooting .................. |vertical-bufferline-troubleshooting|
+
+==============================================================================
+1. INTRODUCTION                               *vertical-bufferline-introduction*
+
+Vertical Bufferline provides a vertical sidebar displaying buffer groups with
+enhanced organization and navigation features for Neovim.
+
+Key Features:
+- Vertical sidebar showing buffer groups and their contents
+- Dynamic buffer grouping with automatic management
+- Seamless bufferline integration
+- Perfect picking mode compatibility with synchronized highlighting
+- Two display modes: Expand all groups (default) or show only active group
+- Smart filename disambiguation
+- History tracking per group
+- Session persistence
+
+==============================================================================
+2. INSTALLATION                               *vertical-bufferline-installation*
+
+Using lazy.nvim:
+>
+    {
+      "your-username/vertical-bufferline",
+      opts = {
+        width = 40,
+        expand_all_groups = true,
+        show_icons = false,
+        position = "left",
+      },
+      keys = {
+        { "<leader>vb", "<cmd>lua require('vertical-bufferline').toggle()<cr>", 
+          desc = "Toggle vertical bufferline" },
+        { "<leader>ve", "<cmd>lua require('vertical-bufferline').toggle_expand_all()<cr>", 
+          desc = "Toggle expand all groups" },
+        { "<leader>gc", "<cmd>lua require('vertical-bufferline').create_group()<cr>", 
+          desc = "Create new group" },
+      }
+    }
+<
+
+==============================================================================
+3. CONFIGURATION                             *vertical-bufferline-configuration*
+
+Default configuration:
+>
+    {
+      -- UI settings
+      width = 40,                     -- Sidebar width
+      expand_all_groups = true,       -- Default to expand all groups mode
+      show_icons = false,             -- Show file type emoji icons
+      position = "left",              -- Sidebar position: "left" or "right"
+      
+      -- Group management  
+      auto_create_groups = true,      -- Enable automatic group creation
+      auto_add_new_buffers = true,    -- Auto-add new buffers to active group
+      
+      -- Path display settings
+      show_path = "auto",             -- "yes", "no", "auto"
+      path_style = "relative",        -- "relative", "absolute", "smart"
+      path_max_length = 50,           -- Maximum path display length
+      
+      -- History settings
+      show_history = "auto",          -- "yes", "no", "auto"
+      history_size = 10,              -- Maximum files to track per group
+      history_auto_threshold = 3,     -- Min files for auto mode to show history
+      
+      -- Session persistence settings
+      auto_save = false,              -- Auto-save session on Neovim exit
+      auto_load = false,              -- Auto-load session on startup
+      session_name_strategy = "cwd_hash", -- "cwd_hash", "cwd_path", "manual"
+    }
+<
+
+==============================================================================
+4. USAGE                                           *vertical-bufferline-usage*
+
+Basic workflow:
+1. Open the sidebar with `<leader>vb`
+2. Create groups with `<leader>gc` 
+3. Organize buffers into groups automatically or manually
+4. Navigate between groups with `<leader>g1`, `<leader>g2`, etc.
+5. Use quick buffer access with `<leader>1`, `<leader>2`, etc.
+
+Display Modes:
+- *Expand All Groups* (default): Shows all groups expanded
+- *Active Group Only*: Shows only current active group
+
+Group Management:
+- Groups are automatically created and managed
+- Buffers are auto-added to the active group
+- Groups can be renamed, reordered, and deleted
+- Empty groups are automatically cleaned up
+
+==============================================================================
+5. COMMANDS                                     *vertical-bufferline-commands*
+
+Group Operations:
+:VBufferLineCreateGroup [name]        Create new group with optional name
+:VBufferLineDeleteGroup <name_or_id>  Delete specified group
+:VBufferLineRenameGroup <new_name>    Rename current active group
+:VBufferLineSwitchGroup [name_or_id]  Switch to specified group
+:VBufferLineAddToGroup <name_or_id>   Add current buffer to specified group
+
+Navigation:
+:VBufferLineNextGroup                 Switch to next group
+:VBufferLinePrevGroup                 Switch to previous group
+:VBufferLineToggleExpandAll           Toggle expand all groups mode
+
+Group Reordering:
+:VBufferLineMoveGroupUp               Move current group up in the list
+:VBufferLineMoveGroupDown             Move current group down in the list
+:VBufferLineMoveGroupToPosition <pos> Move current group to specified position
+
+Session Management:
+:VBufferLineSaveSession [filename]    Save current groups configuration
+:VBufferLineLoadSession [filename]    Load groups configuration from session
+:VBufferLineDeleteSession [filename]  Delete a session file
+:VBufferLineListSessions              List all available sessions
+
+History Management:                            *vertical-bufferline-history-commands*
+:VBufferLineClearHistory [group_name] Clear history for all groups or specific group
+
+Utilities:
+:VBufferLineDebug                     Show debug information
+:VBufferLineRefreshBuffers            Manually refresh and add current buffers
+
+==============================================================================
+6. KEYMAPS                                       *vertical-bufferline-keymaps*
+
+Sidebar Control:
+<leader>vb                            Toggle vertical bufferline sidebar
+<leader>ve                            Toggle expand all groups mode
+
+Group Management:
+<leader>gc                            Create new unnamed group
+<leader>gr                            Rename current group
+<leader>gn                            Switch to next group
+<leader>gp                            Switch to previous group
+<leader>g1 to <leader>g9              Switch directly to group 1-9
+<leader>gU                            Move current group up in the list
+<leader>gD                            Move current group down in the list
+
+Buffer Navigation (within sidebar):
+<CR>                                  Switch to selected buffer
+d                                     Close selected buffer
+q                                     Close sidebar
+j/k                                   Navigate up/down
+h                                     Toggle history display mode
+p                                     Toggle path display mode
+
+Buffer Quick Access:
+<leader>1 to <leader>9                Quick switch to buffers 1-9 in current group
+<leader>0                             Switch to 10th buffer in current group
+<leader>p                             BufferLine picking mode
+
+History Quick Access:                          *vertical-bufferline-history-keymaps*
+<leader>h1 to <leader>h9              Quick switch to recent files 1-9 in history
+
+==============================================================================
+7. HISTORY FEATURE                             *vertical-bufferline-history*
+
+Each group maintains a history of recently accessed files, providing quick
+access to your most recent work within that group.
+
+History Display:
+- *Auto mode*: History shown when group has 3+ files and history isn't empty
+- *Manual toggle*: Use `h` key in sidebar to cycle yes/no/auto modes
+- *Visual feedback*: History entries appear below regular buffers
+
+History Management:
+- History automatically updates when switching between files in a group
+- History entries are ordered by recency (most recent first)
+- History is automatically saved and restored with sessions
+- History size is configurable (default: 10 entries per group)
+
+Example History Display:
+>
+    [1] ● Frontend (5 buffers)
+    ├─ ► 1 🌙 App.tsx
+    ├─ 2 📄 Button.jsx
+    ├─ 3 📝 README.md
+    ├─ 4 📋 package.json
+    ├─ 5 📄 index.html
+    └─ Recent:
+       ├─ 1 📄 utils.js
+       ├─ 2 📄 config.js
+       └─ 3 📄 constants.js
+<
+
+==============================================================================
+8. SESSION MANAGEMENT                          *vertical-bufferline-sessions*
+
+Sessions automatically save and restore your group configurations:
+
+Features:
+- Group structure preservation
+- Buffer assignments
+- Active group tracking
+- Display mode settings
+- History data per group
+
+Session Types:
+- *Automatic*: Based on current working directory
+- *Manual*: Custom named sessions
+- *Integration*: Works with mini.sessions and native mksession
+
+Session Files:
+Sessions are stored in Neovim's data directory under 'vertical-bufferline/'.
+Each working directory gets its own session file automatically.
+
+==============================================================================
+9. INTEGRATION                               *vertical-bufferline-integration*
+
+BufferLine.nvim:
+- Seamlessly filters buffers to show only current group
+- Perfect picking mode integration with synchronized highlights
+- All BufferLine commands work within current group context
+
+Scope.nvim:
+- Compatible with tabpage-scoped buffer management
+- Buffer deletion respects scope.nvim's buffer handling
+
+Mini.sessions:
+- Automatic integration with mini.sessions plugin
+- Session data is preserved across mini.sessions save/restore
+
+==============================================================================
+10. TROUBLESHOOTING                        *vertical-bufferline-troubleshooting*
+
+Common Issues:
+
+Q: Sidebar doesn't show up
+A: Ensure the plugin is properly loaded and try `:VBufferLineDebug`
+
+Q: Buffers not appearing in groups
+A: Check if auto_add_new_buffers is enabled in configuration
+
+Q: History not working
+A: Verify history_size > 0 and show_history is not set to "no"
+
+Q: Session not restoring
+A: Check session file permissions and verify working directory
+
+Q: Keymaps not working
+A: Ensure keymaps are set up after plugin loading (use VimEnter autocmd)
+
+For more help, use `:VBufferLineDebug` to get detailed information about
+the current state of groups, buffers, and configuration.
+
+==============================================================================
+vim:tw=78:ts=8:ft=help:norl:

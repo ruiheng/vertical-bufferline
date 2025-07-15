@@ -5,6 +5,13 @@ dummy.txt
 *.bak
 *.vim
 
+# 内部开发文件
+CLAUDE.md
+PROGRESS.md
+TECHNICAL_NOTES.md
+Session.vim
+TestSession.vim
+
 # 测试文件
 test_*.lua
 *_test.lua

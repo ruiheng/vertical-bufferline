@@ -39,6 +39,8 @@ A Neovim plugin that provides a vertical sidebar displaying buffer groups with e
 - `d` - Close selected buffer (with modification check)
 - `q` - Close sidebar
 - `j/k` - Navigate up/down
+- `h` - Toggle history display mode (yes/no/auto)
+- `p` - Toggle path display mode (yes/no/auto)
 
 ### Buffer Quick Access
 - `<leader>1` to `<leader>9` - Quick switch to buffers 1-9 in current group
@@ -76,6 +78,7 @@ A Neovim plugin that provides a vertical sidebar displaying buffer groups with e
 ### Utilities
 - `:VBufferLineDebug` - Show debug information
 - `:VBufferLineRefreshBuffers` - Manually refresh and add current buffers to active group
+- `:VBufferLineClearHistory [group_name]` - Clear history for all groups or specific group
 
 ## Display Modes
 
@@ -176,6 +179,65 @@ When using `<leader>p` (BufferLine picking), the sidebar shows hint characters:
 # Sessions include: group structure, buffer assignments, active group, display mode
 ```
 
+### Advanced Workflow Examples
+
+#### Multi-Project Development
+```bash
+# Working on frontend and backend simultaneously
+<leader>gc                       # Create "Frontend" group
+# Open React/Vue files → auto-added to Frontend group
+<leader>gc                       # Create "Backend" group  
+# Open API/server files → auto-added to Backend group
+<leader>gc                       # Create "Database" group
+# Open schema/migration files → auto-added to Database group
+
+# Quick switching between contexts
+<leader>g1                       # Frontend work
+<leader>g2                       # Backend work
+<leader>g3                       # Database work
+```
+
+#### Feature Branch Development
+```bash
+# Create feature-specific groups
+<leader>gc                       # Create "Feature-Auth" group
+<leader>gc                       # Create "Tests" group
+<leader>gc                       # Create "Documentation" group
+
+# Use history for quick access to recently modified files
+<leader>h1                       # Most recent file in current group
+<leader>h2                       # Second most recent file
+```
+
+#### Code Review Workflow
+```bash
+# Create review-specific groups
+<leader>gc                       # Create "Review-Files" group
+# Add files under review to this group
+:VBufferLineAddToGroup Review-Files
+
+# Toggle between original and reviewed code
+<leader>g1                       # Original codebase group
+<leader>g2                       # Review-Files group
+```
+
+#### Large Codebase Navigation
+```bash
+# Organize by module/component
+<leader>gc                       # "Core"
+<leader>gc                       # "Utils"  
+<leader>gc                       # "UI-Components"
+<leader>gc                       # "API-Layer"
+
+# Use path display for disambiguation
+p                                # Toggle path display in sidebar
+# Shows minimal paths: src/Button.tsx vs components/Button.tsx
+
+# Use history for recent work context
+h                                # Toggle history display
+<leader>h1-h9                    # Quick access to recent files
+```
+
 ## Automatic Features
 
 1. **Auto-add new buffers** - Files opened are automatically added to the active group
@@ -185,6 +247,40 @@ When using `<leader>p` (BufferLine picking), the sidebar shows hint characters:
 5. **BufferLine synchronization** - BufferLine automatically shows only current group's buffers
 6. **Session persistence** - Automatically save and restore group configurations across sessions
 7. **Smart filename disambiguation** - When multiple files have the same name, automatically shows minimal unique paths
+
+## History Feature
+
+Each group maintains a history of recently accessed files, providing quick access to your most recent work within that group.
+
+### History Display
+- **Auto mode**: History is shown when a group has 3+ files and history isn't empty
+- **Manual toggle**: Use `h` key in sidebar to cycle through yes/no/auto modes
+- **Visual feedback**: History entries appear below regular buffers with a subtle tree structure
+
+### History Quick Access
+- `<leader>h1` to `<leader>h9` - Quick switch to recent files 1-9 in current group history
+- History entries are ordered by recency (most recent first)
+- History automatically updates when switching between files in a group
+
+### History Management
+- `:VBufferLineClearHistory` - Clear history for all groups
+- `:VBufferLineClearHistory [group_name]` - Clear history for specific group
+- History is automatically saved and restored with sessions
+- History size is configurable (default: 10 entries per group)
+
+### Example History Display
+```
+[1] ● Frontend (5 buffers)
+├─ ► 1 🌙 App.tsx
+├─ 2 📄 Button.jsx
+├─ 3 📝 README.md
+├─ 4 📋 package.json
+├─ 5 📄 index.html
+└─ Recent:
+   ├─ 1 📄 utils.js
+   ├─ 2 📄 config.js
+   └─ 3 📄 constants.js
+```
 
 ## Smart Filename Disambiguation
 
@@ -251,6 +347,70 @@ For lazy.nvim users, you can configure the plugin with custom options:
     { "<leader>gc", "<cmd>lua require('vertical-bufferline').create_group()<cr>", desc = "Create new group" },
     { "<leader>gn", "<cmd>lua require('vertical-bufferline').switch_to_next_group()<cr>", desc = "Next group" },
     { "<leader>gp", "<cmd>lua require('vertical-bufferline').switch_to_prev_group()<cr>", desc = "Previous group" },
+  }
+}
+```
+
+### Advanced Configuration Examples
+
+#### Minimal Setup
+```lua
+{
+  "your-username/vertical-bufferline",
+  config = function()
+    require('vertical-bufferline').setup()
+  end
+}
+```
+
+#### Power User Setup
+```lua
+{
+  "your-username/vertical-bufferline",
+  opts = {
+    width = 50,
+    position = "right",
+    show_icons = true,
+    show_path = "yes",
+    show_history = "yes", 
+    history_size = 15,
+    auto_save = true,
+    auto_load = true,
+    session = {
+      mini_sessions_integration = true,
+      auto_serialize = true,
+      auto_restore_prompt = false,
+    }
+  },
+  keys = {
+    { "<leader>vb", "<cmd>lua require('vertical-bufferline').toggle()<cr>" },
+    { "<leader>ve", "<cmd>lua require('vertical-bufferline').toggle_expand_all()<cr>" },
+    { "<leader>gc", "<cmd>lua require('vertical-bufferline').create_group()<cr>" },
+    { "<leader>gd", "<cmd>VBufferLineDeleteCurrentGroup<cr>" },
+    { "<leader>gt", "<cmd>VBufferLineToggleExpandAll<cr>" },
+  }
+}
+```
+
+#### IDE-Style Setup
+```lua
+{
+  "your-username/vertical-bufferline",
+  opts = {
+    width = 45,
+    position = "left",
+    expand_all_groups = false,  -- Start with collapsed groups
+    show_icons = true,
+    show_path = "auto",
+    show_history = "auto",
+    path_style = "smart",
+    auto_create_groups = true,
+    auto_add_new_buffers = true,
+    session = {
+      auto_serialize = true,
+      serialize_interval = 1000,  -- More frequent saves
+      mini_sessions_integration = true,
+    }
   }
 }
 ```
@@ -322,7 +482,92 @@ If you prefer manual setup, the plugin initializes automatically when the sideba
 
 ## Installation
 
-Add to your Neovim configuration and ensure the keymap setup is called after plugin loading:
+### Using lazy.nvim (Recommended)
+
+Add to your lazy.nvim configuration:
+
+```lua
+{
+  "your-username/vertical-bufferline",
+  opts = {
+    width = 40,
+    expand_all_groups = true,
+    show_icons = false,
+    position = "left",
+  },
+  keys = {
+    { "<leader>vb", "<cmd>lua require('vertical-bufferline').toggle()<cr>", desc = "Toggle vertical bufferline" },
+    { "<leader>ve", "<cmd>lua require('vertical-bufferline').toggle_expand_all()<cr>", desc = "Toggle expand all groups" },
+    { "<leader>gc", "<cmd>lua require('vertical-bufferline').create_group()<cr>", desc = "Create new group" },
+    { "<leader>gn", "<cmd>lua require('vertical-bufferline').switch_to_next_group()<cr>", desc = "Next group" },
+    { "<leader>gp", "<cmd>lua require('vertical-bufferline').switch_to_prev_group()<cr>", desc = "Previous group" },
+  }
+}
+```
+
+### Using packer.nvim
+
+```lua
+use {
+  'your-username/vertical-bufferline',
+  config = function()
+    require('vertical-bufferline').setup({
+      width = 40,
+      expand_all_groups = true,
+      show_icons = false,
+      position = "left",
+    })
+  end
+}
+```
+
+### Using vim-plug
+
+```vim
+Plug 'your-username/vertical-bufferline'
+
+" In your init.vim or init.lua
+lua << EOF
+require('vertical-bufferline').setup({
+  width = 40,
+  expand_all_groups = true,
+  show_icons = false,
+  position = "left",
+})
+EOF
+```
+
+### Using dein.vim
+
+```vim
+call dein#add('your-username/vertical-bufferline')
+
+" Configuration in init.vim
+lua << EOF
+require('vertical-bufferline').setup()
+EOF
+```
+
+### Manual Installation
+
+1. Clone the repository:
+```bash
+git clone https://github.com/your-username/vertical-bufferline.git ~/.local/share/nvim/site/pack/plugins/start/vertical-bufferline
+```
+
+2. Add to your init.lua:
+```lua
+require('vertical-bufferline').setup()
+```
+
+### Requirements
+
+- Neovim 0.8.0 or higher
+- Optional: [bufferline.nvim](https://github.com/akinsho/bufferline.nvim) for enhanced integration
+
+### Post-Installation Setup
+
+Ensure the keymap setup is called after plugin loading:
 
 ```lua
 -- In your init.lua, after plugin loading
