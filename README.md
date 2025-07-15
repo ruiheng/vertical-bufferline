@@ -37,7 +37,7 @@ A Neovim plugin that provides a vertical sidebar displaying buffer groups with e
 ### Buffer Navigation (within sidebar)
 - `<CR>` - Switch to selected buffer
 - `d` - Close selected buffer (with modification check)
-- `q` or `<Esc>` - Close sidebar
+- `q` - Close sidebar
 - `j/k` - Navigate up/down
 
 ### Buffer Quick Access
