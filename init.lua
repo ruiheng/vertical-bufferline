@@ -377,9 +377,7 @@ end
 -- Set up highlights initially
 setup_pick_highlights()
 
-local config = {
-    width = config_module.DEFAULTS.width,
-}
+-- Configuration is now managed through config_module.DEFAULTS
 
 -- Check if buffer is special (based on buftype)
 local function is_special_buffer(buf_id)
@@ -624,10 +622,17 @@ local function create_buffer_line(component, j, total_components, current_buffer
     -- Build line parts using component system
     local parts = {}
     
-    -- 1. Tree prefix
-    local tree_parts = components.create_tree_prefix(is_last, is_current, is_in_active_group)
-    for _, part in ipairs(tree_parts) do
-        table.insert(parts, part)
+    -- 1. Tree prefix (optional, but always show for current buffer in history)
+    if config_module.DEFAULTS.show_tree_lines then
+        local tree_parts = components.create_tree_prefix(is_last, is_current, is_in_active_group)
+        for _, part in ipairs(tree_parts) do
+            table.insert(parts, part)
+        end
+    elseif group_id == "history" and is_current then
+        -- For history group, always show current buffer marker
+        local renderer = require('vertical-bufferline.renderer')
+        local current_marker = renderer.create_part(config_module.UI.CURRENT_BUFFER_MARKER, config_module.HIGHLIGHTS.PREFIX_CURRENT)
+        table.insert(parts, current_marker)
     end
     
     -- 2. Pick letter (if in picking mode)
@@ -657,26 +662,31 @@ local function create_buffer_line(component, j, total_components, current_buffer
     
     -- 3. Smart numbering (intelligent display logic)
     local bl_integration = require('vertical-bufferline.bufferline-integration')
-    local ok, position_info = pcall(bl_integration.get_buffer_position_info, group_id)
-    if ok and position_info then
-        local local_pos = position_info[component.id]  -- nil if not visible in bufferline
-        local global_pos = j  -- Global position is just the index in current group
-        local numbering_parts = components.create_smart_numbering(local_pos, global_pos, max_local_digits or 1, max_global_digits or 1, has_any_local_info, should_hide_local_numbering)
-        for _, part in ipairs(numbering_parts) do
-            table.insert(parts, part)
-        end
-    else
-        -- Fallback to simple numbering
-        local numbering_parts = components.create_simple_numbering(j, max_global_digits or 1)
-        for _, part in ipairs(numbering_parts) do
-            table.insert(parts, part)
+    -- 2. Numbering (skip if position is 0)
+    if j > 0 then
+        local ok, position_info = pcall(bl_integration.get_buffer_position_info, group_id)
+        if ok and position_info then
+            local local_pos = position_info[component.id]  -- nil if not visible in bufferline
+            local global_pos = j  -- Global position is just the index in current group
+            local numbering_parts = components.create_smart_numbering(local_pos, global_pos, max_local_digits or 1, max_global_digits or 1, has_any_local_info, should_hide_local_numbering)
+            for _, part in ipairs(numbering_parts) do
+                table.insert(parts, part)
+            end
+        else
+            -- Fallback to simple numbering
+            local numbering_parts = components.create_simple_numbering(j, max_global_digits or 1)
+            for _, part in ipairs(numbering_parts) do
+                table.insert(parts, part)
+            end
         end
     end
     
-    -- 4. Space after numbering
-    local space_parts = components.create_space(1)
-    for _, part in ipairs(space_parts) do
-        table.insert(parts, part)
+    -- 4. Space after numbering (only if there was numbering)
+    if j > 0 then
+        local space_parts = components.create_space(1)
+        for _, part in ipairs(space_parts) do
+            table.insert(parts, part)
+        end
     end
     
     -- 5. Icon (moved before filename) - only if enabled
@@ -944,45 +954,6 @@ end
 
 -- Render buffers within a single group
 local function render_group_buffers(group_components, current_buffer_id, is_picking, lines_text, new_line_map, line_types, line_components, line_group_context, line_infos)
-    -- Render history section if enabled and has content
-    local group_id = line_group_context.current_group_id
-    if group_id and groups.should_show_history(group_id) then
-        local history = groups.get_group_history(group_id)
-        if #history > 0 then
-            -- Add "Recent Files" header
-            table.insert(lines_text, "    📋 Histores")
-            local history_header_line = #lines_text
-            line_types[history_header_line] = "history_header"
-            
-            -- Render each history item
-            for i, buffer_id in ipairs(history) do
-                if api.nvim_buf_is_valid(buffer_id) then
-                    local buf_name = api.nvim_buf_get_name(buffer_id)
-                    local filename = vim.fn.fnamemodify(buf_name, ":t")
-                    local history_line = string.format("    ├─ %d %s", i, filename)
-                    if i == #history then
-                        history_line = string.format("    └─ %d %s", i, filename)
-                    end
-                    
-                    table.insert(lines_text, history_line)
-                    local line_num = #lines_text
-                    new_line_map[line_num] = buffer_id
-                    line_types[line_num] = "history"
-                    line_components[line_num] = {id = buffer_id, name = filename}
-                    line_group_context[line_num] = group_id
-                end
-                
-                -- Limit display to avoid cluttering
-                if i >= 5 then break end
-            end
-            
-            -- Add empty line after history
-            table.insert(lines_text, "")
-            local empty_line_num = #lines_text
-            -- Mark empty line as non-clickable
-            line_types[empty_line_num] = "empty"
-        end
-    end
     
     -- Calculate max digits for alignment
     local max_global_digits = string.len(tostring(#group_components))
@@ -1078,6 +1049,77 @@ local function render_group_header(group, i, is_active, buffer_count, lines_text
         group_id = group.id,
         group_number = group.display_number
     })
+end
+
+-- Render current group's history as a unified group
+local function render_current_group_history(active_group, current_buffer_id, is_picking, lines_text, new_line_map, group_header_lines, line_types, all_components, line_components, line_group_context, line_infos)
+    if not active_group or not groups.should_show_history(active_group.id) then
+        return
+    end
+    
+    -- Get history from current active group only
+    local history = groups.get_group_history(active_group.id)
+    if not history or #history == 0 then
+        return
+    end
+    
+    -- Filter valid history items
+    local valid_history = {}
+    for _, buffer_id in ipairs(history) do
+        if api.nvim_buf_is_valid(buffer_id) then
+            table.insert(valid_history, buffer_id)
+        end
+    end
+    
+    -- Only render if we have valid history items
+    if #valid_history > 0 then
+        -- Render history group header
+        local header_text = string.format("[H] 📋 Recent Files (%d)", math.min(#valid_history, config_module.DEFAULTS.history_display_count))
+        table.insert(lines_text, header_text)
+        local header_line_num = #lines_text
+        group_header_lines[header_line_num] = {
+            group_id = "history",
+            group_number = "H"
+        }
+        
+        -- Render history items
+        for i, buffer_id in ipairs(valid_history) do
+            if i > config_module.DEFAULTS.history_display_count then break end
+            
+            local buf_name = api.nvim_buf_get_name(buffer_id)
+            local filename = vim.fn.fnamemodify(buf_name, ":t")
+            local is_current = buffer_id == current_buffer_id
+            local is_last = (i == math.min(#valid_history, config_module.DEFAULTS.history_display_count))
+            
+            -- Create component object for history buffer
+            local history_component = {
+                id = buffer_id,
+                name = filename,
+                focused = is_current  -- Current buffer should be focused for proper highlighting
+            }
+            
+            -- Create buffer line - first item (current) has no number, rest have numbers
+            local display_pos = (i == 1) and 0 or (i - 1)  -- First item has no number, rest are numbered 1, 2, 3...
+            local line_info = create_buffer_line(history_component, display_pos, #valid_history, current_buffer_id, is_picking, #lines_text + 1, "history", 1, 1, false, false)
+            table.insert(lines_text, line_info.text)
+            local line_num = #lines_text
+            
+            -- Map this line to the buffer
+            new_line_map[line_num] = buffer_id
+            line_types[line_num] = "history"
+            line_components[line_num] = history_component
+            line_group_context[line_num] = active_group.id
+            line_infos[line_num] = line_info
+            
+            -- Add to all components for highlighting
+            all_components[buffer_id] = history_component
+        end
+        
+        -- Add empty line after history
+        table.insert(lines_text, "")
+        local empty_line_num = #lines_text
+        line_types[empty_line_num] = "empty"
+    end
 end
 
 -- Render all groups with their buffers
@@ -1284,6 +1326,9 @@ function M.refresh(reason)
     local line_infos = {}  -- Store complete line_info for each line (includes number_highlights)
     local line_group_context = {}  -- Store which group each line belongs to
 
+    -- Render current group's history first (at the top)
+    render_current_group_history(active_group, current_buffer_id, is_picking, lines_text, new_line_map, group_header_lines, line_types, all_components, line_components, line_group_context, line_infos)
+    
     -- Render all groups with their buffers (without applying highlights yet)
     local remaining_components = render_all_groups(active_group, components, current_buffer_id, is_picking, lines_text, new_line_map, group_header_lines, line_types, all_components, line_components, line_group_context, line_infos)
 
@@ -1367,9 +1412,15 @@ function M.refresh(reason)
                 -- Apply highlighting with group context
                 apply_buffer_highlighting(line_info, component, line_num, group_current_buffer_id, is_picking, is_in_active_group)
             elseif line_type == "history" then
-                -- This is a history line - apply history-specific highlighting
-                local highlight_group = config_module.HIGHLIGHTS.INACTIVE  -- Subtle highlighting for history
-                api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, highlight_group, line_num - 1, 0, -1)
+                -- This is a history line - apply proper highlighting using the component system
+                local component = line_components[line_num]
+                local line_info = line_infos[line_num]
+                if component and line_info then
+                    local buffer_id = new_line_map[line_num]
+                    local is_current_buffer = (buffer_id == current_buffer_id)
+                    -- Apply highlighting with proper group context (history group is considered active)
+                    apply_buffer_highlighting(line_info, component, line_num, current_buffer_id, is_picking, true)
+                end
             elseif line_type == "history_header" then
                 -- This is a history header line - apply header highlighting
                 local highlight_group = config_module.HIGHLIGHTS.GROUP_NUMBER  -- Same as group number
@@ -1610,7 +1661,7 @@ local function open_sidebar()
     end
     local new_win_id = api.nvim_get_current_win()
     api.nvim_win_set_buf(new_win_id, buf_id)
-    api.nvim_win_set_width(new_win_id, config.width)
+    api.nvim_win_set_width(new_win_id, config_module.DEFAULTS.width)
     api.nvim_win_set_option(new_win_id, 'winfixwidth', true)  -- Prevent window from auto-resizing width
     api.nvim_win_set_option(new_win_id, 'number', false)
     api.nvim_win_set_option(new_win_id, 'relativenumber', false)

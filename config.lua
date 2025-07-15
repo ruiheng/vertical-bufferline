@@ -131,11 +131,13 @@ M.DEFAULTS = {
     expand_all_groups = true,
     show_icons = false,  -- Show file type icons (emoji)
     position = "left",  -- Sidebar position: "left" or "right"
+    show_tree_lines = false,  -- Show tree-style connection lines
     
     -- History settings
-    show_history = "auto",  -- "yes", "no", "auto" - show recent files history per group
+    show_history = "auto",  -- "yes", "no", "auto" - show recent files history as unified group
     history_size = 10,      -- Maximum number of recent files to track per group
     history_auto_threshold = 3,  -- Minimum files needed for auto mode to show history
+    history_display_count = 5,  -- Maximum number of history items to display
     
     -- Path display settings
     show_path = "auto", -- "yes", "no", "auto"
@@ -220,6 +222,14 @@ end
 
 function M.validate_history_size(size)
     return type(size) == "number" and size > 0 and size <= 50
+end
+
+function M.validate_history_display_count(count)
+    return type(count) == "number" and count > 0 and count <= 20
+end
+
+function M.validate_show_tree_lines(show_tree_lines)
+    return type(show_tree_lines) == "boolean"
 end
 
 return M

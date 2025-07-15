@@ -250,36 +250,41 @@ h                                # Toggle history display
 
 ## History Feature
 
-Each group maintains a history of recently accessed files, providing quick access to your most recent work within that group.
+Each group maintains its own history of recently accessed files. The current active group's history is displayed as a special group at the top of the sidebar.
 
 ### History Display
-- **Auto mode**: History is shown when a group has 3+ files and history isn't empty
+- **Current Group History**: Shows recent files from the currently active group at the top
+- **Current file first**: The current file is shown first without a number (marked with ►)
+- **Numbered history**: Following files are numbered 1, 2, 3... representing access order
+- **Auto mode**: History is shown when active group has 3+ files and history isn't empty
 - **Manual toggle**: Use `h` key in sidebar to cycle through yes/no/auto modes
-- **Visual feedback**: History entries appear below regular buffers with a subtle tree structure
+- **Configurable display count**: Maximum number of history items shown (default: 5)
 
 ### History Quick Access
-- `<leader>h1` to `<leader>h9` - Quick switch to recent files 1-9 in current group history
+- `<leader>h1` to `<leader>h9` - Quick switch to recent files 1-9 from current group's history
 - History entries are ordered by recency (most recent first)
-- History automatically updates when switching between files in a group
+- History automatically updates when switching between files in the active group
 
 ### History Management
 - `:VBufferLineClearHistory` - Clear history for all groups
 - `:VBufferLineClearHistory [group_name]` - Clear history for specific group
 - History is automatically saved and restored with sessions
 - History size is configurable (default: 10 entries per group)
+- History display count is configurable (default: 5 items shown)
 
 ### Example History Display
 ```
-[1] ● Frontend (5 buffers)
-├─ ► 1 🌙 App.tsx
-├─ 2 📄 Button.jsx
-├─ 3 📝 README.md
-├─ 4 📋 package.json
-├─ 5 📄 index.html
-└─ Recent:
-   ├─ 1 📄 utils.js
-   ├─ 2 📄 config.js
-   └─ 3 📄 constants.js
+[H] 📋 Recent Files (5)
+► 🌙 App.tsx          (current file, no number)
+1 📄 utils.js         (most recent)
+2 📄 config.js        (second most recent)
+3 📝 README.md        (third most recent)
+4 📋 package.json     (fourth most recent)
+
+[1] ● Frontend (3 buffers)
+► 1 🌙 Button.jsx
+2 📄 styles.css
+3 📄 index.html
 ```
 
 ## Smart Filename Disambiguation
@@ -311,6 +316,7 @@ For lazy.nvim users, you can configure the plugin with custom options:
     expand_all_groups = true,       -- Default to expand all groups mode
     show_icons = false,             -- Show file type emoji icons
     position = "left",              -- Sidebar position: "left" or "right"
+    show_tree_lines = false,        -- Show tree-style connection lines
     
     -- Group management  
     auto_create_groups = true,      -- Enable automatic group creation
@@ -325,6 +331,7 @@ For lazy.nvim users, you can configure the plugin with custom options:
     show_history = "auto",          -- "yes", "no", "auto" - show recent files history per group
     history_size = 10,              -- Maximum number of recent files to track per group
     history_auto_threshold = 3,     -- Minimum files needed for auto mode to show history
+    history_display_count = 5,      -- Maximum number of history items to display
     
     -- Session persistence settings
     auto_save = false,              -- Auto-save session on Neovim exit
@@ -371,9 +378,11 @@ For lazy.nvim users, you can configure the plugin with custom options:
     width = 50,
     position = "right",
     show_icons = true,
+    show_tree_lines = true,
     show_path = "yes",
     show_history = "yes", 
     history_size = 15,
+    history_display_count = 8,
     auto_save = true,
     auto_load = true,
     session = {
@@ -401,8 +410,10 @@ For lazy.nvim users, you can configure the plugin with custom options:
     position = "left",
     expand_all_groups = false,  -- Start with collapsed groups
     show_icons = true,
+    show_tree_lines = true,
     show_path = "auto",
     show_history = "auto",
+    history_display_count = 10,
     path_style = "smart",
     auto_create_groups = true,
     auto_add_new_buffers = true,
@@ -440,6 +451,7 @@ If you prefer manual setup, the plugin initializes automatically when the sideba
     show_history = "auto",          -- "yes", "no", "auto" - show recent files history per group
     history_size = 10,              -- Maximum number of recent files to track per group
     history_auto_threshold = 3,     -- Minimum files needed for auto mode to show history
+    history_display_count = 5,      -- Maximum number of history items to display
     
     -- Session persistence settings
     auto_save = false,              -- Auto-save session on Neovim exit

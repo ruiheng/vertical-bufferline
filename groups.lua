@@ -62,13 +62,12 @@ local function init_default_group()
             id = groups_data.default_group_id,
             name = "Default",
             buffers = {},
-            current_buffer = nil,  -- Track current buffer within this group
             created_at = os.time(),
             color = config_module.COLORS.BLUE,
             display_number = groups_data.next_display_number,
             buffer_states = {},  -- Store per-buffer window states (cursor, scroll, etc.)
             position_info = {},   -- Store bufferline position info {buffer_id -> local_pos}
-            history = {}  -- Store recent file access history
+            history = {}  -- Store recent file access history, first item is current buffer
         }
         groups_data.next_display_number = groups_data.next_display_number + 1
         table.insert(groups_data.groups, default_group)
@@ -228,14 +227,12 @@ function M.create_group(name, color)
         id = group_id,
         name = group_name,
         buffers = {},
-        current_buffer = nil,  -- Track current buffer within this group
         created_at = os.time(),
         color = color or config_module.COLORS.GREEN,
         display_number = groups_data.next_display_number,
         buffer_states = {},  -- Store per-buffer window states (cursor, scroll, etc.)
         position_info = {},  -- Store bufferline position info {buffer_id -> local_pos}
-        history = {},        -- Store recent file access history {buffer_id, ...} (newest first, excludes current)
-        last_current_buffer = nil  -- Track previous current buffer for history updates
+        history = {}         -- Store recent file access history {buffer_id, ...} (newest first, first item is current buffer)
     }
     groups_data.next_display_number = groups_data.next_display_number + 1
 
@@ -379,7 +376,8 @@ function M.set_active_group(group_id)
     if old_group then
         local current_buf = vim.api.nvim_get_current_buf()
         if vim.tbl_contains(old_group.buffers, current_buf) then
-            old_group.current_buffer = current_buf
+            -- Update history with current buffer (add to front if not already there)
+            M.sync_group_history_with_current(old_group.id, current_buf)
             -- Save comprehensive window state for current buffer
             save_buffer_state(old_group, current_buf)
         end
@@ -417,10 +415,10 @@ function M.set_active_group(group_id)
     if #group.buffers > 0 then
         local target_buffer = nil
         
-        -- First priority: use group's remembered current buffer if valid
-        if group.current_buffer and vim.api.nvim_buf_is_valid(group.current_buffer) 
-           and vim.tbl_contains(group.buffers, group.current_buffer) then
-            target_buffer = group.current_buffer
+        -- First priority: use first item in history (current buffer) if valid
+        if #group.history > 0 and vim.api.nvim_buf_is_valid(group.history[1]) 
+           and vim.tbl_contains(group.buffers, group.history[1]) then
+            target_buffer = group.history[1]
         else
             -- Second priority: keep current buffer if it's in the group
             local current_buf = vim.api.nvim_get_current_buf()
@@ -440,8 +438,8 @@ function M.set_active_group(group_id)
         -- Switch to the determined buffer
         if target_buffer then
             vim.api.nvim_set_current_buf(target_buffer)
-            -- Update group's current buffer record
-            group.current_buffer = target_buffer
+            -- Update history with current buffer (ensure it's at the front)
+            M.sync_group_history_with_current(group.id, target_buffer)
             
             -- Restore saved window state for this buffer in this group
             vim.schedule(function()
@@ -957,49 +955,29 @@ function M.sync_group_history_with_current(group_id, current_buffer_id)
     if not group.history then
         group.history = {}
     end
-    if group.last_current_buffer == nil then
-        group.last_current_buffer = nil
+    
+    -- If no current buffer, clear history
+    if not current_buffer_id then
+        group.history = {}
+        return
     end
     
-    local old_current = group.last_current_buffer
-    local new_current = current_buffer_id
-    
-    -- Remove new current buffer from history (current buffer should not be in history)
-    if new_current then
-        for i, hist_buf_id in ipairs(group.history) do
-            if hist_buf_id == new_current then
-                table.remove(group.history, i)
-                break
-            end
+    -- Remove current buffer from any other position in history
+    for i, hist_buf_id in ipairs(group.history) do
+        if hist_buf_id == current_buffer_id then
+            table.remove(group.history, i)
+            break
         end
     end
     
-    -- If current buffer changed and old current is valid AND is a normal file, add old current to history front
-    if new_current ~= old_current and old_current and 
-       vim.api.nvim_buf_is_valid(old_current) and 
-       vim.tbl_contains(group.buffers, old_current) and
-       is_normal_file_buffer(old_current) then
-        
-        -- Remove old current from history if it exists
-        for i, hist_buf_id in ipairs(group.history) do
-            if hist_buf_id == old_current then
-                table.remove(group.history, i)
-                break
-            end
-        end
-        
-        -- Add old current to front of history
-        table.insert(group.history, 1, old_current)
-        
-        -- Limit history size
-        local max_size = config_module.DEFAULTS.history_size
-        while #group.history > max_size do
-            table.remove(group.history)
-        end
-    end
+    -- Add current buffer to front of history
+    table.insert(group.history, 1, current_buffer_id)
     
-    -- Update last current buffer tracker
-    group.last_current_buffer = new_current
+    -- Limit history size
+    local max_size = config_module.DEFAULTS.history_size
+    while #group.history > max_size do
+        table.remove(group.history)
+    end
 end
 
 --- Get history for a group
