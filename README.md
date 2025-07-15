@@ -111,9 +111,10 @@ Toggle between modes with `<leader>ve` or `:VBufferLineToggleExpandAll`.
 ## Interface Elements
 
 ### Group Headers
-- `[1] ● GroupName (5 buffers)` - Active group with name
-- `[2] ○ (3 buffers)` - Inactive unnamed group
+- `[1] ● GroupName (5 buffers)` - Active group with name (PmenuSel background, bold text)
+- `[2] ○ (3 buffers)` - Inactive unnamed group (Pmenu background)
 - Numbers correspond to `<leader>g1`, `<leader>g2`, etc.
+- Each group header uses semantic highlight groups that adapt to your theme
 
 ### Buffer Lines
 - `► 1 🌙 filename.lua` - Current buffer with arrow marker

@@ -69,9 +69,13 @@ setup_highlights()
 api.nvim_set_hl(0, config_module.HIGHLIGHTS.ERROR, { fg = config_module.COLORS.RED, default = true })
 api.nvim_set_hl(0, config_module.HIGHLIGHTS.WARNING, { fg = config_module.COLORS.YELLOW, default = true })
 
--- Group header highlights - linked to semantic highlight groups for color scheme compatibility
-api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_ACTIVE, { link = "Function", bold = true, default = true })
-api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_INACTIVE, { link = "Comment", bold = true, default = true })
+-- Group header highlights - use semantic colors for theme compatibility
+api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_ACTIVE, { 
+    link = "PmenuSel", bold = true, default = true 
+})
+api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_INACTIVE, { 
+    link = "Pmenu", default = true 
+})
 api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_NUMBER, { link = "Number", bold = true, default = true })
 api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_SEPARATOR, { link = "Comment", default = true })
 api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_MARKER, { link = "Special", bold = true, default = true })
@@ -1032,16 +1036,11 @@ local function render_group_header(group, i, is_active, buffer_count, lines_text
     local group_marker = is_active and config_module.UI.ACTIVE_GROUP_MARKER or config_module.UI.INACTIVE_GROUP_MARKER
     local group_name_display = group.name == "" and config_module.UI.UNNAMED_GROUP_DISPLAY or group.name
 
-    -- Add visual separator (except for first group)
+    -- Add spacing between groups (except for first group)
     if i > config_module.SYSTEM.FIRST_INDEX then
         table.insert(lines_text, "")  -- Empty line separator
         local separator_line_num = #lines_text
-        -- Use different separator for active group
-        local separator = is_active and config_module.UI.ACTIVE_GROUP_SEPARATOR or config_module.UI.GROUP_SEPARATOR
-        table.insert(lines_text, separator)  -- Separator line
-        local separator_visual_line_num = #lines_text
         table.insert(group_header_lines, {line = separator_line_num, type = "separator"})
-        table.insert(group_header_lines, {line = separator_visual_line_num, type = "separator_visual"})
     end
 
     local group_line = string.format("[%d] %s %s (%d buffers)",
@@ -1278,22 +1277,17 @@ end
 local function apply_group_highlights(group_header_lines, lines_text)
     for _, header_info in ipairs(group_header_lines) do
         if header_info.type == "separator" then
-            -- Separator line highlight
-            api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, config_module.HIGHLIGHTS.GROUP_SEPARATOR, header_info.line, 0, -1)
+            -- Empty separator line - no highlight needed
+            -- Just a space line for visual separation
         elseif header_info.type == "header" then
-            -- Group title line overall highlight
+            -- Group title line overall highlight with background
             local group_highlight = header_info.is_active and config_module.HIGHLIGHTS.GROUP_ACTIVE or config_module.HIGHLIGHTS.GROUP_INACTIVE
             api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, group_highlight, header_info.line, 0, -1)
 
-            -- Highlight group number [1] - include the brackets for consistency
-            api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, config_module.HIGHLIGHTS.GROUP_NUMBER, header_info.line, 0, config_module.SYSTEM.GROUP_NUMBER_END)
-
-            -- Highlight group marker (● or ○)
-            local line_text = lines_text[header_info.line + 1] or ""
-            local marker_start = string.find(line_text, "[●○]")
-            if marker_start then
-                api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, config_module.HIGHLIGHTS.GROUP_MARKER, header_info.line, marker_start - 1, marker_start)
-            end
+            -- Note: We no longer highlight individual parts (number, marker) to preserve the background color
+            -- The overall group highlight already provides the visual distinction
+        elseif header_info.type == "separator_visual" then
+            -- This type is no longer used since we removed visual separators
         end
     end
 end
