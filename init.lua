@@ -950,7 +950,7 @@ local function render_group_buffers(group_components, current_buffer_id, is_pick
         local history = groups.get_group_history(group_id)
         if #history > 0 then
             -- Add "Recent Files" header
-            table.insert(lines_text, "    📋 Recent Files")
+            table.insert(lines_text, "    📋 Histores")
             local history_header_line = #lines_text
             line_types[history_header_line] = "history_header"
             
