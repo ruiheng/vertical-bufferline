@@ -70,15 +70,16 @@ api.nvim_set_hl(0, config_module.HIGHLIGHTS.ERROR, { fg = config_module.COLORS.R
 api.nvim_set_hl(0, config_module.HIGHLIGHTS.WARNING, { fg = config_module.COLORS.YELLOW, default = true })
 
 -- Group header highlights - use semantic colors for theme compatibility
--- Use direct color definition instead of link to ensure bold works
-api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_ACTIVE, {
-    bg = config_module.COLORS.BLUE,
-    fg = "white",
+-- Set up base highlight first, then override with bold
+api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_ACTIVE, { 
+    link = "PmenuSel", default = true 
+})
+-- Override with bold but keep the linked colors
+api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_ACTIVE, { 
     bold = true
 })
 api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_INACTIVE, { 
-    bg = config_module.COLORS.GRAY,
-    fg = "white"
+    link = "Pmenu", default = true 
 })
 api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_NUMBER, { link = "Number", bold = true, default = true })
 api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_SEPARATOR, { link = "Comment", default = true })
