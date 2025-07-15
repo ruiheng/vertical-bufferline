@@ -70,12 +70,18 @@ api.nvim_set_hl(0, config_module.HIGHLIGHTS.ERROR, { fg = config_module.COLORS.R
 api.nvim_set_hl(0, config_module.HIGHLIGHTS.WARNING, { fg = config_module.COLORS.YELLOW, default = true })
 
 -- Group header highlights - use semantic colors for theme compatibility
--- Use underline instead of bold for better terminal compatibility
-api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_ACTIVE, { 
-    link = "PmenuSel", underline = true, default = true 
+-- Get colors from theme but set attributes explicitly
+local pmenu_sel_attrs = vim.api.nvim_get_hl(0, {name = 'PmenuSel'})
+local pmenu_attrs = vim.api.nvim_get_hl(0, {name = 'Pmenu'})
+
+api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_ACTIVE, {
+    bg = pmenu_sel_attrs.bg,
+    fg = pmenu_sel_attrs.fg,
+    bold = true
 })
-api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_INACTIVE, { 
-    link = "Pmenu", default = true 
+api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_INACTIVE, {
+    bg = pmenu_attrs.bg,
+    fg = pmenu_attrs.fg
 })
 api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_NUMBER, { link = "Number", bold = true, default = true })
 api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_SEPARATOR, { link = "Comment", default = true })
