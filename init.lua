@@ -64,11 +64,12 @@ local function setup_highlights()
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.NUMBER_HIDDEN, { link = "NonText" })                -- Hidden: very subtle
     
     -- Group header highlights - use semantic colors for theme compatibility
+    -- Use direct colors to ensure italic works
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_ACTIVE, { 
-        link = "PmenuSel", italic = true, default = true 
+        bg = config_module.COLORS.BLUE, fg = "white", italic = true
     })
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_INACTIVE, { 
-        link = "Pmenu", default = true 
+        bg = config_module.COLORS.GRAY, fg = "white"
     })
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_NUMBER, { link = "Number", bold = true, default = true })
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_SEPARATOR, { link = "Comment", default = true })
