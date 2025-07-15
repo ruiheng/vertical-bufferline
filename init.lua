@@ -763,11 +763,18 @@ local function create_buffer_line(component, j, total_components, current_buffer
                 base_indent = base_indent + 2  -- "🌙 "
             end
             
-            -- Use different continuation character for active vs inactive groups
-            local continuation_char = is_in_active_group and "┃" or "│"
-            local tree_continuation = is_last and string.rep(" ", base_indent) or (" " .. continuation_char .. string.rep(" ", base_indent - 2))
             local display_path = path_dir == "." and "./" or path_dir .. "/"
-            path_line = tree_continuation .. display_path
+            
+            -- Only add tree continuation if tree lines are enabled
+            if config_module.DEFAULTS.show_tree_lines then
+                -- Use different continuation character for active vs inactive groups
+                local continuation_char = is_in_active_group and "┃" or "│"
+                local tree_continuation = is_last and string.rep(" ", base_indent) or (" " .. continuation_char .. string.rep(" ", base_indent - 2))
+                path_line = tree_continuation .. display_path
+            else
+                -- Simple indentation without tree lines
+                path_line = string.rep(" ", base_indent) .. display_path
+            end
         end
     end
     
@@ -1222,7 +1229,10 @@ local function render_all_groups(active_group, components, current_buffer_id, is
 
             -- If group is empty, show clean empty group hint
             if #group_components == 0 then
-                table.insert(lines_text, "  " .. config_module.UI.TREE_LAST .. config_module.UI.TREE_EMPTY)
+                local empty_line = config_module.DEFAULTS.show_tree_lines and 
+                    ("  " .. config_module.UI.TREE_LAST .. config_module.UI.TREE_EMPTY) or 
+                    ("  " .. config_module.UI.TREE_EMPTY)
+                table.insert(lines_text, empty_line)
                 local empty_group_line = #lines_text
                 line_types[empty_group_line] = "empty_group"
             end
@@ -2282,17 +2292,21 @@ function M.switch_to_history_file(position)
     end
     
     local history = groups.get_group_history(active_group.id)
-    if not history or #history == 0 then
+    if not history or #history <= 1 then
         vim.notify("No history available in current group", vim.log.levels.WARN)
         return false
     end
     
-    if position < 1 or position > #history then
-        vim.notify(string.format("History position %d not available (1-%d)", position, #history), vim.log.levels.WARN)
+    -- Skip first item (current buffer) and access history items
+    -- position 1 -> history[2], position 2 -> history[3], etc.
+    local history_index = position + 1
+    
+    if history_index > #history then
+        vim.notify(string.format("History position %d not available (1-%d)", position, #history - 1), vim.log.levels.WARN)
         return false
     end
     
-    local buffer_id = history[position]
+    local buffer_id = history[history_index]
     if not buffer_id or not api.nvim_buf_is_valid(buffer_id) then
         vim.notify("History buffer is no longer valid", vim.log.levels.WARN)
         return false

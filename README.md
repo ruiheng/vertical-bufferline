@@ -205,8 +205,8 @@ When using `<leader>p` (BufferLine picking), the sidebar shows hint characters:
 <leader>gc                       # Create "Documentation" group
 
 # Use history for quick access to recently modified files
-<leader>h1                       # Most recent file in current group
-<leader>h2                       # Second most recent file
+<leader>h1                       # Most recent file in current group (2nd in history list)
+<leader>h2                       # Second most recent file (3rd in history list)
 ```
 
 #### Code Review Workflow
@@ -262,6 +262,8 @@ Each group maintains its own history of recently accessed files. The current act
 
 ### History Quick Access
 - `<leader>h1` to `<leader>h9` - Quick switch to recent files 1-9 from current group's history
+- `<leader>h1` accesses the most recent file (2nd in history list, after current file)
+- `<leader>h2` accesses the second most recent file (3rd in history list), etc.
 - History entries are ordered by recency (most recent first)
 - History automatically updates when switching between files in the active group
 

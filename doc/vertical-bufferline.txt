@@ -171,6 +171,7 @@ Buffer Quick Access:
 
 History Quick Access:                          *vertical-bufferline-history-keymaps*
 <leader>h1 to <leader>h9              Quick switch to recent files 1-9 in history
+                                      (<leader>h1 = most recent, <leader>h2 = second most recent, etc.)
 
 ==============================================================================
 7. HISTORY FEATURE                             *vertical-bufferline-history*
