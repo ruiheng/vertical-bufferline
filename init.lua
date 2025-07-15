@@ -70,13 +70,9 @@ api.nvim_set_hl(0, config_module.HIGHLIGHTS.ERROR, { fg = config_module.COLORS.R
 api.nvim_set_hl(0, config_module.HIGHLIGHTS.WARNING, { fg = config_module.COLORS.YELLOW, default = true })
 
 -- Group header highlights - use semantic colors for theme compatibility
--- Set up base highlight first, then override with bold
+-- Use underline instead of bold for better terminal compatibility
 api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_ACTIVE, { 
-    link = "PmenuSel", default = true 
-})
--- Override with bold but keep the linked colors
-api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_ACTIVE, { 
-    bold = true
+    link = "PmenuSel", underline = true, default = true 
 })
 api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_INACTIVE, { 
     link = "Pmenu", default = true 
