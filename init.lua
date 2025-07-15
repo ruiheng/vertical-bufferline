@@ -64,12 +64,22 @@ local function setup_highlights()
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.NUMBER_HIDDEN, { link = "NonText" })                -- Hidden: very subtle
     
     -- Group header highlights - use semantic colors for theme compatibility
-    -- Use direct colors to ensure italic works
+    -- Get background from PmenuSel/Pmenu but foreground/style from Title/Comment
+    local pmenusel_attrs = vim.api.nvim_get_hl(0, {name = 'PmenuSel'})
+    local pmenu_attrs = vim.api.nvim_get_hl(0, {name = 'Pmenu'})
+    local title_attrs = vim.api.nvim_get_hl(0, {name = 'Title'})
+    local comment_attrs = vim.api.nvim_get_hl(0, {name = 'Comment'})
+    
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_ACTIVE, { 
-        bg = config_module.COLORS.BLUE, fg = "white", italic = true
+        bg = pmenusel_attrs.bg,
+        fg = title_attrs.fg or pmenusel_attrs.fg,
+        bold = title_attrs.bold,
+        italic = title_attrs.italic
     })
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_INACTIVE, { 
-        bg = config_module.COLORS.GRAY, fg = "white"
+        bg = pmenu_attrs.bg,
+        fg = comment_attrs.fg or pmenu_attrs.fg,
+        italic = comment_attrs.italic
     })
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_NUMBER, { link = "Number", bold = true, default = true })
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_SEPARATOR, { link = "Comment", default = true })
