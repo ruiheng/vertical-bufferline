@@ -70,16 +70,15 @@ api.nvim_set_hl(0, config_module.HIGHLIGHTS.ERROR, { fg = config_module.COLORS.R
 api.nvim_set_hl(0, config_module.HIGHLIGHTS.WARNING, { fg = config_module.COLORS.YELLOW, default = true })
 
 -- Group header highlights - use semantic colors for theme compatibility
--- Get the background color from PmenuSel but set bold explicitly
-local pmenu_sel_attrs = vim.api.nvim_get_hl(0, {name = 'PmenuSel'})
+-- Use direct color definition instead of link to ensure bold works
 api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_ACTIVE, {
-    bg = pmenu_sel_attrs.bg,
-    fg = pmenu_sel_attrs.fg,
-    bold = true,
-    default = true
+    bg = config_module.COLORS.BLUE,
+    fg = "white",
+    bold = true
 })
 api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_INACTIVE, { 
-    link = "Pmenu", default = true 
+    bg = config_module.COLORS.GRAY,
+    fg = "white"
 })
 api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_NUMBER, { link = "Number", bold = true, default = true })
 api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_SEPARATOR, { link = "Comment", default = true })
