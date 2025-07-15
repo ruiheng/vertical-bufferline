@@ -62,30 +62,23 @@ local function setup_highlights()
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.NUMBER_GLOBAL, { link = "Comment" })                -- Global: subdued
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.NUMBER_SEPARATOR, { link = "Operator" })            -- Separator: distinct
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.NUMBER_HIDDEN, { link = "NonText" })                -- Hidden: very subtle
+    
+    -- Group header highlights - use semantic colors for theme compatibility
+    api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_ACTIVE, { 
+        link = "PmenuSel", bold = true, default = true 
+    })
+    api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_INACTIVE, { 
+        link = "Pmenu", default = true 
+    })
+    api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_NUMBER, { link = "Number", bold = true, default = true })
+    api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_SEPARATOR, { link = "Comment", default = true })
+    api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_MARKER, { link = "Special", bold = true, default = true })
 end
 
 -- Call setup function immediately
 setup_highlights()
 api.nvim_set_hl(0, config_module.HIGHLIGHTS.ERROR, { fg = config_module.COLORS.RED, default = true })
 api.nvim_set_hl(0, config_module.HIGHLIGHTS.WARNING, { fg = config_module.COLORS.YELLOW, default = true })
-
--- Group header highlights - use semantic colors for theme compatibility
--- Get colors from theme but set attributes explicitly
-local pmenu_sel_attrs = vim.api.nvim_get_hl(0, {name = 'PmenuSel'})
-local pmenu_attrs = vim.api.nvim_get_hl(0, {name = 'Pmenu'})
-
-api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_ACTIVE, {
-    bg = pmenu_sel_attrs.bg,
-    fg = pmenu_sel_attrs.fg,
-    bold = true
-})
-api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_INACTIVE, {
-    bg = pmenu_attrs.bg,
-    fg = pmenu_attrs.fg
-})
-api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_NUMBER, { link = "Number", bold = true, default = true })
-api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_SEPARATOR, { link = "Comment", default = true })
-api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_MARKER, { link = "Special", bold = true, default = true })
 
 
 -- Extended picking mode utilities
