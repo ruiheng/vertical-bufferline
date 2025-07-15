@@ -65,7 +65,7 @@ local function setup_highlights()
     
     -- Group header highlights - use semantic colors for theme compatibility
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_ACTIVE, { 
-        link = "PmenuSel", bold = true, default = true 
+        link = "PmenuSel", italic = true, default = true 
     })
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_INACTIVE, { 
         link = "Pmenu", default = true 
