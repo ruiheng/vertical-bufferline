@@ -70,8 +70,13 @@ api.nvim_set_hl(0, config_module.HIGHLIGHTS.ERROR, { fg = config_module.COLORS.R
 api.nvim_set_hl(0, config_module.HIGHLIGHTS.WARNING, { fg = config_module.COLORS.YELLOW, default = true })
 
 -- Group header highlights - use semantic colors for theme compatibility
-api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_ACTIVE, { 
-    link = "PmenuSel", bold = true, default = true 
+-- Get the background color from PmenuSel but set bold explicitly
+local pmenu_sel_attrs = vim.api.nvim_get_hl(0, {name = 'PmenuSel'})
+api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_ACTIVE, {
+    bg = pmenu_sel_attrs.bg,
+    fg = pmenu_sel_attrs.fg,
+    bold = true,
+    default = true
 })
 api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_INACTIVE, { 
     link = "Pmenu", default = true 
