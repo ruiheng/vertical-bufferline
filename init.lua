@@ -763,15 +763,18 @@ local function create_buffer_line(component, j, total_components, current_buffer
         local show_path_setting = config_module.DEFAULTS.show_path
         if show_path_setting == "yes" or path_dir ~= "." then
             -- Calculate dynamic indentation to align with filename
-            -- Tree prefix width varies: "├─ " (3) vs "┣━ " (3) - same width, good
-            local base_indent = 3  -- Tree prefix: "├─ " or "┣━ "
+            -- Use the same component calculation as filename lines for perfect alignment
+            local base_indent = 0
+            
+            -- Tree prefix: " " + tree_chars (4 chars total)
+            base_indent = base_indent + 4
             
             -- Add pick letter space if in picking mode
             if is_picking then
                 base_indent = base_indent + 2  -- "a "
             end
             
-            -- Add numbering width - calculate actual width based on smart numbering logic
+            -- Add numbering width - match exact smart numbering logic
             local numbering_width
             if not has_any_local_info or should_hide_local_numbering then
                 -- Case 1 & 2: Only global number shown
@@ -782,7 +785,10 @@ local function create_buffer_line(component, j, total_components, current_buffer
             end
             base_indent = base_indent + numbering_width
             
-            -- Add icon width if icons are enabled (assuming 2 characters for emoji + space)
+            -- Add space after numbering (create_space(1))
+            base_indent = base_indent + 1
+            
+            -- Add icon width if icons are enabled (emoji + space)
             if config_module.DEFAULTS.show_icons then
                 base_indent = base_indent + 2  -- "🌙 "
             end
