@@ -128,6 +128,18 @@ end
 -- Extended picking mode implementation
 local PICK_ALPHABET = "asdfjkl;ghqwertyuiopzxcvbnm1234567890ASDFJKL;GHQWERTYUIOPZXCVBNM"
 
+-- Generate multi-character hint for overflow cases
+local function generate_multi_char_hint(overflow_index)
+    -- Use two-character combinations: aa, ab, ac, ..., ba, bb, bc, ...
+    local base = #"asdfjkl;gh"  -- Use first 10 chars as base for multi-char hints
+    local first_char_index = math.floor((overflow_index - 1) / base) + 1
+    local second_char_index = ((overflow_index - 1) % base) + 1
+    
+    local first_char = "asdfjkl;gh":sub(first_char_index, first_char_index)
+    local second_char = "asdfjkl;gh":sub(second_char_index, second_char_index)
+    
+    return first_char .. second_char
+end
 
 -- Generate extended hints for all sidebar buffers
 local function generate_extended_hints(bufferline_components, line_to_buffer, line_group_context, active_group_id)
@@ -161,16 +173,34 @@ local function generate_extended_hints(bufferline_components, line_to_buffer, li
         end
     end
     
-    -- Assign hints to non-active group lines
+    -- Assign hints to non-active group lines with deterministic ordering
     local char_index = 1
+    
+    -- Create sorted list of line numbers for deterministic ordering
+    local sorted_lines = {}
     for line_num, buffer_id in pairs(line_to_buffer) do
         local line_group_id = line_group_context[line_num]
-        
-        -- Skip lines in active group (they use bufferline hints)
-        if line_group_id ~= active_group_id and char_index <= #available_chars then
+        if line_group_id ~= active_group_id then
+            table.insert(sorted_lines, line_num)
+        end
+    end
+    table.sort(sorted_lines)
+    
+    -- Assign hints in deterministic order
+    for _, line_num in ipairs(sorted_lines) do
+        if char_index <= #available_chars then
             local hint_char = available_chars[char_index]
             line_hints[line_num] = hint_char
             hint_lines[hint_char] = line_num
+            char_index = char_index + 1
+        else
+            -- Handle overflow: assign multi-character hints
+            local multi_char_hint = generate_multi_char_hint(char_index - #available_chars)
+            if not used_chars[multi_char_hint] and not hint_lines[multi_char_hint] then
+                line_hints[line_num] = multi_char_hint
+                hint_lines[multi_char_hint] = line_num
+                used_chars[multi_char_hint] = true
+            end
             char_index = char_index + 1
         end
     end
