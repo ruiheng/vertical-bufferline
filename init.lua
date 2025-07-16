@@ -91,6 +91,15 @@ setup_highlights()
 api.nvim_set_hl(0, config_module.HIGHLIGHTS.ERROR, { fg = config_module.COLORS.RED, default = true })
 api.nvim_set_hl(0, config_module.HIGHLIGHTS.WARNING, { fg = config_module.COLORS.YELLOW, default = true })
 
+-- Auto-refresh highlights when colorscheme changes
+vim.api.nvim_create_autocmd("ColorScheme", {
+    pattern = "*",
+    callback = function()
+        setup_highlights()
+    end,
+    desc = "Refresh vertical-bufferline highlights on colorscheme change"
+})
+
 
 -- Extended picking mode utilities
 local function get_bufferline_used_characters()
