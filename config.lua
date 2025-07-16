@@ -8,8 +8,6 @@ M.UI = {
     -- Sidebar dimensions
     DEFAULT_WIDTH = 40,
 
-    -- Display limits
-    MAX_DISPLAY_NUMBER = 10,
 
     -- Timing constants (in milliseconds)
     HIGHLIGHT_UPDATE_INTERVAL = 50,
@@ -136,8 +134,8 @@ M.DEFAULTS = {
     -- History settings
     show_history = "auto",  -- "yes", "no", "auto" - show recent files history as unified group
     history_size = 10,      -- Maximum number of recent files to track per group
-    history_auto_threshold = 3,  -- Minimum files needed for auto mode to show history
-    history_display_count = 5,  -- Maximum number of history items to display
+    history_auto_threshold = 2,  -- Minimum files needed for auto mode to show history
+    history_display_count = 7,  -- Maximum number of history items to display
     
     -- Path display settings
     show_path = "auto", -- "yes", "no", "auto"
