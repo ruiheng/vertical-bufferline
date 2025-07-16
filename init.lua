@@ -768,7 +768,7 @@ local function create_buffer_line(component, j, total_components, current_buffer
             
             -- Tree prefix: only if show_tree_lines is enabled
             if config_module.DEFAULTS.show_tree_lines then
-                base_indent = base_indent + 4  -- " " + tree_chars (4 chars total)
+                base_indent = base_indent + 3  -- " " + tree_chars (3 chars total)
             elseif group_id == "history" and is_current then
                 base_indent = base_indent + 2  -- current marker for history
             end
@@ -796,7 +796,7 @@ local function create_buffer_line(component, j, total_components, current_buffer
             
             -- Add icon width if icons are enabled (emoji + space)
             if config_module.DEFAULTS.show_icons then
-                base_indent = base_indent + 2  -- "🌙 "
+                base_indent = base_indent + 1  -- "🌙 " might be 1 char display width
             end
             
             local display_path = path_dir == "." and "./" or path_dir .. "/"
