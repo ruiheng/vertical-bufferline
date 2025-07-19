@@ -100,6 +100,27 @@ vim.api.nvim_create_autocmd("ColorScheme", {
     desc = "Refresh vertical-bufferline highlights on colorscheme change"
 })
 
+-- Auto-refresh when buffer modification state changes
+vim.api.nvim_create_autocmd({"TextChanged", "TextChangedI", "BufWritePost"}, {
+    pattern = "*",
+    callback = function()
+        local state_module = require('vertical-bufferline.state')
+        if state_module.is_sidebar_open() then
+            -- Use a timer to avoid too frequent updates
+            if vim.g.vertical_bufferline_update_timer then
+                vim.fn.timer_stop(vim.g.vertical_bufferline_update_timer)
+            end
+            vim.g.vertical_bufferline_update_timer = vim.fn.timer_start(100, function()
+                local vertical_bufferline = require('vertical-bufferline')
+                if vertical_bufferline and vertical_bufferline.refresh then
+                    vertical_bufferline.refresh()
+                end
+            end)
+        end
+    end,
+    desc = "Refresh vertical-bufferline when buffer content changes"
+})
+
 
 -- Extended picking mode utilities
 local function get_bufferline_used_characters()
@@ -125,18 +146,65 @@ local function get_bufferline_used_characters()
     return used_chars
 end
 
+-- Enhanced buffer modification detection
+local function is_buffer_actually_modified(buf_id)
+    if not api.nvim_buf_is_valid(buf_id) then
+        return false
+    end
+    
+    -- Check basic modified flag first
+    local basic_modified = api.nvim_buf_get_option(buf_id, "modified")
+    
+    -- For more accurate detection, also check changedtick
+    local current_changedtick = api.nvim_buf_get_changedtick(buf_id)
+    
+    -- Store previous changedtick values to detect actual changes
+    if not vim.g.vertical_bufferline_changedticks then
+        vim.g.vertical_bufferline_changedticks = {}
+    end
+    
+    local stored_tick = vim.g.vertical_bufferline_changedticks[buf_id]
+    
+    -- If this is the first time we see this buffer, store its tick and use basic modified
+    if not stored_tick then
+        vim.g.vertical_bufferline_changedticks[buf_id] = current_changedtick
+        return basic_modified
+    end
+    
+    -- If changedtick hasn't changed, trust the basic modified flag
+    if current_changedtick == stored_tick then
+        return basic_modified
+    end
+    
+    -- If changedtick changed, update stored tick and check for real modification
+    vim.g.vertical_bufferline_changedticks[buf_id] = current_changedtick
+    
+    -- Use a combination of checks for accuracy
+    local buf_modified = api.nvim_buf_get_option(buf_id, "modified")
+    local buf_readonly = api.nvim_buf_get_option(buf_id, "readonly")
+    local buf_modifiable = api.nvim_buf_get_option(buf_id, "modifiable")
+    
+    -- Don't show modified for readonly or non-modifiable buffers
+    if buf_readonly or not buf_modifiable then
+        return false
+    end
+    
+    return buf_modified
+end
+
 -- Extended picking mode implementation
 local PICK_ALPHABET = "asdfjkl;ghqwertyuiopzxcvbnm1234567890ASDFJKL;GHQWERTYUIOPZXCVBNM"
 
 -- Generate multi-character hint for overflow cases
 local function generate_multi_char_hint(overflow_index)
     -- Use two-character combinations: aa, ab, ac, ..., ba, bb, bc, ...
-    local base = #"asdfjkl;gh"  -- Use first 10 chars as base for multi-char hints
+    local base_chars = "asdfjklghq"  -- Use first 10 chars as base for multi-char hints
+    local base = #base_chars
     local first_char_index = math.floor((overflow_index - 1) / base) + 1
     local second_char_index = ((overflow_index - 1) % base) + 1
     
-    local first_char = "asdfjkl;gh":sub(first_char_index, first_char_index)
-    local second_char = "asdfjkl;gh":sub(second_char_index, second_char_index)
+    local first_char = base_chars:sub(first_char_index, first_char_index)
+    local second_char = base_chars:sub(second_char_index, second_char_index)
     
     return first_char .. second_char
 end
@@ -777,7 +845,7 @@ local function create_buffer_line(component, j, total_components, current_buffer
     end
     
     -- 7. Modified indicator (moved to end)
-    local is_modified = api.nvim_buf_is_valid(component.id) and api.nvim_buf_get_option(component.id, "modified")
+    local is_modified = is_buffer_actually_modified(component.id)
     local modified_parts = components.create_modified_indicator(is_modified)
     for _, part in ipairs(modified_parts) do
         table.insert(parts, part)
