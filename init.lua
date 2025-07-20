@@ -784,8 +784,8 @@ local function create_buffer_line(component, j, total_components, current_buffer
     
     -- 3. Smart numbering (intelligent display logic)
     local bl_integration = require('vertical-bufferline.bufferline-integration')
-    -- 2. Numbering (skip if position is 0, and only show for active group)
-    if j > 0 and is_in_active_group then
+    -- 2. Numbering (skip if position is 0, show for active group and history group)
+    if j > 0 and (is_in_active_group or group_id == "history") then
         local ok, position_info = pcall(bl_integration.get_buffer_position_info, group_id)
         if ok and position_info then
             local local_pos = position_info[component.id]  -- nil if not visible in bufferline
@@ -804,7 +804,7 @@ local function create_buffer_line(component, j, total_components, current_buffer
     end
     
     -- 4. Space after numbering (only if there was numbering)
-    if j > 0 and is_in_active_group then
+    if j > 0 and (is_in_active_group or group_id == "history") then
         local space_parts = components.create_space(1)
         for _, part in ipairs(space_parts) do
             table.insert(parts, part)
@@ -876,8 +876,8 @@ local function create_buffer_line(component, j, total_components, current_buffer
                 base_indent = base_indent + 2  -- "a "
             end
             
-            -- Add numbering width - only if j > 0 and in active group
-            if j > 0 and is_in_active_group then
+            -- Add numbering width - only if j > 0 and in active group or history group
+            if j > 0 and (is_in_active_group or group_id == "history") then
                 local numbering_width
                 if not has_any_local_info or should_hide_local_numbering then
                     -- Case 1 & 2: Only global number shown
