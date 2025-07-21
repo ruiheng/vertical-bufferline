@@ -733,13 +733,26 @@ local components = require('vertical-bufferline.components')
 -- Create individual buffer line with proper formatting and highlights
 local function create_buffer_line(component, j, total_components, current_buffer_id, is_picking, line_number, group_id, max_local_digits, max_global_digits, has_any_local_info, should_hide_local_numbering)
     local is_last = (j == total_components)
-    local is_current = (component.id == current_buffer_id)
     local is_visible = component.focused or false  -- Assuming focused means visible
     
     -- Check if this buffer is in the currently active group
     local groups = require('vertical-bufferline.groups')
     local active_group = groups.get_active_group()
     local is_in_active_group = active_group and (group_id == active_group.id)
+    
+    -- Determine if this buffer is "current" based on group context
+    local is_current = false
+    if is_in_active_group then
+        -- For active group, use global current buffer
+        is_current = (component.id == current_buffer_id)
+    else
+        -- For inactive groups, use the group's history to determine current buffer
+        local target_group = groups.find_group_by_id(group_id)
+        if target_group and target_group.history and #target_group.history > 0 then
+            -- The first item in history is the group's "current" buffer
+            is_current = (component.id == target_group.history[1])
+        end
+    end
     
     -- Build line parts using component system
     local parts = {}
