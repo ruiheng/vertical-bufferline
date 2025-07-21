@@ -24,6 +24,17 @@ end
 _G._vertical_bufferline_integration_loaded = true
 
 
+-- Get buffer index in our target list (for sorting)
+local function get_buffer_index_in_list(buf_id, buffer_list)
+    for i, list_buf_id in ipairs(buffer_list) do
+        if list_buf_id == buf_id then
+            return i
+        end
+    end
+    -- Return a large number for buffers not in our list (will be sorted last)
+    return 999999
+end
+
 -- Check if it's a special buffer (based on buftype)
 local function is_special_buffer(buf_id)
     if not vim.api.nvim_buf_is_valid(buf_id) then
@@ -222,6 +233,22 @@ function M.set_bufferline_buffers(buffer_list)
                 pcall(vim.api.nvim_buf_set_option, buf_id, 'buflisted', false)
             end
         end
+    end
+
+    -- Force bufferline to follow our buffer order
+    if #buffer_list > 1 then
+        -- Use vim.schedule to ensure bufferline state is updated first
+        vim.schedule(function()
+            local ok, bufferline = pcall(require, 'bufferline')
+            if ok and bufferline.sort_buffers_by then
+                -- Force bufferline to sort according to our buffer_list order
+                bufferline.sort_buffers_by(function(buf_a, buf_b)
+                    local index_a = get_buffer_index_in_list(buf_a.id, buffer_list)
+                    local index_b = get_buffer_index_in_list(buf_b.id, buffer_list)
+                    return index_a < index_b
+                end)
+            end
+        end)
     end
 
     -- Handle empty group case: if buffer_list is empty, need to display empty state
