@@ -91,38 +91,6 @@ local function delete_group_command(args)
     end
 end
 
--- Delete current group command
-local function delete_current_group_command()
-    local active_group = groups.get_active_group()
-    if not active_group then
-        vim.notify("No active group to delete", vim.log.levels.ERROR)
-        return
-    end
-
-    -- Prevent deletion of default group
-    if active_group.id == "default" then
-        vim.notify("Cannot delete the default group", vim.log.levels.WARN)
-        return
-    end
-
-    -- Confirm deletion
-    local choice = vim.fn.confirm("Delete group '" .. active_group.name .. "'?", "&Yes\n&No", 2)
-    if choice ~= 1 then
-        return
-    end
-
-    if groups.delete_group(active_group.id) then
-        vim.notify("Deleted group: " .. active_group.name, vim.log.levels.INFO)
-
-        -- Refresh interface
-        vim.schedule(function()
-            if require('vertical-bufferline').refresh then
-                require('vertical-bufferline').refresh()
-            end
-        end)
-    end
-end
-
 -- Rename group command
 local function rename_group_command(args)
     local new_name = args.args
@@ -462,12 +430,6 @@ function M.setup()
     vim.api.nvim_create_user_command("VBufferLineDeleteGroup", delete_group_command, {
         nargs = "?",
         desc = "Delete a buffer group by number, name, or current active group if no argument (e.g. :VBufferLineDeleteGroup 2)"
-    })
-
-    -- Delete current group
-    vim.api.nvim_create_user_command("VBufferLineDeleteCurrentGroup", delete_current_group_command, {
-        nargs = 0,
-        desc = "Delete the current active group"
     })
 
     -- Rename group
@@ -984,7 +946,6 @@ end
 -- Export functions for use by other modules
 M.create_group = create_group_command
 M.delete_group = delete_group_command
-M.delete_current_group = delete_current_group_command
 M.rename_group = rename_group_command
 M.switch_group = switch_group_command
 M.add_buffer_to_group = add_buffer_to_group_command
