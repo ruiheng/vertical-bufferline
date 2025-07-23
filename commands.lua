@@ -30,35 +30,45 @@ end
 -- Delete group command
 local function delete_group_command(args)
     local input = args.args
-    if input == "" then
-        vim.notify("Usage: VBufferLineDeleteGroup <group_number>", vim.log.levels.ERROR)
-        return
-    end
-
     local all_groups = groups.get_all_groups()
     local target_group = nil
 
-    -- First try to find by sequence number
-    local group_number = tonumber(input)
-    if group_number then
-        if group_number >= 1 and group_number <= #all_groups then
-            target_group = all_groups[group_number]
+    if input == "" then
+        -- No argument provided: delete current active group
+        local active_group = groups.get_active_group()
+        if active_group then
+            target_group = active_group
+        else
+            vim.notify("No active group to delete", vim.log.levels.ERROR)
+            return
         end
     else
-        -- If not a number, find by name or ID (backward compatibility)
-        for _, group in ipairs(all_groups) do
-            if group.id == input or (group.name ~= "" and group.name == input) then
-                target_group = group
-                break
+        -- Argument provided: find by sequence number, name, or ID
+        local group_number = tonumber(input)
+        if group_number then
+            if group_number >= 1 and group_number <= #all_groups then
+                target_group = all_groups[group_number]
+            end
+        else
+            -- If not a number, find by name or ID (backward compatibility)
+            for _, group in ipairs(all_groups) do
+                if group.id == input or (group.name ~= "" and group.name == input) then
+                    target_group = group
+                    break
+                end
             end
         end
     end
 
     if not target_group then
-        if group_number then
-            vim.notify("Invalid group number: " .. input .. " (valid range: 1-" .. #all_groups .. ")", vim.log.levels.ERROR)
-        else
-            vim.notify("Group not found: " .. input, vim.log.levels.ERROR)
+        if input ~= "" then
+            -- Error when explicit argument was provided but not found
+            local group_number = tonumber(input)
+            if group_number then
+                vim.notify("Invalid group number: " .. input .. " (valid range: 1-" .. #all_groups .. ")", vim.log.levels.ERROR)
+            else
+                vim.notify("Group not found: " .. input, vim.log.levels.ERROR)
+            end
         end
         return
     end
@@ -450,8 +460,8 @@ function M.setup()
 
     -- Delete group
     vim.api.nvim_create_user_command("VBufferLineDeleteGroup", delete_group_command, {
-        nargs = 1,
-        desc = "Delete a buffer group by number (e.g. :VBufferLineDeleteGroup 2)"
+        nargs = "?",
+        desc = "Delete a buffer group by number, name, or current active group if no argument (e.g. :VBufferLineDeleteGroup 2)"
     })
 
     -- Delete current group
