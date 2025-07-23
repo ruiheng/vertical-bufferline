@@ -298,7 +298,8 @@ function M.delete_group(group_id)
 
     -- If deleting current active group, switch to default group
     if groups_data.active_group_id == group_id then
-        groups_data.active_group_id = groups_data.default_group_id
+        -- Use proper group switching logic instead of direct assignment
+        M.set_active_group(groups_data.default_group_id)
     end
 
     -- Trigger event
