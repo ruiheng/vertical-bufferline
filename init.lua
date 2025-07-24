@@ -1815,6 +1815,9 @@ local function open_sidebar()
     api.nvim_win_set_option(new_win_id, 'cursorline', false)
     api.nvim_win_set_option(new_win_id, 'cursorcolumn', false)
     
+    -- Prevent cursor from entering sidebar window - switch back to original window
+    api.nvim_set_current_win(current_win)
+    
     -- Ensure mouse support is enabled for this window
     if vim.o.mouse == '' then
         vim.notify("Mouse support disabled. Enable with :set mouse=a for sidebar mouse interaction", vim.log.levels.INFO)
@@ -1823,9 +1826,31 @@ local function open_sidebar()
     -- Note: We don't use winfixbuf as it completely blocks file opening
     -- Instead, we rely on autocmd protection below for smart handling
     
-    -- Additional protection: monitor buffer changes in sidebar window
+    -- Additional protection: monitor buffer changes and prevent cursor entering sidebar
     local group_name = "VerticalBufferlineSidebarProtection"
     api.nvim_create_augroup(group_name, { clear = true })
+    
+    -- Prevent cursor from entering sidebar window
+    api.nvim_create_autocmd("WinEnter", {
+        group = group_name,
+        callback = function()
+            local current_win = api.nvim_get_current_win()
+            if current_win == new_win_id then
+                -- Cursor entered sidebar, switch to any other valid window
+                local all_wins = api.nvim_list_wins()
+                for _, win_id in ipairs(all_wins) do
+                    if win_id ~= new_win_id and api.nvim_win_is_valid(win_id) then
+                        -- Switch to first valid non-sidebar window
+                        api.nvim_set_current_win(win_id)
+                        break
+                    end
+                end
+            end
+        end,
+        desc = "Prevent cursor from entering vertical-bufferline sidebar window"
+    })
+    
+    -- Monitor buffer changes in sidebar window
     api.nvim_create_autocmd("BufWinEnter", {
         group = group_name,
         callback = function(ev)
