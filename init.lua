@@ -1833,40 +1833,39 @@ local function open_sidebar()
     local group_name = "VerticalBufferlineSidebarProtection"
     api.nvim_create_augroup(group_name, { clear = true })
     
-    -- Simple approach: prevent cursor from entering sidebar, skip to next available window
-    api.nvim_create_autocmd("WinEnter", {
+    -- Set up buffer-local keymaps for easy navigation when accidentally in sidebar
+    api.nvim_create_autocmd("BufEnter", {
+        buffer = buf_id,
         group = group_name,
         callback = function()
-            local current_win = api.nvim_get_current_win()
-            if current_win == new_win_id then
-                -- Use vim's wincmd to continue the window navigation in the intended direction
-                -- This allows <C-w>j, <C-w>k, etc. to work as expected by skipping over sidebar
-                vim.schedule(function()
-                    -- Try each direction to find a suitable window
-                    local directions = {'j', 'k', 'l', 'h'}
-                    for _, dir in ipairs(directions) do
-                        local current_before = api.nvim_get_current_win()
-                        vim.cmd('wincmd ' .. dir)
-                        local current_after = api.nvim_get_current_win()
-                        
-                        -- If we moved to a different window that's not the sidebar, we're good
-                        if current_after ~= current_before and current_after ~= new_win_id then
-                            return
-                        end
-                    end
-                    
-                    -- If all directions failed, just go to any non-sidebar window
-                    local all_wins = api.nvim_list_wins()
-                    for _, win_id in ipairs(all_wins) do
-                        if win_id ~= new_win_id and api.nvim_win_is_valid(win_id) then
-                            api.nvim_set_current_win(win_id)
-                            break
-                        end
-                    end
-                end)
-            end
+            -- Quick escape mappings when in sidebar
+            local opts = { buffer = buf_id, silent = true, nowait = true }
+            vim.keymap.set('n', '<C-w>j', function()
+                vim.cmd('wincmd j')
+                if api.nvim_get_current_win() == new_win_id then
+                    vim.cmd('wincmd j')  -- Try again if still in sidebar
+                end
+            end, opts)
+            vim.keymap.set('n', '<C-w>k', function()
+                vim.cmd('wincmd k')
+                if api.nvim_get_current_win() == new_win_id then
+                    vim.cmd('wincmd k')  -- Try again if still in sidebar
+                end
+            end, opts)
+            vim.keymap.set('n', '<C-w>l', function()
+                vim.cmd('wincmd l')
+                if api.nvim_get_current_win() == new_win_id then
+                    vim.cmd('wincmd l')  -- Try again if still in sidebar
+                end
+            end, opts)
+            vim.keymap.set('n', '<C-w>h', function()
+                vim.cmd('wincmd h')
+                if api.nvim_get_current_win() == new_win_id then
+                    vim.cmd('wincmd h')  -- Try again if still in sidebar
+                end
+            end, opts)
         end,
-        desc = "Prevent cursor from staying in sidebar window"
+        desc = "Set up sidebar navigation keymaps"
     })
     
     -- Monitor buffer changes in sidebar window
