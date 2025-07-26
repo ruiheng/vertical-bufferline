@@ -1833,39 +1833,46 @@ local function open_sidebar()
     local group_name = "VerticalBufferlineSidebarProtection"
     api.nvim_create_augroup(group_name, { clear = true })
     
-    -- Set up buffer-local keymaps for easy navigation when accidentally in sidebar
-    api.nvim_create_autocmd("BufEnter", {
-        buffer = buf_id,
+    -- Simple and reliable: when cursor enters sidebar, jump to current editing buffer
+    api.nvim_create_autocmd("WinEnter", {
         group = group_name,
         callback = function()
-            -- Quick escape mappings when in sidebar
-            local opts = { buffer = buf_id, silent = true, nowait = true }
-            vim.keymap.set('n', '<C-w>j', function()
-                vim.cmd('wincmd j')
-                if api.nvim_get_current_win() == new_win_id then
-                    vim.cmd('wincmd j')  -- Try again if still in sidebar
+            local current_win = api.nvim_get_current_win()
+            if current_win == new_win_id then
+                -- Find window that contains the main editing buffer
+                local main_buf = get_main_window_current_buffer()
+                if main_buf and api.nvim_buf_is_valid(main_buf) then
+                    -- Find which window is displaying this buffer
+                    local target_win = nil
+                    local all_wins = api.nvim_list_wins()
+                    for _, win_id in ipairs(all_wins) do
+                        if win_id ~= new_win_id and api.nvim_win_is_valid(win_id) then
+                            local win_buf = api.nvim_win_get_buf(win_id)
+                            if win_buf == main_buf then
+                                target_win = win_id
+                                break
+                            end
+                        end
+                    end
+                    
+                    -- Switch to the window displaying the main buffer
+                    if target_win then
+                        api.nvim_set_current_win(target_win)
+                        return
+                    end
                 end
-            end, opts)
-            vim.keymap.set('n', '<C-w>k', function()
-                vim.cmd('wincmd k')
-                if api.nvim_get_current_win() == new_win_id then
-                    vim.cmd('wincmd k')  -- Try again if still in sidebar
+                
+                -- Fallback: jump to any non-sidebar window
+                local all_wins = api.nvim_list_wins()
+                for _, win_id in ipairs(all_wins) do
+                    if win_id ~= new_win_id and api.nvim_win_is_valid(win_id) then
+                        api.nvim_set_current_win(win_id)
+                        break
+                    end
                 end
-            end, opts)
-            vim.keymap.set('n', '<C-w>l', function()
-                vim.cmd('wincmd l')
-                if api.nvim_get_current_win() == new_win_id then
-                    vim.cmd('wincmd l')  -- Try again if still in sidebar
-                end
-            end, opts)
-            vim.keymap.set('n', '<C-w>h', function()
-                vim.cmd('wincmd h')
-                if api.nvim_get_current_win() == new_win_id then
-                    vim.cmd('wincmd h')  -- Try again if still in sidebar
-                end
-            end, opts)
+            end
         end,
-        desc = "Set up sidebar navigation keymaps"
+        desc = "Jump to main editing buffer when entering sidebar"
     })
     
     -- Monitor buffer changes in sidebar window
