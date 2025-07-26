@@ -1815,6 +1815,9 @@ local function open_sidebar()
     api.nvim_win_set_option(new_win_id, 'cursorline', false)
     api.nvim_win_set_option(new_win_id, 'cursorcolumn', false)
     
+    -- Make sidebar window non-focusable (if the option exists)
+    pcall(api.nvim_win_set_option, new_win_id, 'winfocusable', false)
+    
     -- Prevent cursor from entering sidebar window - switch back to original window
     api.nvim_set_current_win(current_win)
     
@@ -1830,73 +1833,40 @@ local function open_sidebar()
     local group_name = "VerticalBufferlineSidebarProtection"
     api.nvim_create_augroup(group_name, { clear = true })
     
-    -- Track the last non-sidebar window for smarter redirection
-    local last_main_window = current_win
-    
-    -- Update last main window when leaving non-sidebar windows
-    api.nvim_create_autocmd("WinLeave", {
-        group = group_name,
-        callback = function()
-            local leaving_win = api.nvim_get_current_win()
-            if leaving_win ~= new_win_id and api.nvim_win_is_valid(leaving_win) then
-                last_main_window = leaving_win
-            end
-        end,
-        desc = "Track last main window for intelligent sidebar redirection"
-    })
-    
-    -- Prevent cursor from entering sidebar window
+    -- Simple approach: prevent cursor from entering sidebar, skip to next available window
     api.nvim_create_autocmd("WinEnter", {
         group = group_name,
         callback = function()
             local current_win = api.nvim_get_current_win()
             if current_win == new_win_id then
-                local target_win = nil
-                
-                -- First try to return to the last main window if it's still valid
-                if last_main_window and api.nvim_win_is_valid(last_main_window) then
-                    target_win = last_main_window
-                else
-                    -- If last main window is invalid, find the best alternative
-                    -- Based on sidebar position, prefer the window on the opposite side
-                    local all_wins = api.nvim_list_wins()
-                    local sidebar_pos = config_module.DEFAULTS.position
-                    local best_win = nil
-                    
-                    for _, win_id in ipairs(all_wins) do
-                        if win_id ~= new_win_id and api.nvim_win_is_valid(win_id) then
-                            if not best_win then
-                                best_win = win_id
-                            else
-                                -- Prefer windows based on sidebar position
-                                local win_col = api.nvim_win_get_position(win_id)[2]
-                                local best_col = api.nvim_win_get_position(best_win)[2]
-                                local sidebar_col = api.nvim_win_get_position(new_win_id)[2]
-                                
-                                if sidebar_pos == "left" then
-                                    -- Sidebar on left, prefer rightmost window
-                                    if win_col > best_col then
-                                        best_win = win_id
-                                    end
-                                else
-                                    -- Sidebar on right, prefer leftmost window
-                                    if win_col < best_col then
-                                        best_win = win_id
-                                    end
-                                end
-                            end
+                -- Use vim's wincmd to continue the window navigation in the intended direction
+                -- This allows <C-w>j, <C-w>k, etc. to work as expected by skipping over sidebar
+                vim.schedule(function()
+                    -- Try each direction to find a suitable window
+                    local directions = {'j', 'k', 'l', 'h'}
+                    for _, dir in ipairs(directions) do
+                        local current_before = api.nvim_get_current_win()
+                        vim.cmd('wincmd ' .. dir)
+                        local current_after = api.nvim_get_current_win()
+                        
+                        -- If we moved to a different window that's not the sidebar, we're good
+                        if current_after ~= current_before and current_after ~= new_win_id then
+                            return
                         end
                     end
-                    target_win = best_win
-                end
-                
-                -- Switch to the determined target window
-                if target_win then
-                    api.nvim_set_current_win(target_win)
-                end
+                    
+                    -- If all directions failed, just go to any non-sidebar window
+                    local all_wins = api.nvim_list_wins()
+                    for _, win_id in ipairs(all_wins) do
+                        if win_id ~= new_win_id and api.nvim_win_is_valid(win_id) then
+                            api.nvim_set_current_win(win_id)
+                            break
+                        end
+                    end
+                end)
             end
         end,
-        desc = "Prevent cursor from entering vertical-bufferline sidebar window"
+        desc = "Prevent cursor from staying in sidebar window"
     })
     
     -- Monitor buffer changes in sidebar window
