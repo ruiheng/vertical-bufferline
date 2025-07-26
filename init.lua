@@ -1839,51 +1839,87 @@ local function open_sidebar()
         callback = function()
             local current_win = api.nvim_get_current_win()
             if current_win == new_win_id then
-                -- Find the best window to jump to
+                -- Find the best window to jump to, with priority ranking
                 local target_win = nil
                 local all_wins = api.nvim_list_wins()
+                local fallback_win = nil
                 
                 -- Get current active group to find a buffer from that group
                 local groups = require('vertical-bufferline.groups')
                 local active_group = groups.get_active_group()
                 
-                if active_group and active_group.history and #active_group.history > 0 then
-                    -- Try to find a window displaying a buffer from the active group
-                    local group_buf = active_group.history[1]  -- Current buffer in active group
-                    for _, win_id in ipairs(all_wins) do
-                        if win_id ~= new_win_id and api.nvim_win_is_valid(win_id) then
-                            local win_buf = api.nvim_win_get_buf(win_id)
+                -- Build a priority list of windows
+                local window_candidates = {}
+                
+                for _, win_id in ipairs(all_wins) do
+                    if win_id ~= new_win_id and api.nvim_win_is_valid(win_id) then
+                        local win_buf = api.nvim_win_get_buf(win_id)
+                        local buf_name = api.nvim_buf_get_name(win_buf)
+                        local buf_type = api.nvim_buf_get_option(win_buf, 'buftype')
+                        local buf_filetype = api.nvim_buf_get_option(win_buf, 'filetype')
+                        
+                        local candidate = {
+                            win_id = win_id,
+                            buf_id = win_buf,
+                            buf_name = buf_name,
+                            buf_type = buf_type,
+                            buf_filetype = buf_filetype,
+                            priority = 0
+                        }
+                        
+                        -- Priority 1: Window displaying current group buffer (highest)
+                        if active_group and active_group.history and #active_group.history > 0 then
+                            local group_buf = active_group.history[1]
                             if win_buf == group_buf then
-                                target_win = win_id
-                                break
+                                candidate.priority = 100
                             end
                         end
+                        
+                        -- Priority 2: Normal files with valid file paths (editing windows)
+                        if buf_type == '' and buf_name ~= '' and not buf_name:match('^fugitive://') 
+                           and not buf_name:match('^diffpanel_') and vim.fn.filereadable(buf_name) == 1 then
+                            candidate.priority = candidate.priority + 50
+                        end
+                        
+                        -- Priority 3: Regular file types we want to prioritize
+                        if buf_filetype == '' or buf_filetype == 'lua' or buf_filetype == 'vim' 
+                           or buf_filetype == 'javascript' or buf_filetype == 'typescript'
+                           or buf_filetype == 'python' or buf_filetype == 'c' or buf_filetype == 'cpp' then
+                            candidate.priority = candidate.priority + 25
+                        end
+                        
+                        -- Penalty: Special buffers and git-related windows
+                        if buf_name:match('^fugitive://') or buf_filetype == 'fugitive' 
+                           or buf_filetype == 'git' or buf_type ~= '' then
+                            candidate.priority = candidate.priority - 30
+                        end
+                        
+                        -- Penalty: Empty or unnamed buffers
+                        if buf_name == '' or buf_name:match('^%s*$') then
+                            candidate.priority = candidate.priority - 20
+                        end
+                        
+                        table.insert(window_candidates, candidate)
                     end
                 end
                 
-                -- If no group buffer window found, look for normal file buffers (not special buffers)
-                if not target_win then
-                    for _, win_id in ipairs(all_wins) do
-                        if win_id ~= new_win_id and api.nvim_win_is_valid(win_id) then
-                            local win_buf = api.nvim_win_get_buf(win_id)
-                            local buf_name = api.nvim_buf_get_name(win_buf)
-                            local buf_type = api.nvim_buf_get_option(win_buf, 'buftype')
-                            
-                            -- Prefer normal files over special buffers (fugitive, etc.)
-                            if buf_type == '' and buf_name ~= '' and not buf_name:match('^fugitive://') then
-                                target_win = win_id
+                -- Sort by priority (highest first)
+                table.sort(window_candidates, function(a, b) return a.priority > b.priority end)
+                
+                -- Pick the highest priority window, but ensure it's a reasonable choice
+                if #window_candidates > 0 then
+                    target_win = window_candidates[1].win_id
+                    
+                    -- Safety check: if the highest priority window is still a special buffer,
+                    -- try to find a better alternative
+                    local first_candidate = window_candidates[1]
+                    if first_candidate.priority < 10 and #window_candidates > 1 then
+                        -- Look for any window with reasonable priority
+                        for _, candidate in ipairs(window_candidates) do
+                            if candidate.buf_type == '' and candidate.buf_name ~= '' then
+                                target_win = candidate.win_id
                                 break
                             end
-                        end
-                    end
-                end
-                
-                -- Final fallback: any non-sidebar window
-                if not target_win then
-                    for _, win_id in ipairs(all_wins) do
-                        if win_id ~= new_win_id and api.nvim_win_is_valid(win_id) then
-                            target_win = win_id
-                            break
                         end
                     end
                 end
