@@ -474,6 +474,26 @@ If you prefer manual setup, the plugin initializes automatically when the sideba
 - Compatible with tabpage-scoped buffer management
 - Buffer deletion respects scope.nvim's buffer handling
 
+### Filetype Support
+The sidebar buffer uses the `vertical-bufferline` filetype, making it easy to:
+- Set buffer-specific configurations and keymaps
+- Integrate with other plugins that check buffer filetype
+- Apply custom syntax highlighting or statusline behavior
+- Use filetype-specific autocommands for enhanced functionality
+
+Example configuration for the sidebar buffer:
+```lua
+-- Custom configuration for vertical-bufferline buffers
+vim.api.nvim_create_autocmd("FileType", {
+    pattern = "vertical-bufferline",
+    callback = function()
+        -- Custom settings for sidebar buffer
+        vim.opt_local.wrap = false
+        vim.opt_local.signcolumn = "no"
+        -- Add custom keymaps or settings here
+    end,
+})
+
 ## Technical Details
 
 - **Event-driven architecture** - Responds to Neovim buffer events automatically

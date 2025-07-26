@@ -1799,6 +1799,7 @@ local function open_sidebar()
     if state_module.is_sidebar_open() then return end
     local buf_id = api.nvim_create_buf(false, true)
     api.nvim_buf_set_option(buf_id, 'bufhidden', 'wipe')
+    api.nvim_buf_set_option(buf_id, 'filetype', 'vertical-bufferline')
     local current_win = api.nvim_get_current_win()
     -- Create sidebar window based on configured position
     if config_module.DEFAULTS.position == "left" then
@@ -1890,7 +1891,7 @@ local function open_sidebar()
                         
                         -- Penalty: Special buffers and git-related windows
                         if buf_name:match('^fugitive://') or buf_filetype == 'fugitive' 
-                           or buf_filetype == 'git' or buf_type ~= '' then
+                           or buf_filetype == 'git' or buf_filetype == 'vertical-bufferline' or buf_type ~= '' then
                             candidate.priority = candidate.priority - 30
                         end
                         
@@ -1971,6 +1972,7 @@ local function open_sidebar()
                     -- The original sidebar buffer was wiped, create a new one
                     local new_sidebar_buf = api.nvim_create_buf(false, true)
                     api.nvim_buf_set_option(new_sidebar_buf, 'bufhidden', 'wipe')
+                    api.nvim_buf_set_option(new_sidebar_buf, 'filetype', 'vertical-bufferline')
                     api.nvim_win_set_buf(new_win_id, new_sidebar_buf)
                     
                     -- Update state with new buffer ID
@@ -1984,6 +1986,7 @@ local function open_sidebar()
                     -- No main window available, restore sidebar
                     local new_sidebar_buf = api.nvim_create_buf(false, true)
                     api.nvim_buf_set_option(new_sidebar_buf, 'bufhidden', 'wipe')
+                    api.nvim_buf_set_option(new_sidebar_buf, 'filetype', 'vertical-bufferline')
                     api.nvim_win_set_buf(new_win_id, new_sidebar_buf)
                     state_module.set_buf_id(new_sidebar_buf)
                     
