@@ -1833,46 +1833,68 @@ local function open_sidebar()
     local group_name = "VerticalBufferlineSidebarProtection"
     api.nvim_create_augroup(group_name, { clear = true })
     
-    -- Simple and reliable: when cursor enters sidebar, jump to current editing buffer
+    -- Jump to the most appropriate non-sidebar window when entering sidebar
     api.nvim_create_autocmd("WinEnter", {
         group = group_name,
         callback = function()
             local current_win = api.nvim_get_current_win()
             if current_win == new_win_id then
-                -- Find window that contains the main editing buffer
-                local main_buf = get_main_window_current_buffer()
-                if main_buf and api.nvim_buf_is_valid(main_buf) then
-                    -- Find which window is displaying this buffer
-                    local target_win = nil
-                    local all_wins = api.nvim_list_wins()
+                -- Find the best window to jump to
+                local target_win = nil
+                local all_wins = api.nvim_list_wins()
+                
+                -- Get current active group to find a buffer from that group
+                local groups = require('vertical-bufferline.groups')
+                local active_group = groups.get_active_group()
+                
+                if active_group and active_group.history and #active_group.history > 0 then
+                    -- Try to find a window displaying a buffer from the active group
+                    local group_buf = active_group.history[1]  -- Current buffer in active group
                     for _, win_id in ipairs(all_wins) do
                         if win_id ~= new_win_id and api.nvim_win_is_valid(win_id) then
                             local win_buf = api.nvim_win_get_buf(win_id)
-                            if win_buf == main_buf then
+                            if win_buf == group_buf then
                                 target_win = win_id
                                 break
                             end
                         end
                     end
-                    
-                    -- Switch to the window displaying the main buffer
-                    if target_win then
-                        api.nvim_set_current_win(target_win)
-                        return
+                end
+                
+                -- If no group buffer window found, look for normal file buffers (not special buffers)
+                if not target_win then
+                    for _, win_id in ipairs(all_wins) do
+                        if win_id ~= new_win_id and api.nvim_win_is_valid(win_id) then
+                            local win_buf = api.nvim_win_get_buf(win_id)
+                            local buf_name = api.nvim_buf_get_name(win_buf)
+                            local buf_type = api.nvim_buf_get_option(win_buf, 'buftype')
+                            
+                            -- Prefer normal files over special buffers (fugitive, etc.)
+                            if buf_type == '' and buf_name ~= '' and not buf_name:match('^fugitive://') then
+                                target_win = win_id
+                                break
+                            end
+                        end
                     end
                 end
                 
-                -- Fallback: jump to any non-sidebar window
-                local all_wins = api.nvim_list_wins()
-                for _, win_id in ipairs(all_wins) do
-                    if win_id ~= new_win_id and api.nvim_win_is_valid(win_id) then
-                        api.nvim_set_current_win(win_id)
-                        break
+                -- Final fallback: any non-sidebar window
+                if not target_win then
+                    for _, win_id in ipairs(all_wins) do
+                        if win_id ~= new_win_id and api.nvim_win_is_valid(win_id) then
+                            target_win = win_id
+                            break
+                        end
                     end
+                end
+                
+                -- Switch to the determined target window
+                if target_win then
+                    api.nvim_set_current_win(target_win)
                 end
             end
         end,
-        desc = "Jump to main editing buffer when entering sidebar"
+        desc = "Jump to appropriate editing window when entering sidebar"
     })
     
     -- Monitor buffer changes in sidebar window
