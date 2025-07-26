@@ -1830,20 +1830,69 @@ local function open_sidebar()
     local group_name = "VerticalBufferlineSidebarProtection"
     api.nvim_create_augroup(group_name, { clear = true })
     
+    -- Track the last non-sidebar window for smarter redirection
+    local last_main_window = current_win
+    
+    -- Update last main window when leaving non-sidebar windows
+    api.nvim_create_autocmd("WinLeave", {
+        group = group_name,
+        callback = function()
+            local leaving_win = api.nvim_get_current_win()
+            if leaving_win ~= new_win_id and api.nvim_win_is_valid(leaving_win) then
+                last_main_window = leaving_win
+            end
+        end,
+        desc = "Track last main window for intelligent sidebar redirection"
+    })
+    
     -- Prevent cursor from entering sidebar window
     api.nvim_create_autocmd("WinEnter", {
         group = group_name,
         callback = function()
             local current_win = api.nvim_get_current_win()
             if current_win == new_win_id then
-                -- Cursor entered sidebar, switch to any other valid window
-                local all_wins = api.nvim_list_wins()
-                for _, win_id in ipairs(all_wins) do
-                    if win_id ~= new_win_id and api.nvim_win_is_valid(win_id) then
-                        -- Switch to first valid non-sidebar window
-                        api.nvim_set_current_win(win_id)
-                        break
+                local target_win = nil
+                
+                -- First try to return to the last main window if it's still valid
+                if last_main_window and api.nvim_win_is_valid(last_main_window) then
+                    target_win = last_main_window
+                else
+                    -- If last main window is invalid, find the best alternative
+                    -- Based on sidebar position, prefer the window on the opposite side
+                    local all_wins = api.nvim_list_wins()
+                    local sidebar_pos = config_module.DEFAULTS.position
+                    local best_win = nil
+                    
+                    for _, win_id in ipairs(all_wins) do
+                        if win_id ~= new_win_id and api.nvim_win_is_valid(win_id) then
+                            if not best_win then
+                                best_win = win_id
+                            else
+                                -- Prefer windows based on sidebar position
+                                local win_col = api.nvim_win_get_position(win_id)[2]
+                                local best_col = api.nvim_win_get_position(best_win)[2]
+                                local sidebar_col = api.nvim_win_get_position(new_win_id)[2]
+                                
+                                if sidebar_pos == "left" then
+                                    -- Sidebar on left, prefer rightmost window
+                                    if win_col > best_col then
+                                        best_win = win_id
+                                    end
+                                else
+                                    -- Sidebar on right, prefer leftmost window
+                                    if win_col < best_col then
+                                        best_win = win_id
+                                    end
+                                end
+                            end
+                        end
                     end
+                    target_win = best_win
+                end
+                
+                -- Switch to the determined target window
+                if target_win then
+                    api.nvim_set_current_win(target_win)
                 end
             end
         end,
