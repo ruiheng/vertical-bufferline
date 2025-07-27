@@ -24,6 +24,7 @@ A Neovim plugin that provides a vertical sidebar displaying buffer groups with e
 ### Sidebar Control
 - `<leader>vb` - Toggle vertical bufferline sidebar
 - `<leader>ve` - Toggle expand all groups mode
+- `<leader>vi` - Toggle showing inactive groups (default: only show active group)
 
 ### Group Management
 - `<leader>gc` - Create new unnamed group (instant creation)
@@ -63,6 +64,7 @@ A Neovim plugin that provides a vertical sidebar displaying buffer groups with e
 - `:VBufferLineNextGroup` - Switch to next group
 - `:VBufferLinePrevGroup` - Switch to previous group
 - `:VBufferLineToggleExpandAll` - Toggle expand all groups mode
+- `:VBufferLineToggleInactiveGroups` - Toggle showing buffer lists for inactive groups
 
 ### Group Reordering
 - `:VBufferLineMoveGroupUp` - Move current group up in the list
@@ -317,6 +319,7 @@ For lazy.nvim users, you can configure the plugin with custom options:
     -- UI settings
     width = 40,                     -- Sidebar width
     expand_all_groups = true,       -- Default to expand all groups mode
+    show_inactive_groups = false,   -- Show buffer lists for inactive groups (default: only active group)
     show_icons = false,             -- Show file type emoji icons
     position = "left",              -- Sidebar position: "left" or "right"
     show_tree_lines = false,        -- Show tree-style connection lines
@@ -397,6 +400,7 @@ For lazy.nvim users, you can configure the plugin with custom options:
   keys = {
     { "<leader>vb", "<cmd>lua require('vertical-bufferline').toggle()<cr>" },
     { "<leader>ve", "<cmd>lua require('vertical-bufferline').toggle_expand_all()<cr>" },
+    { "<leader>vi", "<cmd>VBufferLineToggleInactiveGroups<cr>" },
     { "<leader>gc", "<cmd>lua require('vertical-bufferline').create_group()<cr>" },
     { "<leader>gd", "<cmd>VBufferLineDeleteCurrentGroup<cr>" },
     { "<leader>gt", "<cmd>VBufferLineToggleExpandAll<cr>" },
