@@ -943,144 +943,15 @@ end
 local function apply_buffer_highlighting(line_info, component, actual_line_number, current_buffer_id, is_picking, is_in_active_group)
     if not line_info or not component then return end
     
-    -- Use new renderer system if available
+    -- Use component-based renderer system - this is the modern approach
     if line_info.rendered_line then
         renderer.apply_highlights(state_module.get_buf_id(), ns_id, actual_line_number - 1, line_info.rendered_line)
         return
     end
     
-    -- Legacy highlighting fallback (can be removed later)
-    
-    local line_text = line_info.text
-    local tree_prefix = line_info.tree_prefix or ""
-    local prefix_info = line_info.prefix_info
-    
-    -- Note: Highlight groups are set up once in main refresh function
-    -- Remove debug code that was causing highlight group conflicts
-    
-    -- Determine buffer state for highlighting
-    local is_current = component.id == current_buffer_id
-    local is_visible = component.focused or false
-    
-    -- Choose appropriate highlight groups based on buffer state and group context
-    local tree_highlight_group, filename_highlight_group, prefix_highlight_group
-    
-    if is_current and is_in_active_group then
-        -- Current buffer in active group: most prominent
-        tree_highlight_group = config_module.HIGHLIGHTS.CURRENT
-        filename_highlight_group = config_module.HIGHLIGHTS.FILENAME_CURRENT
-        prefix_highlight_group = config_module.HIGHLIGHTS.PREFIX_CURRENT
-    elseif is_current then
-        -- Current buffer but NOT in active group: should not be highlighted as current
-        tree_highlight_group = config_module.HIGHLIGHTS.INACTIVE
-        filename_highlight_group = config_module.HIGHLIGHTS.FILENAME
-        prefix_highlight_group = config_module.HIGHLIGHTS.PREFIX
-    elseif is_visible and is_in_active_group then
-        -- Visible buffer in active group: medium prominence
-        tree_highlight_group = config_module.HIGHLIGHTS.VISIBLE
-        filename_highlight_group = config_module.HIGHLIGHTS.FILENAME_VISIBLE
-        prefix_highlight_group = config_module.HIGHLIGHTS.PREFIX_VISIBLE
-    elseif is_in_active_group then
-        -- Non-visible buffer in active group: normal
-        tree_highlight_group = config_module.HIGHLIGHTS.INACTIVE
-        filename_highlight_group = config_module.HIGHLIGHTS.FILENAME
-        prefix_highlight_group = config_module.HIGHLIGHTS.PREFIX
-    else
-        -- Buffer in non-active group: most subdued
-        tree_highlight_group = config_module.HIGHLIGHTS.INACTIVE
-        filename_highlight_group = config_module.HIGHLIGHTS.FILENAME
-        prefix_highlight_group = config_module.HIGHLIGHTS.PREFIX
-    end
-    
-    -- Highlight groups are ensured to exist by main refresh function
-    
-    -- Apply tree/prefix highlighting to the beginning part (tree branches, numbers, icons)
-    -- Find where the actual filename starts
-    local filename_start_pos = nil
-    local icon_pos = line_text:find("[🌙📄🐍🟢🦀📝📋]")
-    if icon_pos then
-        -- Find first character after the icon and space
-        filename_start_pos = line_text:find("%S", icon_pos + 2)
-    else
-        -- Fallback: find filename after tree prefix and common markers
-        local after_tree = #tree_prefix + 1
-        local marker_pattern = "[►]?%s*%d+%s+"  -- Optional arrow, space, number, space
-        local marker_end = line_text:find(marker_pattern, after_tree)
-        if marker_end then
-            filename_start_pos = line_text:find("%S", marker_end + string.len(line_text:match(marker_pattern, after_tree)))
-        else
-            filename_start_pos = line_text:find("%S", after_tree)
-        end
-    end
-    
-    -- Apply tree/prefix highlighting (everything before filename)
-    if filename_start_pos and filename_start_pos > 1 then
-        api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, tree_highlight_group, actual_line_number - 1, 0, filename_start_pos - 1)
-    end
-    
-    -- Find and highlight the modified indicator "●" if present
-    local modified_pos = line_text:find("●")
-    if modified_pos then
-        api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, config_module.HIGHLIGHTS.MODIFIED, actual_line_number - 1, modified_pos - 1, modified_pos)
-    end
-    
-    -- Apply dual numbering highlighting by parsing the line text
-    -- Look for dual numbering pattern like "3|5" in the line
-    local number_start = #tree_prefix  -- Numbers come right after tree prefix
-    local number_pattern = "([-%d]+)|([%d]+)"  -- Match "3|5" or "-|5" patterns
-    local line_substr = line_text:sub(number_start + 1)  -- Get text after tree prefix
-    local local_num, global_num = line_substr:match("^%s*" .. number_pattern)
-    
-    if local_num and global_num then
-        -- Found dual numbering pattern, apply highlighting
-        local pattern_start = line_text:find(number_pattern, number_start + 1)
-        if pattern_start then
-            -- Highlight local number
-            if local_num == "-" then
-                api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, config_module.HIGHLIGHTS.NUMBER_HIDDEN, 
-                                           actual_line_number - 1, pattern_start - 1, pattern_start - 1 + #local_num)
-            else
-                api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, config_module.HIGHLIGHTS.NUMBER_LOCAL, 
-                                           actual_line_number - 1, pattern_start - 1, pattern_start - 1 + #local_num)
-            end
-            
-            -- Highlight separator "|"
-            local separator_pos = pattern_start - 1 + #local_num
-            api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, config_module.HIGHLIGHTS.NUMBER_SEPARATOR, 
-                                       actual_line_number - 1, separator_pos, separator_pos + 1)
-            
-            -- Highlight global number
-            local global_pos = separator_pos + 1
-            api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, config_module.HIGHLIGHTS.NUMBER_GLOBAL, 
-                                       actual_line_number - 1, global_pos, global_pos + #global_num)
-        end
-    end
-    
-    -- Apply filename highlighting (from filename_start_pos to end of line)
-    if filename_start_pos and filename_start_pos <= #line_text then
-        if prefix_info and prefix_info.prefix and prefix_info.prefix ~= "" then
-            -- Handle buffers WITH prefix: highlight prefix and filename separately
-            local prefix_start = line_text:find(vim.pesc(prefix_info.prefix), filename_start_pos)
-            if prefix_start then
-                local prefix_end = prefix_start + #prefix_info.prefix - 1
-                
-                -- Highlight prefix part
-                api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, prefix_highlight_group, actual_line_number - 1, prefix_start - 1, prefix_end)
-                
-                -- Highlight filename part (after prefix)
-                local filename_part_start = prefix_end + 1
-                if filename_part_start <= #line_text then
-                    api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, filename_highlight_group, actual_line_number - 1, filename_part_start - 1, -1)
-                end
-            else
-                -- Fallback: highlight entire filename part
-                api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, filename_highlight_group, actual_line_number - 1, filename_start_pos - 1, -1)
-            end
-        else
-            -- Handle buffers WITHOUT prefix: highlight entire filename part
-            api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, filename_highlight_group, actual_line_number - 1, filename_start_pos - 1, -1)
-        end
-    end
+    -- Fallback: This should rarely happen with the new component system
+    -- If we reach here, it means create_buffer_line didn't return rendered_line properly
+    vim.notify("Warning: Falling back to legacy highlighting for line " .. actual_line_number, vim.log.levels.WARN)
 end
 
 -- Apply path-specific highlighting for path lines
