@@ -1613,19 +1613,25 @@ function M.close_sidebar()
         -- If only sidebar window remains, exit nvim completely
         vim.cmd("qall")
     else
-        -- Normal case: multiple windows, safe to close sidebar
-        api.nvim_set_current_win(sidebar_win_id)
-        vim.cmd("close")
-
-        -- Return to previous window
-        if api.nvim_win_is_valid(current_win) and current_win ~= sidebar_win_id then
-            api.nvim_set_current_win(current_win)
+        -- Normal case: close sidebar (floating or split)
+        if config_module.DEFAULTS.floating then
+            -- Close floating window
+            api.nvim_win_close(sidebar_win_id, false)
         else
-            -- If previous window is invalid, find first valid non-sidebar window
-            for _, win_id in ipairs(api.nvim_list_wins()) do
-                if win_id ~= sidebar_win_id and api.nvim_win_is_valid(win_id) then
-                    api.nvim_set_current_win(win_id)
-                    break
+            -- Close split window
+            api.nvim_set_current_win(sidebar_win_id)
+            vim.cmd("close")
+            
+            -- Return to previous window
+            if api.nvim_win_is_valid(current_win) and current_win ~= sidebar_win_id then
+                api.nvim_set_current_win(current_win)
+            else
+                -- If previous window is invalid, find first valid non-sidebar window
+                for _, win_id in ipairs(api.nvim_list_wins()) do
+                    if win_id ~= sidebar_win_id and api.nvim_win_is_valid(win_id) then
+                        api.nvim_set_current_win(win_id)
+                        break
+                    end
                 end
             end
         end
@@ -1673,12 +1679,38 @@ local function open_sidebar()
     api.nvim_buf_set_option(buf_id, 'filetype', 'vertical-bufferline')
     local current_win = api.nvim_get_current_win()
     
-    -- Create sidebar window using nvim_open_win with focusable=false from the start
-    local new_win_id = api.nvim_open_win(buf_id, false, {  -- false = don't enter the new window
-        split = config_module.DEFAULTS.position,  -- "left" or "right"
-        width = config_module.DEFAULTS.width,
-        focusable = false  -- Set as non-focusable from creation to prevent keyboard navigation
-    })
+    local new_win_id
+    
+    if config_module.DEFAULTS.floating then
+        -- Create floating sidebar (right side, focusable=false)
+        local screen_width = vim.o.columns
+        local screen_height = vim.o.lines
+        local width = config_module.DEFAULTS.width
+        local height = screen_height - 2  -- Leave space for command line
+        local col = screen_width - width  -- Always on right side for floating
+        
+        new_win_id = api.nvim_open_win(buf_id, false, {  -- false = don't enter the new window
+            relative = 'editor',
+            width = width,
+            height = height,
+            col = col,
+            row = 0,
+            style = 'minimal',
+            border = 'none',
+            focusable = false,  -- This works for floating windows
+            mouse = true, -- Enable mouse interaction for floating window
+        })
+    else
+        -- Create traditional split sidebar
+        if config_module.DEFAULTS.position == "left" then
+            vim.cmd("topleft vsplit")
+        else
+            vim.cmd("botright vsplit")
+        end
+        new_win_id = api.nvim_get_current_win()
+        api.nvim_win_set_buf(new_win_id, buf_id)
+        api.nvim_win_set_width(new_win_id, config_module.DEFAULTS.width)
+    end
     
     -- Configure window options after creation
     api.nvim_win_set_option(new_win_id, 'winfixwidth', true)  -- Prevent window from auto-resizing width
@@ -1695,9 +1727,36 @@ local function open_sidebar()
     -- Note: We don't use winfixbuf as it completely blocks file opening
     -- Instead, we rely on autocmd protection below for smart handling
     
-    -- Buffer protection: monitor buffer changes in sidebar window
+    -- Buffer protection and floating window management
     local group_name = "VerticalBufferlineSidebarProtection"
     api.nvim_create_augroup(group_name, { clear = true })
+    
+    -- Handle window resize for floating sidebar (only needed in floating mode)
+    if config_module.DEFAULTS.floating then
+        api.nvim_create_autocmd("VimResized", {
+            group = group_name,
+            callback = function()
+                if api.nvim_win_is_valid(new_win_id) then
+                    local new_screen_width = vim.o.columns
+                    local new_screen_height = vim.o.lines
+                    local new_height = new_screen_height - 2
+                    local width = config_module.DEFAULTS.width
+                    
+                    -- Always position on right side for floating sidebar
+                    local new_col = new_screen_width - width
+                    
+                    api.nvim_win_set_config(new_win_id, {
+                        relative = 'editor',
+                        width = width,
+                        height = new_height,
+                        col = new_col,
+                        row = 0
+                    })
+                end
+            end,
+            desc = "Resize floating sidebar when terminal is resized"
+        })
+    end
     
     -- Monitor buffer changes in sidebar window
     api.nvim_create_autocmd("BufWinEnter", {
@@ -1770,7 +1829,11 @@ local function open_sidebar()
 
     setup_sidebar_keymaps(buf_id)
 
-    -- No need to switch windows - nvim_open_win with enter=false keeps focus in original window
+    -- Switch back to original window (only needed for split mode)
+    if not config_module.DEFAULTS.floating then
+        api.nvim_set_current_win(current_win)
+    end
+    
     M.refresh("sidebar_open")
 end
 

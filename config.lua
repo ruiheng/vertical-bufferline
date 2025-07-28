@@ -131,6 +131,7 @@ M.DEFAULTS = {
     show_icons = false,  -- Show file type icons (emoji)
     position = "left",  -- Sidebar position: "left" or "right"
     show_tree_lines = false,  -- Show tree-style connection lines
+    floating = false,  -- Use floating window (right side, focusable=false) instead of split window
     
     -- History settings
     show_history = "auto",  -- "yes", "no", "auto" - show recent files history as unified group
