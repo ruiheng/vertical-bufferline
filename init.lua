@@ -1672,25 +1672,20 @@ local function open_sidebar()
     api.nvim_buf_set_option(buf_id, 'bufhidden', 'wipe')
     api.nvim_buf_set_option(buf_id, 'filetype', 'vertical-bufferline')
     local current_win = api.nvim_get_current_win()
-    -- Create sidebar window based on configured position
-    if config_module.DEFAULTS.position == "left" then
-        vim.cmd("topleft vsplit")
-    else
-        vim.cmd("botright vsplit")
-    end
-    local new_win_id = api.nvim_get_current_win()
-    api.nvim_win_set_buf(new_win_id, buf_id)
-    api.nvim_win_set_width(new_win_id, config_module.DEFAULTS.width)
+    
+    -- Create sidebar window using nvim_open_win with focusable=false from the start
+    local new_win_id = api.nvim_open_win(buf_id, false, {  -- false = don't enter the new window
+        split = config_module.DEFAULTS.position,  -- "left" or "right"
+        width = config_module.DEFAULTS.width,
+        focusable = false  -- Set as non-focusable from creation to prevent keyboard navigation
+    })
+    
+    -- Configure window options after creation
     api.nvim_win_set_option(new_win_id, 'winfixwidth', true)  -- Prevent window from auto-resizing width
     api.nvim_win_set_option(new_win_id, 'number', false)
     api.nvim_win_set_option(new_win_id, 'relativenumber', false)
     api.nvim_win_set_option(new_win_id, 'cursorline', false)
     api.nvim_win_set_option(new_win_id, 'cursorcolumn', false)
-    
-    -- Make sidebar window non-focusable to prevent keyboard navigation
-    pcall(function()
-        api.nvim_win_set_config(new_win_id, {focusable = false})
-    end)
     
     -- Ensure mouse support is enabled for this window
     if vim.o.mouse == '' then
@@ -1775,9 +1770,7 @@ local function open_sidebar()
 
     setup_sidebar_keymaps(buf_id)
 
-    -- Switch back to the original window to prevent cursor from staying in sidebar
-    api.nvim_set_current_win(current_win)
-    
+    -- No need to switch windows - nvim_open_win with enter=false keeps focus in original window
     M.refresh("sidebar_open")
 end
 
