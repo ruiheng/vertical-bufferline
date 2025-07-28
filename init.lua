@@ -1687,11 +1687,10 @@ local function open_sidebar()
     api.nvim_win_set_option(new_win_id, 'cursorline', false)
     api.nvim_win_set_option(new_win_id, 'cursorcolumn', false)
     
-    -- Make sidebar window non-focusable (if the option exists)
-    pcall(api.nvim_win_set_option, new_win_id, 'winfocusable', false)
-    
-    -- Prevent cursor from entering sidebar window - switch back to original window
-    api.nvim_set_current_win(current_win)
+    -- Make sidebar window non-focusable to prevent keyboard navigation
+    pcall(function()
+        api.nvim_win_set_config(new_win_id, {focusable = false})
+    end)
     
     -- Ensure mouse support is enabled for this window
     if vim.o.mouse == '' then
@@ -1701,109 +1700,9 @@ local function open_sidebar()
     -- Note: We don't use winfixbuf as it completely blocks file opening
     -- Instead, we rely on autocmd protection below for smart handling
     
-    -- Additional protection: monitor buffer changes and prevent cursor entering sidebar
+    -- Buffer protection: monitor buffer changes in sidebar window
     local group_name = "VerticalBufferlineSidebarProtection"
     api.nvim_create_augroup(group_name, { clear = true })
-    
-    -- Jump to the most appropriate non-sidebar window when entering sidebar
-    api.nvim_create_autocmd("WinEnter", {
-        group = group_name,
-        callback = function()
-            local current_win = api.nvim_get_current_win()
-            if current_win == new_win_id then
-                -- Find the best window to jump to, with priority ranking
-                local target_win = nil
-                local all_wins = api.nvim_list_wins()
-                local fallback_win = nil
-                
-                -- Get current active group to find a buffer from that group
-                local groups = require('vertical-bufferline.groups')
-                local active_group = groups.get_active_group()
-                
-                -- Build a priority list of windows
-                local window_candidates = {}
-                
-                for _, win_id in ipairs(all_wins) do
-                    if win_id ~= new_win_id and api.nvim_win_is_valid(win_id) then
-                        local win_buf = api.nvim_win_get_buf(win_id)
-                        local buf_name = api.nvim_buf_get_name(win_buf)
-                        local buf_type = api.nvim_buf_get_option(win_buf, 'buftype')
-                        local buf_filetype = api.nvim_buf_get_option(win_buf, 'filetype')
-                        
-                        local candidate = {
-                            win_id = win_id,
-                            buf_id = win_buf,
-                            buf_name = buf_name,
-                            buf_type = buf_type,
-                            buf_filetype = buf_filetype,
-                            priority = 0
-                        }
-                        
-                        -- Priority 1: Window displaying current group buffer (highest)
-                        if active_group and active_group.history and #active_group.history > 0 then
-                            local group_buf = active_group.history[1]
-                            if win_buf == group_buf then
-                                candidate.priority = 100
-                            end
-                        end
-                        
-                        -- Priority 2: Normal files with valid file paths (editing windows)
-                        if buf_type == '' and buf_name ~= '' and not buf_name:match('^fugitive://') 
-                           and not buf_name:match('^diffpanel_') and vim.fn.filereadable(buf_name) == 1 then
-                            candidate.priority = candidate.priority + 50
-                        end
-                        
-                        -- Priority 3: Regular file types we want to prioritize
-                        if buf_filetype == '' or buf_filetype == 'lua' or buf_filetype == 'vim' 
-                           or buf_filetype == 'javascript' or buf_filetype == 'typescript'
-                           or buf_filetype == 'python' or buf_filetype == 'c' or buf_filetype == 'cpp' then
-                            candidate.priority = candidate.priority + 25
-                        end
-                        
-                        -- Penalty: Special buffers and git-related windows
-                        if buf_name:match('^fugitive://') or buf_filetype == 'fugitive' 
-                           or buf_filetype == 'git' or buf_filetype == 'vertical-bufferline' or buf_type ~= '' then
-                            candidate.priority = candidate.priority - 30
-                        end
-                        
-                        -- Penalty: Empty or unnamed buffers
-                        if buf_name == '' or buf_name:match('^%s*$') then
-                            candidate.priority = candidate.priority - 20
-                        end
-                        
-                        table.insert(window_candidates, candidate)
-                    end
-                end
-                
-                -- Sort by priority (highest first)
-                table.sort(window_candidates, function(a, b) return a.priority > b.priority end)
-                
-                -- Pick the highest priority window, but ensure it's a reasonable choice
-                if #window_candidates > 0 then
-                    target_win = window_candidates[1].win_id
-                    
-                    -- Safety check: if the highest priority window is still a special buffer,
-                    -- try to find a better alternative
-                    local first_candidate = window_candidates[1]
-                    if first_candidate.priority < 10 and #window_candidates > 1 then
-                        -- Look for any window with reasonable priority
-                        for _, candidate in ipairs(window_candidates) do
-                            if candidate.buf_type == '' and candidate.buf_name ~= '' then
-                                target_win = candidate.win_id
-                                break
-                            end
-                        end
-                    end
-                end
-                
-                -- Switch to the determined target window
-                if target_win then
-                    api.nvim_set_current_win(target_win)
-                end
-            end
-        end,
-        desc = "Jump to appropriate editing window when entering sidebar"
-    })
     
     -- Monitor buffer changes in sidebar window
     api.nvim_create_autocmd("BufWinEnter", {
@@ -1876,7 +1775,9 @@ local function open_sidebar()
 
     setup_sidebar_keymaps(buf_id)
 
+    -- Switch back to the original window to prevent cursor from staying in sidebar
     api.nvim_set_current_win(current_win)
+    
     M.refresh("sidebar_open")
 end
 
@@ -1892,19 +1793,8 @@ function M.handle_mouse_click()
         return -- Click not in sidebar window
     end
     
-    -- Ensure we're in the sidebar window and set cursor position
-    local sidebar_win = state_module.get_win_id()
-    local was_in_sidebar = api.nvim_get_current_win() == sidebar_win
-    
-    if not was_in_sidebar then
-        api.nvim_set_current_win(sidebar_win)
-    end
-    
-    -- Set cursor to click position
-    api.nvim_win_set_cursor(sidebar_win, {mouse_pos.line, 0})
-    
-    -- Call handle_selection normally
-    M.handle_selection()
+    -- Directly handle selection with mouse position, no need to change windows
+    M.handle_selection(nil, mouse_pos.line)
 end
 
 --- Cycle through show_path settings (yes -> no -> auto -> yes)
