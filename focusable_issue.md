@@ -82,25 +82,45 @@ Sidebar window 1002 config:
 2. **清理其他代码**：移除了所有可能影响的 autocmd 和窗口切换逻辑
 3. **使用 pcall**：确保 API 调用没有失败
 
-## 关键疑问
+## 关键发现：focusable 仅对浮动窗口有效
 
-1. **API 版本问题**：是否 `focusable = false` 在某些 Neovim 版本中行为不一致？
-2. **窗口创建方式**：使用 `vim.cmd("vsplit")` 创建的窗口是否影响 focusable 设置？
-3. **设置时机**：是否需要在特定时机设置 focusable 才能生效？
-4. **其他配置冲突**：是否有其他窗口配置或全局设置影响了 focusable 的行为？
+**重要更新**：经过进一步调研，发现了问题的根本原因。
 
-## 相关文档引用
+根据 Neovim 的 GitHub issue [#29365](https://github.com/neovim/neovim/issues/29365)，**`focusable` 属性对非浮动窗口（分割窗口）是被明确忽略的**。
 
-根据 Neovim 官方文档：
-> "Focusable windows are part of the navigation stack and can be accessed by commands like :windo and CTRL-W. Non-focusable windows are skipped by navigation commands but can still be explicitly focused."
+> The "focusable" attribute is explicitly ignored for non-floating windows. For example, here is the code for going to the next/previous window, which ignores focusable==false unless the window is also floating.
 
-这表明 `focusable = false` 应该让导航命令跳过该窗口，但我们的实际体验不符合这个描述。
+这意味着我们的分割窗口（split window）sidebar 无法通过 `focusable = false` 来阻止键盘导航，这是 Neovim 的设计限制，不是 bug。
 
-## 完整代码上下文
+## 尝试过的解决方案
 
-如果需要更多上下文，可以查看完整的窗口创建和配置代码。我们已经排除了以下可能的干扰因素：
-- WinEnter autocmd 重定向
-- 多余的 `nvim_set_current_win` 调用  
-- 错误的 API 使用（如使用不存在的 `winfocusable` 选项）
+1. **改进窗口创建方式**：
+   - 从 `vim.cmd("vsplit")` 改为 `nvim_open_win` 原子性创建
+   - 在创建时就设置 `focusable = false`
+   - **结果**：仍然无效，因为 focusable 对分割窗口不起作用
 
-希望能得到关于为什么 `focusable = false` 在我们的场景下不起作用的指导。
+## 可能的替代方案
+
+既然 `focusable = false` 对分割窗口无效，可能需要考虑以下替代方案：
+
+1. **使用浮动窗口**：
+   - 改为创建浮动窗口形式的 sidebar
+   - 浮动窗口支持 `focusable = false`
+   - 但可能影响现有的布局逻辑
+
+2. **WinEnter autocmd 重定向**：
+   - 监听 WinEnter 事件，检测到进入 sidebar 时自动跳转
+   - 我们之前尝试过，但可能需要更精细的实现
+
+3. **修改键盘映射**：
+   - 重新映射 `<C-w>w` 等导航键
+   - 让它们跳过 sidebar 窗口
+
+4. **接受现状**：
+   - 文档说明用户可以进入 sidebar，但建议使用鼠标或特定键退出
+
+## 结论
+
+这个问题的根本原因是 Neovim 的设计限制：**`focusable = false` 只对浮动窗口有效，对分割窗口无效**。
+
+这不是我们的代码问题，而是需要寻找其他技术方案来实现"阻止键盘导航进入侧边栏"的需求。
