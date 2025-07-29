@@ -354,7 +354,7 @@ end
 --- Set active group
 --- @param group_id string ID of group to activate
 --- @return boolean success
-function M.set_active_group(group_id)
+function M.set_active_group(group_id, target_buffer_id)
     local group = find_group_by_id(group_id)
     if not group then
         vim.notify("Group not found: " .. group_id, vim.log.levels.ERROR)
@@ -416,9 +416,13 @@ function M.set_active_group(group_id)
     if #group.buffers > 0 then
         local target_buffer = nil
         
+        -- Highest priority: use explicitly requested target buffer if valid
+        if target_buffer_id and vim.api.nvim_buf_is_valid(target_buffer_id) 
+           and vim.tbl_contains(group.buffers, target_buffer_id) then
+            target_buffer = target_buffer_id
         -- First priority: use first item in history (current buffer) if valid
-        if #group.history > 0 and vim.api.nvim_buf_is_valid(group.history[1]) 
-           and vim.tbl_contains(group.buffers, group.history[1]) then
+        elseif #group.history > 0 and vim.api.nvim_buf_is_valid(group.history[1]) 
+               and vim.tbl_contains(group.buffers, group.history[1]) then
             target_buffer = group.history[1]
         else
             -- Second priority: keep current buffer if it's in the group

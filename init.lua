@@ -1170,8 +1170,15 @@ local function render_all_groups(active_group, components, current_buffer_id, is
         -- Render group header
         render_group_header(group, i, is_active, buffer_count, lines_text, group_header_lines)
 
-        -- Decide whether to expand group based on mode
-        local should_expand = state_module.get_expand_all_groups() or is_active
+        -- Decide whether to expand group based on mode and inactive groups setting
+        local should_expand = false
+        if is_active then
+            -- Always expand active group
+            should_expand = true
+        elseif state_module.get_expand_all_groups() then
+            -- In expand-all mode, show inactive groups only if show_inactive_groups is enabled
+            should_expand = config_module.DEFAULTS.show_inactive_groups
+        end
         if should_expand then
             -- Get current group buffers and display them
             local group_components = {}
@@ -1662,7 +1669,7 @@ local function setup_sidebar_keymaps(buf_id)
     api.nvim_buf_set_keymap(buf_id, "n", "p", ":lua require('vertical-bufferline').cycle_show_path_setting()<CR>", keymap_opts)
     api.nvim_buf_set_keymap(buf_id, "n", "h", ":lua require('vertical-bufferline').cycle_show_history_setting()<CR>", keymap_opts)
     
-    -- Mouse support
+    -- Mouse support - simple approach
     api.nvim_buf_set_keymap(buf_id, "n", "<LeftRelease>", ":lua require('vertical-bufferline').handle_mouse_click()<CR>", keymap_opts)
     api.nvim_buf_set_keymap(buf_id, "n", "<LeftMouse>", "<LeftMouse>", keymap_opts)
     
@@ -1756,6 +1763,62 @@ local function open_sidebar()
             end,
             desc = "Resize floating sidebar when terminal is resized"
         })
+    else
+        -- For split windows, add WinEnter redirect with delay for mouse clicks
+        api.nvim_create_autocmd("WinEnter", {
+            group = group_name,
+            callback = function()
+                local current_win = api.nvim_get_current_win()
+                if current_win == new_win_id then
+                    -- Wait a short delay to allow mouse click processing
+                    vim.defer_fn(function()
+                        -- Check if we're still in the sidebar window
+                        local check_win = api.nvim_get_current_win()
+                        if check_win == new_win_id then
+                            -- Find best non-sidebar window
+                            local all_wins = api.nvim_list_wins()
+                            local best_win = nil
+                            local best_priority = -1
+                            
+                            for _, win_id in ipairs(all_wins) do
+                                if win_id ~= new_win_id and api.nvim_win_is_valid(win_id) then
+                                    local win_buf = api.nvim_win_get_buf(win_id)
+                                    local buf_type = api.nvim_buf_get_option(win_buf, 'buftype')
+                                    local buf_name = api.nvim_buf_get_name(win_buf)
+                                    local priority = 0
+                                    
+                                    -- Prefer normal editing buffers
+                                    if buf_type == '' and buf_name ~= '' then
+                                        priority = priority + 100
+                                    end
+                                    
+                                    -- Prefer readable files
+                                    if buf_name ~= '' and vim.fn.filereadable(buf_name) == 1 then
+                                        priority = priority + 50
+                                    end
+                                    
+                                    -- Avoid special buffers
+                                    if buf_name:match('^fugitive://') or buf_type ~= '' then
+                                        priority = priority - 50
+                                    end
+                                    
+                                    if priority > best_priority then
+                                        best_priority = priority
+                                        best_win = win_id
+                                    end
+                                end
+                            end
+                            
+                            -- Redirect to the best window found
+                            if best_win then
+                                api.nvim_set_current_win(best_win)
+                            end
+                        end
+                    end, 500)  -- 500ms delay
+                end
+            end,
+            desc = "Redirect keyboard navigation away from sidebar with delay for mouse clicks"
+        })
     end
     
     -- Monitor buffer changes in sidebar window
@@ -1845,11 +1908,13 @@ function M.handle_mouse_click()
     
     -- Get mouse position
     local mouse_pos = vim.fn.getmousepos()
-    if not mouse_pos or mouse_pos.winid ~= state_module.get_win_id() then
-        return -- Click not in sidebar window
+    
+    local sidebar_win_id = state_module.get_win_id()
+    if not mouse_pos or mouse_pos.winid ~= sidebar_win_id then
+        return
     end
     
-    -- Directly handle selection with mouse position, no need to change windows
+    -- Handle selection directly using mouse position
     M.handle_selection(nil, mouse_pos.line)
 end
 
@@ -1986,7 +2051,7 @@ function M.handle_selection(captured_buffer_id, captured_line_number)
     elseif buffer_group then
         -- Switch to the group containing this buffer
         if not current_active_group or current_active_group.id ~= buffer_group.id then
-            groups.set_active_group(buffer_group.id)
+            groups.set_active_group(buffer_group.id, bufnr)
         end
     else
         -- Buffer doesn't belong to any group - add it to current active group
