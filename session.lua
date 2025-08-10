@@ -25,16 +25,6 @@ local function finalize_session_restore(session_data, opened_count, total_groups
     local groups = require('vertical-bufferline.groups')
     local bufferline_integration = require('vertical-bufferline.bufferline-integration')
     
-    -- Restore expand mode if available
-    if session_data.expand_all_groups ~= nil then
-        local vbl = require('vertical-bufferline')
-        if vbl.state then
-            vbl.state.expand_all_groups = session_data.expand_all_groups
-        else
-            local state_module = require('vertical-bufferline.state')
-            state_module.set_expand_all_groups(session_data.expand_all_groups)
-        end
-    end
 
     -- Clear all position info from all groups after session restore
     local all_groups = groups.get_all_groups()
@@ -148,8 +138,6 @@ function M.save_session(filename)
         timestamp = os.time(),
         working_directory = vim.fn.getcwd(),
         active_group_id = active_group_id,
-        expand_all_groups = require('vertical-bufferline').state and
-                           require('vertical-bufferline').state.expand_all_groups or true,
         groups = {}
     }
 
@@ -822,7 +810,6 @@ local function collect_current_state()
         version = "1.0",
         timestamp = os.time(),
         active_group_id = active_group_id,
-        expand_all_groups = state_module.get_expand_all_groups(),
         groups = {}
     }
     

@@ -16,7 +16,6 @@ local state = {
     line_group_context = {}, -- Maps a line number to the group ID it belongs to
     group_header_lines = {}, -- Maps line numbers to group header information
     was_picking = false, -- Track picking mode state to avoid spam
-    expand_all_groups = true, -- Default mode: show all groups expanded
     session_loading = false, -- Flag to prevent interference during session loading
     highlight_timer = nil, -- Timer for picking highlights
     
@@ -186,21 +185,6 @@ function M.set_was_picking(was_picking)
 end
 
 -- Expand all groups mode
-function M.get_expand_all_groups()
-    return state.expand_all_groups
-end
-
-function M.set_expand_all_groups(expand_all)
-    if type(expand_all) ~= "boolean" then
-        error("expand_all_groups must be boolean, got: " .. type(expand_all))
-    end
-    state.expand_all_groups = expand_all
-end
-
-function M.toggle_expand_all_groups()
-    state.expand_all_groups = not state.expand_all_groups
-    return state.expand_all_groups
-end
 
 -- Session loading state
 function M.is_session_loading()
@@ -312,7 +296,6 @@ function M.get_state_summary()
         win_id = state.win_id,
         buf_id = state.buf_id,
         is_sidebar_open = state.is_sidebar_open,
-        expand_all_groups = state.expand_all_groups,
         was_picking = state.was_picking,
         session_loading = state.session_loading,
         has_highlight_timer = state.highlight_timer ~= nil,

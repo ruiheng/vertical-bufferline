@@ -273,10 +273,10 @@ local function toggle_expand_all_command()
     vbl.toggle_expand_all()
 end
 
--- Toggle show inactive groups mode
-local function toggle_show_inactive_groups_command()
+-- Toggle show inactive group buffers mode
+local function toggle_show_inactive_group_buffers_command()
     local vbl = require('vertical-bufferline')
-    vbl.toggle_show_inactive_groups()
+    vbl.toggle_show_inactive_group_buffers()
 end
 
 -- Move current group up
@@ -478,8 +478,8 @@ function M.setup()
         desc = "Toggle expand all groups mode"
     })
 
-    -- Toggle show inactive groups mode
-    vim.api.nvim_create_user_command("VBufferLineToggleInactiveGroups", toggle_show_inactive_groups_command, {
+    -- Toggle show inactive group buffers mode
+    vim.api.nvim_create_user_command("VBufferLineToggleInactiveGroupBuffers", toggle_show_inactive_group_buffers_command, {
         nargs = 0,
         desc = "Toggle showing buffer lists for inactive groups"
     })

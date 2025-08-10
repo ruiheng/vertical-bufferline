@@ -126,8 +126,7 @@ M.DEFAULTS = {
 
     -- UI settings
     width = M.UI.DEFAULT_WIDTH,
-    expand_all_groups = true,
-    show_inactive_groups = false,  -- Show buffer list for inactive groups (default: only show active group)
+    show_inactive_group_buffers = false,  -- Show buffer list for inactive groups (default: only show active group)
     show_icons = false,  -- Show file type icons (emoji)
     position = "left",  -- Sidebar position: "left" or "right"
     show_tree_lines = false,  -- Show tree-style connection lines

@@ -1170,15 +1170,8 @@ local function render_all_groups(active_group, components, current_buffer_id, is
         -- Render group header
         render_group_header(group, i, is_active, buffer_count, lines_text, group_header_lines)
 
-        -- Decide whether to expand group based on mode and inactive groups setting
-        local should_expand = false
-        if is_active then
-            -- Always expand active group
-            should_expand = true
-        elseif state_module.get_expand_all_groups() then
-            -- In expand-all mode, show inactive groups only if show_inactive_groups is enabled
-            should_expand = config_module.DEFAULTS.show_inactive_groups
-        end
+        -- Decide whether to expand group based on active status and setting
+        local should_expand = is_active or config_module.DEFAULTS.show_inactive_group_buffers
         if should_expand then
             -- Get current group buffers and display them
             local group_components = {}
@@ -1216,8 +1209,8 @@ local function render_all_groups(active_group, components, current_buffer_id, is
                 end
             end
 
-            -- For expand-all mode and non-active groups, manually construct components
-            if state_module.get_expand_all_groups() and not is_active then
+            -- For inactive groups that should show buffers, manually construct components
+            if config_module.DEFAULTS.show_inactive_group_buffers and not is_active then
                 group_components = {}
 
                 -- First collect all valid buffer information
@@ -1284,8 +1277,8 @@ local function render_all_groups(active_group, components, current_buffer_id, is
                 all_components[comp.id] = comp
             end
 
-            -- If current active group and not expand-all mode, clear remaining components
-            if is_active and not state_module.get_expand_all_groups() then
+            -- If current active group and inactive groups not shown, clear remaining components
+            if is_active and not config_module.DEFAULTS.show_inactive_group_buffers then
                 remaining_components = {}
             end
         end
@@ -2192,16 +2185,40 @@ function M.smart_close_buffer()
     end
 end
 
---- Toggle expand all groups mode
+--- Toggle expand all groups mode (now equivalent to show inactive group buffers)
 function M.toggle_expand_all()
-    local new_status = state_module.toggle_expand_all_groups()
-    local status = new_status and "enabled" or "disabled"
-    vim.notify("Expand all groups mode " .. status, vim.log.levels.INFO)
+    config_module.DEFAULTS.show_inactive_group_buffers = not config_module.DEFAULTS.show_inactive_group_buffers
+    local status = config_module.DEFAULTS.show_inactive_group_buffers and "enabled" or "disabled"
+    vim.notify("Show inactive group buffers " .. status, vim.log.levels.INFO)
 
     -- Refresh display
     if state_module.is_sidebar_open() then
         vim.schedule(function()
             M.refresh("expand_toggle")
+        end)
+    end
+end
+
+--- Toggle show inactive group buffers mode
+function M.toggle_show_inactive_group_buffers()
+    if not state_module.is_sidebar_open() then 
+        return 
+    end
+    
+    local current_setting = config_module.DEFAULTS.show_inactive_group_buffers
+    local new_setting = not current_setting
+    
+    -- Update the configuration
+    config_module.DEFAULTS.show_inactive_group_buffers = new_setting
+    
+    -- Provide visual feedback
+    local status = new_setting and "enabled" or "disabled"
+    vim.notify("Show inactive group buffers mode " .. status, vim.log.levels.INFO)
+    
+    -- Refresh display
+    if state_module.is_sidebar_open() then
+        vim.schedule(function()
+            M.refresh("toggle_inactive_group_buffers")
         end)
     end
 end
