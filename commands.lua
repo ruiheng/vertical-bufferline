@@ -4,6 +4,7 @@
 local M = {}
 
 local groups = require('vertical-bufferline.groups')
+local logger = require('vertical-bufferline.logger')
 
 -- Create group command
 local function create_group_command(args)
@@ -921,6 +922,67 @@ function M.setup()
     end, {
         nargs = 0,
         desc = "Manually refresh and add current buffers to active group"
+    })
+
+    -- Debug logging commands
+    vim.api.nvim_create_user_command("VBufferLineDebugEnable", function(args)
+        local args_str = args.args or ""
+        local args_list = args_str ~= "" and vim.split(args_str, "%s+") or {}
+        local log_file = args_list[1] or vim.fn.expand("~/vbl-debug.log")
+        local log_level = args_list[2] or "INFO"
+        
+        logger.enable(log_file, log_level)
+        vim.notify(string.format("VBL debug logging enabled: %s (level: %s)", log_file, log_level), vim.log.levels.INFO)
+    end, {
+        nargs = "*",
+        desc = "Enable VBL debug logging. Args: [log_file] [log_level]. Example: :VBufferLineDebugEnable ~/vbl.log DEBUG"
+    })
+
+    vim.api.nvim_create_user_command("VBufferLineDebugDisable", function()
+        logger.disable()
+        vim.notify("VBL debug logging disabled", vim.log.levels.INFO)
+    end, {
+        nargs = 0,
+        desc = "Disable VBL debug logging"
+    })
+
+    vim.api.nvim_create_user_command("VBufferLineDebugStatus", function()
+        local status = logger.get_status()
+        if status.enabled then
+            vim.notify(string.format("VBL debug logging: ENABLED\nFile: %s\nLevel: %s\nSession: %s\nBuffer lines: %d", 
+                status.log_file or "none", status.log_level, status.session_id or "none", status.buffer_lines), 
+                vim.log.levels.INFO)
+        else
+            vim.notify("VBL debug logging: DISABLED", vim.log.levels.INFO)
+        end
+    end, {
+        nargs = 0,
+        desc = "Show VBL debug logging status"
+    })
+
+    vim.api.nvim_create_user_command("VBufferLineDebugLogs", function(args)
+        local args_str = args.args or ""
+        local count = (args_str ~= "" and tonumber(args_str)) or 20
+        local logs = logger.get_recent_logs(count)
+        
+        if #logs == 0 then
+            vim.notify("No logs available", vim.log.levels.INFO)
+            return
+        end
+        
+        -- Create a new buffer to display logs
+        local buf = vim.api.nvim_create_buf(false, true)
+        vim.api.nvim_buf_set_name(buf, "VBL Debug Logs")
+        vim.api.nvim_buf_set_lines(buf, 0, -1, false, logs)
+        vim.api.nvim_buf_set_option(buf, 'filetype', 'log')
+        vim.api.nvim_buf_set_option(buf, 'modifiable', false)
+        
+        -- Open in a new split
+        vim.cmd("split")
+        vim.api.nvim_set_current_buf(buf)
+    end, {
+        nargs = "?",
+        desc = "Show recent VBL debug logs. Args: [count] (default: 20)"
     })
 
     -- Clear history command

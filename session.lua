@@ -41,7 +41,15 @@ local function finalize_session_restore(session_data, opened_count, total_groups
     end
     
     -- Final sync to bufferline
+    local logger = require('vertical-bufferline.logger')
     local active_group = groups.get_active_group()
+    
+    logger.info("session", "finalizing session restore", {
+        active_group_id = active_group and active_group.id or "none",
+        active_group_current_buffer = active_group and active_group.current_buffer or "none",
+        current_vim_buffer = vim.api.nvim_get_current_buf()
+    })
+    
     if active_group then
         bufferline_integration.set_bufferline_buffers(active_group.buffers)
         bufferline_integration.set_sync_target(active_group.id)
@@ -50,17 +58,35 @@ local function finalize_session_restore(session_data, opened_count, total_groups
         local target_buf = nil
         if active_group.current_buffer and vim.api.nvim_buf_is_valid(active_group.current_buffer) and vim.api.nvim_buf_is_loaded(active_group.current_buffer) then
             target_buf = active_group.current_buffer
+            logger.info("session", "using group's saved current buffer", {
+                buf_id = target_buf,
+                buf_name = vim.api.nvim_buf_get_name(target_buf)
+            })
         elseif #active_group.buffers > 0 then
             for _, buf_id in ipairs(active_group.buffers) do
                 if vim.api.nvim_buf_is_valid(buf_id) and vim.api.nvim_buf_is_loaded(buf_id) then
                     target_buf = buf_id
+                    logger.info("session", "using first available buffer from group", {
+                        buf_id = target_buf,
+                        buf_name = vim.api.nvim_buf_get_name(target_buf)
+                    })
                     break
                 end
             end
         end
         
         if target_buf then
+            logger.info("session", "switching to target buffer", {
+                from_buf = vim.api.nvim_get_current_buf(),
+                to_buf = target_buf,
+                to_buf_name = vim.api.nvim_buf_get_name(target_buf)
+            })
             vim.api.nvim_set_current_buf(target_buf)
+        else
+            logger.warn("session", "no valid target buffer found", {
+                group_buffers = active_group.buffers,
+                group_current_buffer = active_group.current_buffer
+            })
         end
     else
         -- Fallback: ensure sync is enabled even if no active group
@@ -310,11 +336,77 @@ local function collect_session_files(session_data)
 end
 
 -- Find existing buffers without creating new ones (safe for session restore)
+-- Helper function to find buffer by matching filename patterns
+local function find_buffer_by_path_patterns(target_path)
+    local logger = require('vertical-bufferline.logger')
+    local all_bufs = vim.api.nvim_list_bufs()
+    local target_filename = vim.fn.fnamemodify(target_path, ":t")  -- Get filename only
+    
+    logger.debug("session", "searching for buffer with pattern matching", {
+        target_path = target_path,
+        target_filename = target_filename
+    })
+    
+    for _, buf_id in ipairs(all_bufs) do
+        if vim.api.nvim_buf_is_valid(buf_id) then
+            local buf_name = vim.api.nvim_buf_get_name(buf_id)
+            if buf_name ~= "" then
+                -- Try exact match first
+                if buf_name == target_path then
+                    logger.debug("session", "found exact path match", {
+                        buf_id = buf_id,
+                        buf_name = buf_name
+                    })
+                    return buf_id
+                end
+                
+                -- Try filename match for cases where paths don't match exactly
+                local buf_filename = vim.fn.fnamemodify(buf_name, ":t")
+                if buf_filename == target_filename then
+                    -- Additional check: ensure the relative path suffix matches
+                    local target_suffix = target_path:match(".*/(.+)") or target_path
+                    local buf_suffix = buf_name:match(".*/(.+)") or buf_name
+                    
+                    logger.debug("session", "checking filename match", {
+                        buf_id = buf_id,
+                        buf_name = buf_name,
+                        target_suffix = target_suffix,
+                        buf_suffix = buf_suffix
+                    })
+                    
+                    if target_suffix == buf_suffix then
+                        logger.info("session", "found suffix match", {
+                            buf_id = buf_id,
+                            buf_name = buf_name,
+                            matched_suffix = target_suffix
+                        })
+                        return buf_id
+                    elseif buf_name:find(target_suffix:gsub("([%.%-%+%*%?%[%]%^%$%(%)%%])", "%%%1") .. "$") then
+                        logger.info("session", "found pattern match", {
+                            buf_id = buf_id,
+                            buf_name = buf_name,
+                            pattern = target_suffix
+                        })
+                        return buf_id
+                    end
+                end
+            end
+        end
+    end
+    
+    logger.warn("session", "no buffer found for path", {
+        target_path = target_path,
+        target_filename = target_filename
+    })
+    return nil
+end
+
 local function find_existing_buffers(session_data)
+    local logger = require('vertical-bufferline.logger')
     local buffer_mappings = {} -- file_path -> buffer_id
     local found_count = 0
 
-    -- Get all existing buffers
+    -- Get all existing buffers for debugging
     local all_bufs = vim.api.nvim_list_bufs()
     local existing_buf_names = {}
     for _, buf_id in ipairs(all_bufs) do
@@ -325,17 +417,30 @@ local function find_existing_buffers(session_data)
             end
         end
     end
+    
+    logger.info("session", "finding existing buffers", {
+        existing_count = #existing_buf_names,
+        current_cwd = vim.fn.getcwd(),
+        existing_buffers = existing_buf_names
+    })
 
     -- Try to match session data buffers with existing buffers
     for _, group_data in ipairs(session_data.groups) do
         for _, buffer_info in ipairs(group_data.buffers or {}) do
             local file_path = expand_buffer_path(buffer_info.path)
             
-            -- Only look for existing buffers, don't create new ones
+            -- Try exact path match first
             local existing_buf = vim.fn.bufnr(file_path, false)
             if existing_buf > 0 and vim.api.nvim_buf_is_valid(existing_buf) then
                 buffer_mappings[file_path] = existing_buf
                 found_count = found_count + 1
+            else
+                -- If exact match fails, try pattern matching
+                existing_buf = find_buffer_by_path_patterns(file_path)
+                if existing_buf then
+                    buffer_mappings[file_path] = existing_buf
+                    found_count = found_count + 1
+                end
             end
         end
         
@@ -343,11 +448,18 @@ local function find_existing_buffers(session_data)
         for _, history_path in ipairs(group_data.history or {}) do
             local file_path = expand_buffer_path(history_path)
             
-            -- Only look for existing buffers, don't create new ones
+            -- Try exact path match first
             local existing_buf = vim.fn.bufnr(file_path, false)
             if existing_buf > 0 and vim.api.nvim_buf_is_valid(existing_buf) then
                 buffer_mappings[file_path] = existing_buf
                 found_count = found_count + 1
+            else
+                -- If exact match fails, try pattern matching
+                existing_buf = find_buffer_by_path_patterns(file_path)
+                if existing_buf then
+                    buffer_mappings[file_path] = existing_buf
+                    found_count = found_count + 1
+                end
             end
         end
     end
@@ -509,13 +621,35 @@ local function rebuild_groups(session_data, buffer_mappings)
         
         -- Restore current buffer for this group if available
         if group_data.current_buffer_path then
+            local logger = require('vertical-bufferline.logger')
             local current_buffer_file_path = expand_buffer_path(group_data.current_buffer_path)
             local current_buf_id = buffer_mappings[current_buffer_file_path]
+            
+            logger.info("session", "restoring current buffer for group", {
+                group_id = new_group_id,
+                saved_path = group_data.current_buffer_path,
+                expanded_path = current_buffer_file_path,
+                found_buf_id = current_buf_id,
+                buffer_valid = current_buf_id and vim.api.nvim_buf_is_valid(current_buf_id) or false
+            })
+            
             if current_buf_id and vim.api.nvim_buf_is_valid(current_buf_id) then
                 local restored_group = groups.find_group_by_id(new_group_id)
                 if restored_group then
                     restored_group.current_buffer = current_buf_id
+                    logger.info("session", "current buffer restored successfully", {
+                        group_id = new_group_id,
+                        buf_id = current_buf_id,
+                        buf_name = vim.api.nvim_buf_get_name(current_buf_id)
+                    })
                 end
+            else
+                logger.warn("session", "failed to restore current buffer", {
+                    group_id = new_group_id,
+                    saved_path = group_data.current_buffer_path,
+                    expanded_path = current_buffer_file_path,
+                    available_mappings = vim.tbl_keys(buffer_mappings)
+                })
             end
         end
         
@@ -886,15 +1020,39 @@ end
 
 -- State restoration from global variable (simplified synchronous version)
 local function restore_state_from_global()
+    local logger = require('vertical-bufferline.logger')
+    
+    -- Auto-enable logging for session debugging (disabled for normal use)
+    -- if not logger.is_enabled() then
+    --     logger.enable(vim.fn.expand("~/vbl-session-debug.log"), "DEBUG")
+    --     logger.info("session", "auto-enabled debug logging for session restore")
+    -- end
+    
+    logger.info("session", "starting session restore", {
+        cwd = vim.fn.getcwd(),
+        global_session_exists = vim.g.VerticalBufferlineSession ~= nil
+    })
+    
     if not vim.g.VerticalBufferlineSession then
+        logger.warn("session", "no VBL session data found")
         return false
     end
     
     local success, session_data = pcall(vim.json.decode, vim.g.VerticalBufferlineSession)
     if not success then
+        logger.error("session", "failed to decode VBL session data", {
+            error = session_data,
+            raw_data = vim.g.VerticalBufferlineSession
+        })
         vim.notify("Failed to decode VBL session data", vim.log.levels.ERROR)
         return false
     end
+    
+    logger.info("session", "session data decoded successfully", {
+        group_count = #session_data.groups,
+        active_group_id = session_data.active_group_id,
+        timestamp = session_data.timestamp
+    })
     
     
     -- Validate session data

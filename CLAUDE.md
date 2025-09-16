@@ -3,25 +3,78 @@
 ## Important Directory Information
 
 - **Working Directory**: `/home/ruiheng/config_files/nvim/lua/vertical-bufferline`
-- **Git Repository Root**: `/home/ruiheng/config_files`
+- **Git Repository**: `/home/ruiheng/config_files/nvim/lua/vertical-bufferline` (THIS is the git repo)
 - **Plugin Code Location**: `/home/ruiheng/config_files/nvim/lua/vertical-bufferline/`
+
+**IMPORTANT**: Git operations should be performed directly in `/home/ruiheng/config_files/nvim/lua/vertical-bufferline/` - this is NOT a submodule, it's the actual git repository.
 
 ## Git Operations
 
-Always operate from the git root directory: `/home/ruiheng/config_files`
+Git repository is directly at: `/home/ruiheng/config_files/nvim/lua/vertical-bufferline/`
 
 ```bash
-cd /home/ruiheng/config_files
-git add nvim/lua/vertical-bufferline/
+# Work directly in the vertical-bufferline directory
+git add .
 git commit -m "message"
 ```
+
+**DO NOT** manage other directories like `/home/ruiheng/config_files/` - only manage the vertical-bufferline plugin directory.
 
 ## Key Files
 
 - `init.lua` - Main plugin file
 - `bufferline-integration.lua` - Integration with bufferline.nvim
 - `config.lua` - Configuration and constants
+- `logger.lua` - Debug logging system (NEW)
+- `commands.lua` - User commands including debug commands
 
 ## Current Status
 
-Working on dual numbering feature with highlighting for vertical bufferline plugin.
+### Recently Implemented: Debug Logging System
+
+Added comprehensive debug logging system to help troubleshoot buffer state synchronization issues:
+
+#### New Files
+- `logger.lua` - Full-featured logging module with file output, memory buffer, and multiple log levels
+
+#### Debug Commands Added
+```vim
+:VBufferLineDebugEnable [log_file] [log_level]  # Enable logging
+:VBufferLineDebugDisable                        # Disable logging  
+:VBufferLineDebugStatus                         # Show status
+:VBufferLineDebugLogs [count]                   # Show recent logs
+```
+
+#### Key Monitoring Points
+- Timer-based synchronization in bufferline-integration.lua
+- Current buffer detection logic in get_main_window_current_buffer()
+- Buffer state changes and highlighting decisions
+- Refresh trigger reasons and validation
+
+#### Usage Example
+```vim
+:VBufferLineDebugEnable ~/vbl-debug.log DEBUG
+# Reproduce the issue
+:VBufferLineDebugLogs 50
+:VBufferLineDebugDisable
+```
+
+#### Auto-Logging Feature
+为了方便调试session恢复问题，日志系统现在会在以下情况自动启用：
+- Session恢复时 → `~/vbl-session-debug.log` (DEBUG级别)
+- Buffer同步时 → `~/vbl-sync-debug.log` (DEBUG级别)  
+- 刷新操作时 → `~/vbl-refresh-debug.log` (INFO级别)
+
+### Known Issue Being Debugged
+VBL侧边栏有时无法跟随bufferline更新当前buffer状态 - 高亮显示错误的文件或无高亮。
+
+#### 问题分析进展
+通过Session.vim分析发现根本原因：**路径格式不匹配导致session恢复失败**
+- VBL保存相对路径：`"lyceum/page/chat_utils.py"`
+- Vim实际路径：`~/lyceum/lyceum/page/chat_utils.py`
+- 当前工作目录变化导致路径无法匹配，current buffer状态丢失
+
+#### 已实施修复
+1. 增强路径匹配算法 - 支持相对/绝对路径混合匹配
+2. 详细日志追踪 - 自动记录session恢复和同步过程
+3. 智能buffer查找 - 文件名+路径后缀匹配算法

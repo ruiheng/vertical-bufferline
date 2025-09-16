@@ -4,6 +4,7 @@
 local M = {}
 
 local groups = require('vertical-bufferline.groups')
+local logger = require('vertical-bufferline.logger')
 
 -- Simple state
 local sync_timer = nil
@@ -126,12 +127,26 @@ end
 
 -- Direction 1: bufferline → current group (timer, 99% of the time)
 local function sync_bufferline_to_group()
+    -- Auto-enable logging for sync debugging (disabled for normal use)
+    -- if not logger.is_enabled() and not _G._vbl_auto_logging_enabled then
+    --     logger.enable(vim.fn.expand("~/vbl-sync-debug.log"), "DEBUG")
+    --     logger.info("sync", "auto-enabled debug logging for sync debugging")
+    --     _G._vbl_auto_logging_enabled = true
+    -- end
+    
+    logger.debug("sync", "sync_bufferline_to_group called", {
+        enabled = is_enabled,
+        target_group_id = sync_target_group_id
+    })
+    
     if not is_enabled then
+        logger.debug("sync", "sync disabled, skipping")
         return
     end
 
     -- Check pointer: if nil, copy is invalid
     if not sync_target_group_id then
+        logger.debug("sync", "no target group ID set, skipping")
         return
     end
 
@@ -172,6 +187,19 @@ local function sync_bufferline_to_group()
         local current_buf = vim.api.nvim_get_current_buf()
         local current_buffer_changed = last_current_buffer ~= current_buf
 
+        -- Log the change detection details
+        logger.log_sync_state("sync", "change_detection", 
+            buffers_changed or names_changed or current_buffer_changed, {
+            buffers_changed = buffers_changed,
+            names_changed = names_changed,
+            current_buffer_changed = current_buffer_changed,
+            current_buf = current_buf,
+            last_current_buffer = last_current_buffer,
+            target_group_id = sync_target_group_id,
+            filtered_buffer_count = #filtered_buffer_ids,
+            target_group_buffer_count = #target_group.buffers
+        })
+
         if buffers_changed or names_changed or current_buffer_changed then
             -- Update cached state
             last_buffer_state = current_buffer_state
@@ -198,7 +226,19 @@ local function sync_bufferline_to_group()
             -- Actively refresh sidebar display
             local vbl = require('vertical-bufferline')
             if vbl.state and vbl.state.is_sidebar_open and vbl.refresh then
+                logger.info("sync", "triggering VBL refresh", {
+                    reason = "bufferline_sync",
+                    sidebar_open = vbl.state.is_sidebar_open,
+                    current_buffer_in_group = current_buffer_in_group
+                })
                 vbl.refresh("bufferline_sync")
+            else
+                logger.warn("sync", "VBL refresh not available", {
+                    vbl_exists = vbl ~= nil,
+                    state_exists = vbl and vbl.state ~= nil,
+                    sidebar_open = vbl and vbl.state and vbl.state.is_sidebar_open,
+                    refresh_exists = vbl and vbl.refresh ~= nil
+                })
             end
         end
     end

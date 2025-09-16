@@ -21,6 +21,7 @@ local commands = require('vertical-bufferline.commands')
 local bufferline_integration = require('vertical-bufferline.bufferline-integration')
 local session = require('vertical-bufferline.session')
 local filename_utils = require('vertical-bufferline.filename_utils')
+local logger = require('vertical-bufferline.logger')
 
 -- Namespace for our highlights
 local ns_id = api.nvim_create_namespace("VerticalBufferline")
@@ -514,18 +515,74 @@ end
 
 -- Helper function to get the current buffer from main window, not sidebar
 local function get_main_window_current_buffer()
+    local current_win = api.nvim_get_current_win()
+    local sidebar_win = state_module.get_win_id()
+    
+    logger.debug("current_buffer", "detecting current buffer", {
+        current_win = current_win,
+        sidebar_win = sidebar_win,
+        is_current_sidebar = current_win == sidebar_win
+    })
+    
+    -- If current window is not the sidebar, use its buffer directly
+    if current_win ~= sidebar_win then
+        local win_config = api.nvim_win_get_config(current_win)
+        if win_config.relative == "" then  -- Not a floating window
+            local buf_id = api.nvim_win_get_buf(current_win)
+            logger.debug("current_buffer", "using current window buffer", {
+                win_id = current_win,
+                buf_id = buf_id,
+                buf_name = vim.api.nvim_buf_get_name(buf_id)
+            })
+            return buf_id
+        end
+    end
+    
+    -- If current window is sidebar or floating, find the most recent non-sidebar window
+    local main_windows = {}
     for _, win_id in ipairs(api.nvim_list_wins()) do
-        if win_id ~= state_module.get_win_id() and api.nvim_win_is_valid(win_id) then
-            -- Check if this window is not a floating window
+        if win_id ~= sidebar_win and api.nvim_win_is_valid(win_id) then
             local win_config = api.nvim_win_get_config(win_id)
             if win_config.relative == "" then  -- Not a floating window
-                return api.nvim_win_get_buf(win_id)
+                table.insert(main_windows, {
+                    id = win_id,
+                    buf_id = api.nvim_win_get_buf(win_id),
+                    buf_name = vim.api.nvim_buf_get_name(api.nvim_win_get_buf(win_id))
+                })
             end
         end
     end
+    
+    -- Try to find a window that has a real file (not fugitive, etc.)
+    for _, win_info in ipairs(main_windows) do
+        if not win_info.buf_name:match("^fugitive://") and win_info.buf_name ~= "" then
+            logger.debug("current_buffer", "found main file window buffer", {
+                win_id = win_info.id,
+                buf_id = win_info.buf_id,
+                buf_name = win_info.buf_name
+            })
+            return win_info.buf_id
+        end
+    end
+    
+    -- If no real file window found, use the first main window
+    if #main_windows > 0 then
+        local win_info = main_windows[1]
+        logger.debug("current_buffer", "using first main window buffer", {
+            win_id = win_info.id,
+            buf_id = win_info.buf_id,
+            buf_name = win_info.buf_name
+        })
+        return win_info.buf_id
+    end
 
     -- Fallback to global current buffer if no main window found
-    return api.nvim_get_current_buf()
+    local fallback_buf = api.nvim_get_current_buf()
+    logger.warn("current_buffer", "using fallback current buffer", {
+        buf_id = fallback_buf,
+        buf_name = vim.api.nvim_buf_get_name(fallback_buf)
+    })
+    return fallback_buf
 end
 
 -- Validate and initialize refresh state
@@ -1323,8 +1380,28 @@ end
 
 --- Refreshes the sidebar content with the current list of buffers.
 function M.refresh(reason)
+    -- Auto-enable logging for refresh debugging (disabled for normal use)
+    -- if not logger.is_enabled() and not _G._vbl_auto_logging_enabled then
+    --     logger.enable(vim.fn.expand("~/vbl-refresh-debug.log"), "INFO")
+    --     logger.info("refresh", "auto-enabled debug logging for refresh debugging")
+    --     _G._vbl_auto_logging_enabled = true
+    -- end
+    
+    logger.info("refresh", "refresh called", {
+        reason = reason or "unknown",
+        sidebar_open = state_module.is_sidebar_open(),
+        win_valid = state_module.get_win_id() and api.nvim_win_is_valid(state_module.get_win_id()),
+        buf_valid = state_module.get_buf_id() and api.nvim_buf_is_valid(state_module.get_buf_id())
+    })
+    
     local refresh_data = validate_and_initialize_refresh()
     if not refresh_data then 
+        logger.warn("refresh", "refresh validation failed - skipping refresh", {
+            reason = reason,
+            sidebar_open = state_module.is_sidebar_open(),
+            win_id = state_module.get_win_id(),
+            buf_id = state_module.get_buf_id()
+        })
         return 
     end
 
@@ -1374,6 +1451,14 @@ function M.refresh(reason)
     -- Apply group header highlights
     apply_group_highlights(group_header_lines, lines_text)
     
+    -- Log highlight application start
+    logger.info("highlight", "applying buffer highlights", {
+        current_buffer_id = current_buffer_id,
+        active_group_id = active_group and active_group.id or "none",
+        line_count = #lines_text,
+        mapped_lines = vim.tbl_count(new_line_map)
+    })
+    
     -- Apply all buffer highlights using the line type table
     for line_num, buffer_id in pairs(new_line_map) do
         local line_type = line_types[line_num]
@@ -1406,6 +1491,15 @@ function M.refresh(reason)
                             group_current_buffer_id = line_group.current_buffer
                         end
                     end
+                end
+                
+                -- Log current buffer detection for this line
+                local is_current_buffer = (buffer_id == group_current_buffer_id)
+                if is_current_buffer or buffer_id == current_buffer_id then
+                    logger.log_buffer_state("highlight", buffer_id, group_current_buffer_id, 
+                        string.format("line %d: %s buffer in %s group", 
+                            line_num, is_current_buffer and "CURRENT" or "non-current",
+                            is_in_active_group and "active" or "inactive"))
                 end
             end
             
