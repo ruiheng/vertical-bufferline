@@ -1008,13 +1008,13 @@ end
 -- Apply all highlighting for a single buffer line (unified highlighting function)
 local function apply_buffer_highlighting(line_info, component, actual_line_number, current_buffer_id, is_picking, is_in_active_group)
     if not line_info or not component then return end
-    
+
     -- Use component-based renderer system - this is the modern approach
     if line_info.rendered_line then
         renderer.apply_highlights(state_module.get_buf_id(), ns_id, actual_line_number - 1, line_info.rendered_line)
         return
     end
-    
+
     -- Fallback: This should rarely happen with the new component system
     -- If we reach here, it means create_buffer_line didn't return rendered_line properly
     vim.notify("Warning: Falling back to legacy highlighting for line " .. actual_line_number, vim.log.levels.WARN)
@@ -1440,7 +1440,7 @@ local function calculate_cursor_based_offset()
 end
 
 -- Finalize buffer display with lines and mapping
-local function finalize_buffer_display(lines_text, new_line_map, line_group_context, group_header_lines)
+local function finalize_buffer_display(lines_text, new_line_map, line_group_context, group_header_lines, line_infos, line_types, line_components)
     api.nvim_buf_set_option(state_module.get_buf_id(), "modifiable", true)
 
     -- Calculate vertical offset to align with cursor
@@ -1451,6 +1451,9 @@ local function finalize_buffer_display(lines_text, new_line_map, line_group_cont
     local adjusted_line_map = {}
     local adjusted_group_context = {}
     local adjusted_header_lines = {}
+    local adjusted_line_infos = {}
+    local adjusted_line_types = {}
+    local adjusted_line_components = {}
 
     -- Add empty lines for offset
     for i = 1, offset do
@@ -1481,11 +1484,29 @@ local function finalize_buffer_display(lines_text, new_line_map, line_group_cont
         adjusted_header_lines[line_num + offset] = header_info
     end
 
+    -- Adjust line_infos mappings to account for offset
+    for line_num, line_info in pairs(line_infos or {}) do
+        adjusted_line_infos[line_num + offset] = line_info
+    end
+
+    -- Adjust line_types mappings to account for offset
+    for line_num, line_type in pairs(line_types or {}) do
+        adjusted_line_types[line_num + offset] = line_type
+    end
+
+    -- Adjust line_components mappings to account for offset
+    for line_num, line_component in pairs(line_components or {}) do
+        adjusted_line_components[line_num + offset] = line_component
+    end
+
     api.nvim_buf_set_lines(state_module.get_buf_id(), 0, -1, false, final_lines)
 
     state_module.set_line_to_buffer_id(adjusted_line_map)
     state_module.set_line_group_context(adjusted_group_context)
     state_module.set_group_header_lines(adjusted_header_lines)
+
+    -- Return adjusted data so the caller can use it for highlighting
+    return adjusted_line_infos, adjusted_line_map, adjusted_line_types, adjusted_line_components
 end
 
 -- Complete buffer setup and make it read-only
@@ -1543,7 +1564,7 @@ function M.refresh(reason)
     local remaining_components = render_all_groups(active_group, components, current_buffer_id, is_picking, lines_text, new_line_map, group_header_lines, line_types, all_components, line_components, line_group_context, line_infos)
 
     -- Finalize buffer display (set lines but keep modifiable) - this clears highlights
-    finalize_buffer_display(lines_text, new_line_map, line_group_context, group_header_lines)
+    line_infos, new_line_map, line_types, line_components = finalize_buffer_display(lines_text, new_line_map, line_group_context, group_header_lines, line_infos, line_types, line_components)
     
     -- Clear old highlights and apply all highlights AFTER buffer content is set
     api.nvim_buf_clear_namespace(state_module.get_buf_id(), ns_id, 0, -1)
@@ -1625,7 +1646,7 @@ function M.refresh(reason)
                 -- This is a main buffer line - apply buffer highlighting
                 -- Use the stored line_info that contains number_highlights
                 local line_info = line_infos[line_num]
-                
+
                 if not line_info then
                     -- Fallback: create a minimal line_info if not found
                     local line_text = api.nvim_buf_get_lines(state_module.get_buf_id(), line_num - 1, line_num, false)[1] or ""
