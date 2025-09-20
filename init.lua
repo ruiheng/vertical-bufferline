@@ -1392,14 +1392,115 @@ local function apply_group_highlights(group_header_lines, lines_text)
     end
 end
 
+-- Calculate vertical offset to align VBL content with main window cursor
+local function calculate_cursor_based_offset()
+    -- Check if cursor alignment is enabled
+    if not config_module.DEFAULTS.align_with_cursor then
+        return 0
+    end
+
+    -- Find the most recently used normal window (avoid floating windows)
+    local sidebar_win = state_module.get_win_id()
+    local main_win = nil
+
+    -- Look for the most suitable main window
+    for _, win_id in ipairs(api.nvim_list_wins()) do
+        if win_id ~= sidebar_win and api.nvim_win_is_valid(win_id) then
+            local win_config = api.nvim_win_get_config(win_id)
+            if win_config.relative == "" then  -- Only normal windows
+                local buf_id = api.nvim_win_get_buf(win_id)
+                local buftype = api.nvim_buf_get_option(buf_id, 'buftype')
+                local filetype = api.nvim_buf_get_option(buf_id, 'filetype')
+
+                -- Only use normal file buffers
+                if buftype == '' and
+                   filetype ~= 'TelescopePrompt' and
+                   filetype ~= 'TelescopeResults' then
+                    main_win = win_id
+                    break
+                end
+            end
+        end
+    end
+
+    if not main_win or not api.nvim_win_is_valid(main_win) or not api.nvim_win_is_valid(sidebar_win) then
+        return 0
+    end
+
+    -- Safely get cursor position and window info
+    local success, cursor_line, main_height, sidebar_height, topline = pcall(function()
+        local cursor_pos = api.nvim_win_get_cursor(main_win)
+        local main_h = api.nvim_win_get_height(main_win)
+        local sidebar_h = api.nvim_win_get_height(sidebar_win)
+
+        -- Get scroll position safely
+        local view = vim.api.nvim_win_call(main_win, vim.fn.winsaveview)
+        local top = view.topline or 1
+
+        return cursor_pos[1], main_h, sidebar_h, top
+    end)
+
+    if not success then
+        return 0
+    end
+
+    -- Calculate cursor position relative to visible area
+    local cursor_relative_to_window = cursor_line - topline + 1
+
+    -- Calculate desired offset with conservative bounds
+    local desired_offset = math.max(0, cursor_relative_to_window - 5)  -- More space above
+    local max_offset = math.max(0, sidebar_height - 15)  -- More space reserved for content
+
+    return math.min(desired_offset, max_offset)
+end
+
 -- Finalize buffer display with lines and mapping
 local function finalize_buffer_display(lines_text, new_line_map, line_group_context, group_header_lines)
     api.nvim_buf_set_option(state_module.get_buf_id(), "modifiable", true)
-    api.nvim_buf_set_lines(state_module.get_buf_id(), 0, -1, false, lines_text)
-    
-    state_module.set_line_to_buffer_id(new_line_map)
-    state_module.set_line_group_context(line_group_context or {})
-    state_module.set_group_header_lines(group_header_lines or {})
+
+    -- Calculate vertical offset to align with cursor
+    local offset = calculate_cursor_based_offset()
+
+    -- Add empty lines at the beginning if offset is needed
+    local final_lines = {}
+    local adjusted_line_map = {}
+    local adjusted_group_context = {}
+    local adjusted_header_lines = {}
+
+    -- Add empty lines for offset
+    for i = 1, offset do
+        table.insert(final_lines, "")
+    end
+
+    -- Add original content
+    for i, line in ipairs(lines_text) do
+        table.insert(final_lines, line)
+    end
+
+    -- Adjust line mappings to account for offset
+    for line_num, buffer_id in pairs(new_line_map or {}) do
+        adjusted_line_map[line_num + offset] = buffer_id
+    end
+
+    -- Adjust group context mappings
+    for line_num, group_id in pairs(line_group_context or {}) do
+        if type(line_num) == "number" then
+            adjusted_group_context[line_num + offset] = group_id
+        else
+            adjusted_group_context[line_num] = group_id
+        end
+    end
+
+    -- Adjust group header line mappings
+    for line_num, header_info in pairs(group_header_lines or {}) do
+        adjusted_header_lines[line_num + offset] = header_info
+    end
+
+    api.nvim_buf_set_lines(state_module.get_buf_id(), 0, -1, false, final_lines)
+
+    state_module.set_line_to_buffer_id(adjusted_line_map)
+    state_module.set_line_group_context(adjusted_group_context)
+    state_module.set_group_header_lines(adjusted_header_lines)
 end
 
 -- Complete buffer setup and make it read-only
@@ -2405,6 +2506,10 @@ local function initialize_plugin()
     -- TEMP DISABLED: api.nvim_command("autocmd BufEnter,BufDelete,BufWipeout * lua require('vertical-bufferline').refresh_if_open()")
     api.nvim_command("autocmd BufWritePost * lua require('vertical-bufferline').refresh_if_open()")
     api.nvim_command("autocmd WinClosed * lua require('vertical-bufferline').check_quit_condition()")
+
+    -- Add cursor alignment triggers (only for VBL-managed file buffers)
+    api.nvim_command("autocmd CursorMoved,CursorMovedI * lua require('vertical-bufferline').refresh_cursor_alignment()")
+
     api.nvim_command("augroup END")
 
     -- Setup extended picking mode hooks
@@ -2424,6 +2529,53 @@ function M.refresh_if_open()
         M.refresh("autocmd_trigger")
     end
 end
+
+-- Throttled refresh for cursor alignment (only for VBL-managed buffers)
+local cursor_alignment_timer = nil
+
+function M.refresh_cursor_alignment()
+    -- Only refresh if cursor alignment is enabled and sidebar is open
+    if not config_module.DEFAULTS.align_with_cursor or not state_module.is_sidebar_open() then
+        return
+    end
+
+    local current_buf = api.nvim_get_current_buf()
+
+    -- Check if current buffer is managed by VBL
+    local groups = require('vertical-bufferline.groups')
+    local all_groups = groups.get_all_groups()
+
+    local is_vbl_buffer = false
+    for _, group in ipairs(all_groups) do
+        if vim.tbl_contains(group.buffers, current_buf) then
+            is_vbl_buffer = true
+            break
+        end
+    end
+
+    if not is_vbl_buffer then
+        return  -- Not a VBL-managed buffer, ignore
+    end
+
+    -- Cancel existing timer
+    if cursor_alignment_timer then
+        cursor_alignment_timer:stop()
+        cursor_alignment_timer:close()
+    end
+
+    -- Create debounced refresh (100ms delay)
+    cursor_alignment_timer = vim.loop.new_timer()
+    cursor_alignment_timer:start(100, 0, vim.schedule_wrap(function()
+        if state_module.is_sidebar_open() and config_module.DEFAULTS.align_with_cursor then
+            M.refresh("cursor_alignment")
+        end
+        if cursor_alignment_timer then
+            cursor_alignment_timer:close()
+            cursor_alignment_timer = nil
+        end
+    end))
+end
+
 
 --- Check if should exit nvim (when only sidebar window remains)
 function M.check_quit_condition()

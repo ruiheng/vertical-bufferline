@@ -11,6 +11,7 @@ A Neovim plugin that provides a vertical sidebar displaying buffer groups with e
 - **Perfect picking mode compatibility** with synchronized highlighting
 - **Two display modes**: Expand all groups (default) or show only active group
 - **Smart filename disambiguation** - automatically resolves duplicate filenames with minimal path context
+- **Cursor alignment** - VBL content automatically aligns with your cursor position in the main window
 
 ### Group Management
 - **Automatic buffer addition** - new buffers auto-join the active group
@@ -81,6 +82,7 @@ A Neovim plugin that provides a vertical sidebar displaying buffer groups with e
 - `:VBufferLineDebug` - Show debug information
 - `:VBufferLineRefreshBuffers` - Manually refresh and add current buffers to active group
 - `:VBufferLineClearHistory [group_name]` - Clear history for all groups or specific group
+- `:VBufferLineToggleCursorAlign` - Toggle cursor alignment for VBL content
 
 ## Display Modes
 
@@ -332,6 +334,9 @@ For lazy.nvim users, you can configure the plugin with custom options:
     show_path = "auto",             -- "yes", "no", "auto"
     path_style = "relative",        -- "relative", "absolute", "smart"
     path_max_length = 50,           -- Maximum path display length
+
+    -- Cursor alignment settings
+    align_with_cursor = true,       -- Align VBL content with main window cursor position
     
     -- History settings
     show_history = "auto",          -- "yes", "no", "auto" - show recent files history per group

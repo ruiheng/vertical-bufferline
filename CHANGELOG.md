@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `<leader>h1` to `<leader>h9` hotkeys for quick history access
 - Comprehensive vim help documentation
 - Session save/restore functionality for history data
+- **Cursor alignment feature** - VBL content automatically aligns with main window cursor position
+- `align_with_cursor` configuration option (default: true)
+- `:VBufferLineToggleCursorAlign` command to toggle cursor alignment
+- Intelligent path compression with progressive abbreviation (3→2→1 chars)
 
 ### Fixed
 - Click handling precision issues in history display

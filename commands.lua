@@ -1015,6 +1015,20 @@ function M.setup()
         nargs = "?",
         desc = "Clear history for specific group or all groups (no args = all groups)"
     })
+
+    -- Toggle cursor alignment
+    vim.api.nvim_create_user_command("VBufferLineToggleCursorAlign", function()
+        local config = require('vertical-bufferline.config')
+        config.DEFAULTS.align_with_cursor = not config.DEFAULTS.align_with_cursor
+        local status = config.DEFAULTS.align_with_cursor and "enabled" or "disabled"
+        vim.notify(string.format("VBL cursor alignment: %s", status), vim.log.levels.INFO)
+
+        -- Refresh to apply the change
+        require('vertical-bufferline').refresh("cursor_align_toggle")
+    end, {
+        nargs = 0,
+        desc = "Toggle cursor alignment for VBL content"
+    })
 end
 
 -- Export functions for use by other modules
