@@ -502,14 +502,8 @@ setup_pick_highlights()
 
 -- Configuration is now managed through config_module.DEFAULTS
 
--- Check if buffer is special (based on buftype)
-local function is_special_buffer(buf_id)
-    if not api.nvim_buf_is_valid(buf_id) then
-        return true -- Invalid buffers are also considered special
-    end
-    local buftype = api.nvim_buf_get_option(buf_id, 'buftype')
-    return buftype ~= config_module.SYSTEM.EMPTY_BUFTYPE -- Non-empty means special buffer (nofile, quickfix, help, terminal, etc.)
-end
+-- Import shared utilities
+local utils = require('vertical-bufferline.utils')
 
 -- State is now managed by the state_module, no direct state object needed
 
@@ -607,7 +601,7 @@ local function validate_and_initialize_refresh()
     -- Filter out invalid components and special buffers
     local valid_components = {}
     for _, comp in ipairs(components) do
-        if comp.id and api.nvim_buf_is_valid(comp.id) and not is_special_buffer(comp.id) then
+        if comp.id and api.nvim_buf_is_valid(comp.id) and not utils.is_special_buffer(comp.id) then
             table.insert(valid_components, comp)
         end
     end
@@ -1179,7 +1173,7 @@ local function render_current_group_history(active_group, current_buffer_id, is_
             if i > config_module.DEFAULTS.history_display_count then break end
             
             local buf_name = api.nvim_buf_get_name(buffer_id)
-            local filename = vim.fn.fnamemodify(buf_name, ":t")
+            local filename = buf_name == "" and "[No Name]" or vim.fn.fnamemodify(buf_name, ":t")
             local is_current = buffer_id == current_buffer_id
             local is_last = (i == math.min(#valid_history, config_module.DEFAULTS.history_display_count))
             
@@ -1227,14 +1221,11 @@ local function render_all_groups(active_group, components, current_buffer_id, is
         local is_active = group.id == active_group.id
         local group_buffers = groups.get_group_buffers(group.id) or {}
 
-        -- Calculate valid buffer count (filter out unnamed and special buffers)
+        -- Calculate valid buffer count (filter out special buffers only)
         local valid_buffer_count = 0
         for _, buf_id in ipairs(group_buffers) do
-            if vim.api.nvim_buf_is_valid(buf_id) and not is_special_buffer(buf_id) then
-                local buf_name = vim.api.nvim_buf_get_name(buf_id)
-                if buf_name ~= "" then
-                    valid_buffer_count = valid_buffer_count + 1
-                end
+            if vim.api.nvim_buf_is_valid(buf_id) and not utils.is_special_buffer(buf_id) then
+                valid_buffer_count = valid_buffer_count + 1
             end
         end
         local buffer_count = valid_buffer_count
@@ -1248,14 +1239,10 @@ local function render_all_groups(active_group, components, current_buffer_id, is
             -- Get current group buffers and display them
             local group_components = {}
             if is_active then
-                -- For active group, filter out unnamed and special buffers for consistency
+                -- For active group, use bufferline components directly (including [No Name] buffers)
                 for _, comp in ipairs(components) do
-                    if comp.id and comp.name then
-                        local buf_name = api.nvim_buf_get_name(comp.id)
-                        -- Filter out unnamed and special buffers
-                        if buf_name ~= "" and not is_special_buffer(comp.id) then
-                            table.insert(group_components, comp)
-                        end
+                    if comp.id and comp.name and not utils.is_special_buffer(comp.id) then
+                        table.insert(group_components, comp)
                     end
                 end
             end
@@ -1295,11 +1282,8 @@ local function render_all_groups(active_group, components, current_buffer_id, is
                 -- First collect all valid buffer information
                 local valid_buffers = {}
                 for _, buf_id in ipairs(group_buffers) do
-                    if api.nvim_buf_is_valid(buf_id) then
-                        local buf_name = api.nvim_buf_get_name(buf_id)
-                        if buf_name ~= "" then
-                            table.insert(valid_buffers, buf_id)
-                        end
+                    if api.nvim_buf_is_valid(buf_id) and not utils.is_special_buffer(buf_id) then
+                        table.insert(valid_buffers, buf_id)
                     end
                 end
 
@@ -1315,7 +1299,8 @@ local function render_all_groups(active_group, components, current_buffer_id, is
 
                 -- Construct components
                 for j, buf_id in ipairs(valid_buffers) do
-                    local filename = vim.fn.fnamemodify(api.nvim_buf_get_name(buf_id), ":t")
+                    local buf_name = api.nvim_buf_get_name(buf_id)
+                    local filename = buf_name == "" and "[No Name]" or vim.fn.fnamemodify(buf_name, ":t")
                     table.insert(group_components, {
                         id = buf_id,
                         name = filename,
@@ -2322,7 +2307,7 @@ function M.handle_selection(captured_buffer_id, captured_line_number)
     -- Provide visual feedback for history clicks
     if is_history_click then
         local buf_name = api.nvim_buf_get_name(bufnr)
-        local filename = vim.fn.fnamemodify(buf_name, ":t")
+        local filename = buf_name == "" and "[No Name]" or vim.fn.fnamemodify(buf_name, ":t")
         vim.notify("Switched to recent file: " .. filename, vim.log.levels.INFO)
     end
     
@@ -2503,7 +2488,7 @@ local function initialize_plugin()
     -- Setup global autocmds (not dependent on sidebar state)
     api.nvim_command("augroup VerticalBufferlineGlobal")
     api.nvim_command("autocmd!")
-    -- TEMP DISABLED: api.nvim_command("autocmd BufEnter,BufDelete,BufWipeout * lua require('vertical-bufferline').refresh_if_open()")
+    api.nvim_command("autocmd BufEnter,BufDelete,BufWipeout * lua require('vertical-bufferline').refresh_if_open()")
     api.nvim_command("autocmd BufWritePost * lua require('vertical-bufferline').refresh_if_open()")
     api.nvim_command("autocmd WinClosed * lua require('vertical-bufferline').check_quit_condition()")
 
@@ -2627,8 +2612,8 @@ function M.toggle()
                         if vim.api.nvim_buf_is_valid(buf) then
                             local buf_name = vim.api.nvim_buf_get_name(buf)
                             local buf_type = vim.api.nvim_buf_get_option(buf, 'buftype')
-                            -- Only add normal file buffers not already in groups
-                            if buf_name ~= "" and not buf_name:match("^%s*$") and
+                            -- Only add buffers that bufferline would track, not already in groups
+                            if not utils.is_special_buffer(buf) and
                                buf_type == config_module.SYSTEM.EMPTY_BUFTYPE and
                                not vim.tbl_contains(default_group.buffers, buf) then
                                 groups.add_buffer_to_group(buf, default_group.id)

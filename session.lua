@@ -1021,23 +1021,23 @@ end
 -- State restoration from global variable (simplified synchronous version)
 local function restore_state_from_global()
     local logger = require('vertical-bufferline.logger')
-    
+
     -- Auto-enable logging for session debugging (disabled for normal use)
     -- if not logger.is_enabled() then
     --     logger.enable(vim.fn.expand("~/vbl-session-debug.log"), "DEBUG")
     --     logger.info("session", "auto-enabled debug logging for session restore")
     -- end
-    
+
     logger.info("session", "starting session restore", {
         cwd = vim.fn.getcwd(),
         global_session_exists = vim.g.VerticalBufferlineSession ~= nil
     })
-    
+
     if not vim.g.VerticalBufferlineSession then
         logger.warn("session", "no VBL session data found")
         return false
     end
-    
+
     local success, session_data = pcall(vim.json.decode, vim.g.VerticalBufferlineSession)
     if not success then
         logger.error("session", "failed to decode VBL session data", {

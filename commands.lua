@@ -5,6 +5,7 @@ local M = {}
 
 local groups = require('vertical-bufferline.groups')
 local logger = require('vertical-bufferline.logger')
+local utils = require('vertical-bufferline.utils')
 
 -- Create group command
 local function create_group_command(args)
@@ -898,8 +899,8 @@ function M.setup()
                 local buf_hidden = pcall(vim.api.nvim_buf_get_option, buf, 'bufhidden')
                 local is_sidebar_buf = (buf_hidden and vim.api.nvim_buf_get_option(buf, 'bufhidden') == 'wipe')
 
-                -- Only add regular file buffers
-                if buf_name ~= "" and not buf_name:match("^%s*$") and
+                -- Only add buffers that bufferline would track
+                if not utils.is_special_buffer(buf) and
                    buf_type == "" and
                    not is_sidebar_buf and
                    not vim.tbl_contains(active_group.buffers, buf) then
@@ -958,6 +959,184 @@ function M.setup()
     end, {
         nargs = 0,
         desc = "Show VBL debug logging status"
+    })
+
+    vim.api.nvim_create_user_command("VBufferLineTestUnnamed", function()
+        print("=== Testing unnamed buffer creation ===")
+
+        -- Create a new unnamed buffer
+        vim.cmd('enew')
+        local new_buf = vim.api.nvim_get_current_buf()
+
+        print("Newly created buffer:")
+        print("  ID:", new_buf)
+        print("  Name:", vim.api.nvim_buf_get_name(new_buf))
+        print("  Type:", vim.api.nvim_buf_get_option(new_buf, 'buftype'))
+        print("  Listed:", vim.api.nvim_buf_get_option(new_buf, 'buflisted'))
+
+        -- Check if VBL's is_special_buffer thinks it's special
+        local init_module = require('vertical-bufferline')
+        -- Since is_special_buffer is local, let's check indirectly
+
+        print("This tells us if vim creates unnamed buffers as unlisted by default")
+    end, {
+        nargs = 0,
+        desc = "Test unnamed buffer creation behavior"
+    })
+
+    vim.api.nvim_create_user_command("VBufferLineDebugState", function()
+        print("=== Current VBL State ===")
+
+        -- Check unnamed buffers
+        local unnamed_bufs = {}
+        local all_bufs = vim.api.nvim_list_bufs()
+        for _, buf in ipairs(all_bufs) do
+            if vim.api.nvim_buf_is_valid(buf) then
+                local buf_name = vim.api.nvim_buf_get_name(buf)
+                if buf_name == "" then
+                    table.insert(unnamed_bufs, buf)
+                    local buftype = vim.api.nvim_buf_get_option(buf, 'buftype')
+                    local buflisted = vim.api.nvim_buf_get_option(buf, 'buflisted')
+                    print(string.format("Unnamed buf %d: type='%s', listed=%s", buf, buftype, buflisted))
+                end
+            end
+        end
+
+        -- Check active group
+        local groups = require('vertical-bufferline.groups')
+        local active_group = groups.get_active_group()
+        if active_group then
+            print("Active group:", active_group.name, "ID:", active_group.id)
+            print("Group buffers:", vim.inspect(active_group.buffers))
+
+            -- Check if unnamed buffers are in active group
+            for _, unnamed_buf in ipairs(unnamed_bufs) do
+                local in_group = vim.tbl_contains(active_group.buffers, unnamed_buf)
+                print(string.format("Unnamed buf %d in active group: %s", unnamed_buf, in_group))
+            end
+        end
+
+        -- Check bufferline elements
+        local bufferline_ok, bufferline = pcall(require, 'bufferline')
+        if bufferline_ok then
+            local elements = bufferline.get_elements().elements
+            print("Bufferline elements count:", #elements)
+            for _, elem in ipairs(elements) do
+                local is_unnamed = vim.tbl_contains(unnamed_bufs, elem.id)
+                print(string.format("  elem id %d: name='%s'%s", elem.id, elem.name or "[unnamed]", is_unnamed and " [UNNAMED]" or ""))
+            end
+        end
+    end, {
+        nargs = 0,
+        desc = "Debug current VBL and bufferline state"
+    })
+
+    vim.api.nvim_create_user_command("VBufferLineWatchUnnamed", function()
+        -- Create autocmd to watch when unnamed buffers get unlisted
+        vim.api.nvim_create_autocmd({"BufEnter", "BufLeave", "BufAdd", "BufDelete"}, {
+            callback = function(args)
+                local buf = args.buf
+                if vim.api.nvim_buf_is_valid(buf) then
+                    local buf_name = vim.api.nvim_buf_get_name(buf)
+                    if buf_name == "" then
+                        local buftype = vim.api.nvim_buf_get_option(buf, 'buftype')
+                        local buflisted = vim.api.nvim_buf_get_option(buf, 'buflisted')
+                        print(string.format("[%s] Unnamed buf %d: type='%s', listed=%s",
+                            args.event, buf, buftype, buflisted))
+                    end
+                end
+            end
+        })
+        print("Watching unnamed buffer state changes. Open files to see what happens.")
+    end, {
+        nargs = 0,
+        desc = "Watch unnamed buffer state changes"
+    })
+
+    vim.api.nvim_create_user_command("VBufferLineDebugSync", function()
+        print("=== Debugging unnamed buffer issue ===")
+
+        -- Check all current buffers
+        local all_bufs = vim.api.nvim_list_bufs()
+        local unnamed_buffers = {}
+        print("All vim buffers:")
+        for _, buf in ipairs(all_bufs) do
+            if vim.api.nvim_buf_is_valid(buf) then
+                local buf_name = vim.api.nvim_buf_get_name(buf)
+                local buftype = vim.api.nvim_buf_get_option(buf, 'buftype')
+                local buflisted = vim.api.nvim_buf_get_option(buf, 'buflisted')
+                if buf_name == "" and buftype == "" then
+                    table.insert(unnamed_buffers, buf)
+                    -- Check if our is_special_buffer function thinks this is special
+                    local integration = require('vertical-bufferline.bufferline-integration')
+                    local init_module = require('vertical-bufferline')
+                    local is_special = init_module.is_special_buffer and init_module.is_special_buffer(buf)
+                    print(string.format("  buf %d: name='[unnamed]', type='%s', listed=%s, is_special=%s",
+                        buf, buftype, buflisted, tostring(is_special)))
+                else
+                    print(string.format("  buf %d: name='%s', type='%s', listed=%s",
+                        buf, buf_name == "" and "[unnamed]" or buf_name, buftype, buflisted))
+                end
+            end
+        end
+
+        -- Check bufferline's view
+        local bufferline_ok, bufferline = pcall(require, 'bufferline')
+        local bufferline_has_unnamed = false
+        if bufferline_ok then
+            local elements = bufferline.get_elements().elements
+            print("Bufferline elements:")
+            for _, elem in ipairs(elements) do
+                local elem_name = elem.name or "[unnamed]"
+                if #unnamed_buffers > 0 and vim.tbl_contains(unnamed_buffers, elem.id) then
+                    bufferline_has_unnamed = true
+                    elem_name = elem_name .. " [UNNAMED]"
+                end
+                print(string.format("  elem id %d: name='%s'", elem.id, elem_name))
+            end
+        end
+
+        -- Check VBL active group
+        local groups = require('vertical-bufferline.groups')
+        local active_group = groups.get_active_group()
+        local vbl_has_unnamed = false
+        if active_group then
+            print("VBL active group buffers:")
+            for _, buf in ipairs(active_group.buffers) do
+                local buf_name = vim.api.nvim_buf_get_name(buf)
+                if #unnamed_buffers > 0 and vim.tbl_contains(unnamed_buffers, buf) then
+                    vbl_has_unnamed = true
+                    buf_name = buf_name .. " [UNNAMED]"
+                end
+                print(string.format("  buf %d: name='%s'", buf, buf_name == "" and "[unnamed]" or buf_name))
+            end
+        end
+
+        print("\nSummary:")
+        print("  Unnamed buffers exist:", #unnamed_buffers > 0)
+        print("  Bufferline has unnamed:", bufferline_has_unnamed)
+        print("  VBL has unnamed:", vbl_has_unnamed)
+
+        if #unnamed_buffers > 0 and bufferline_has_unnamed and not vbl_has_unnamed then
+            print("  PROBLEM: Bufferline has unnamed buffer but VBL doesn't!")
+        elseif #unnamed_buffers > 0 and not bufferline_has_unnamed then
+            print("  PROBLEM: Unnamed buffer exists but bufferline ignores it (probably buflisted=false)")
+            -- Try to fix it
+            for _, buf in ipairs(unnamed_buffers) do
+                print("  Fixing unnamed buffer", buf, "- setting buflisted=true")
+                vim.api.nvim_buf_set_option(buf, 'buflisted', true)
+                local new_listed = vim.api.nvim_buf_get_option(buf, 'buflisted')
+                print("    Verification: buflisted is now", new_listed)
+            end
+
+            -- Force VBL refresh after fixing
+            local vbl = require('vertical-bufferline')
+            vbl.refresh()
+            print("  Fixed and refreshed VBL! Test your scenario now.")
+        end
+    end, {
+        nargs = 0,
+        desc = "Debug unnamed buffer sync issue"
     })
 
     vim.api.nvim_create_user_command("VBufferLineDebugLogs", function(args)

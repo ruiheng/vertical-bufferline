@@ -5,6 +5,7 @@ local M = {}
 
 local groups = require('vertical-bufferline.groups')
 local logger = require('vertical-bufferline.logger')
+local utils = require('vertical-bufferline.utils')
 
 -- Simple state
 local sync_timer = nil
@@ -36,13 +37,9 @@ local function get_buffer_index_in_list(buf_id, buffer_list)
     return 999999
 end
 
--- Check if it's a special buffer (based on buftype)
+-- Use shared utility function
 local function is_special_buffer(buf_id)
-    if not vim.api.nvim_buf_is_valid(buf_id) then
-        return true -- Invalid buffer is also considered special
-    end
-    local buftype = vim.api.nvim_buf_get_option(buf_id, 'buftype')
-    return buftype ~= '' -- Non-empty indicates special buffer (nofile, quickfix, help, terminal, etc.)
+    return utils.is_special_buffer(buf_id)
 end
 
 -- Get bufferline's custom sort order for proper buffer ordering
@@ -134,36 +131,32 @@ local function sync_bufferline_to_group()
     --     _G._vbl_auto_logging_enabled = true
     -- end
     
-    logger.debug("sync", "sync_bufferline_to_group called", {
-        enabled = is_enabled,
-        target_group_id = sync_target_group_id
-    })
-    
     if not is_enabled then
-        logger.debug("sync", "sync disabled, skipping")
         return
     end
 
     -- Check pointer: if nil, copy is invalid
     if not sync_target_group_id then
-        logger.debug("sync", "no target group ID set, skipping")
         return
     end
 
     -- Get all valid buffer list from bufferline with proper ordering
     local all_valid_buffers = get_bufferline_sorted_buffers()
 
+    -- Also check what bufferline.get_elements() returns for comparison
+    local bufferline_ok, bufferline = pcall(require, 'bufferline')
+    local bufferline_buffer_ids = {}
+    if bufferline_ok then
+        local elements = bufferline.get_elements().elements
+        for _, elem in ipairs(elements) do
+            table.insert(bufferline_buffer_ids, elem.id)
+        end
+    end
 
     -- Filter out special buffers (based on buftype)
     local filtered_buffer_ids = {}
     for _, buf_id in ipairs(all_valid_buffers) do
         local should_include = not is_special_buffer(buf_id)
-
-        -- Ensure special buffers remain unlisted
-        if is_special_buffer(buf_id) then
-            pcall(vim.api.nvim_buf_set_option, buf_id, 'buflisted', false)
-        end
-
 
         if should_include then
             table.insert(filtered_buffer_ids, buf_id)
@@ -208,8 +201,30 @@ local function sync_bufferline_to_group()
             -- Update position info for active group when we're not in sidebar
             update_active_group_position_info()
 
-            -- Directly update the target group's buffer list
-            target_group.buffers = filtered_buffer_ids
+            -- Merge with existing buffers instead of replacing completely
+            local merged_buffers = {}
+            local seen_buffers = {}
+
+            -- First, add all buffers from bufferline (in proper order)
+            for _, buf_id in ipairs(filtered_buffer_ids) do
+                if vim.api.nvim_buf_is_valid(buf_id) then
+                    table.insert(merged_buffers, buf_id)
+                    seen_buffers[buf_id] = true
+                end
+            end
+
+            -- Then, add any existing VBL buffers that bufferline might have missed
+            for _, buf_id in ipairs(target_group.buffers) do
+                if vim.api.nvim_buf_is_valid(buf_id) and not seen_buffers[buf_id] and not is_special_buffer(buf_id) then
+                    table.insert(merged_buffers, buf_id)
+                    logger.debug("sync", "preserved buffer not in bufferline", {
+                        buf_id = buf_id,
+                        buf_name = vim.api.nvim_buf_get_name(buf_id)
+                    })
+                end
+            end
+
+            target_group.buffers = merged_buffers
             
             -- Sync group history with current buffer (only when current buffer is actually in the group)
             local current_buffer_in_group = vim.tbl_contains(filtered_buffer_ids, current_buf) and current_buf or nil
@@ -252,8 +267,8 @@ function M.set_bufferline_buffers(buffer_list)
         return
     end
 
-    -- 2. Copy buffer_list to bufferline
-    -- Get all buffers (not using bufferline_utils, as it may not check buflisted)
+    -- Control bufferline's buffer visibility to match target group
+    -- Get all buffers for visibility control
     local all_buffers = vim.api.nvim_list_bufs()
 
     -- Create buffer set for fast lookup
@@ -262,7 +277,7 @@ function M.set_bufferline_buffers(buffer_list)
         target_buffer_set[buf_id] = true
     end
 
-    -- Hide buffers not in target list (set to unlisted)
+    -- Update buffer visibility based on target list
     for _, buf_id in ipairs(all_buffers) do
         if vim.api.nvim_buf_is_valid(buf_id) then
             if target_buffer_set[buf_id] then
@@ -324,10 +339,7 @@ function M.handle_empty_group_display()
             local buflisted = vim.api.nvim_buf_get_option(buf_id, 'buflisted')
             local buf_name = vim.api.nvim_buf_get_name(buf_id)
 
-            -- If it's a normal empty buffer (no name), hide it
-            if buftype == '' and buflisted and (buf_name == '' or buf_name:match('^%s*$')) then
-                pcall(vim.api.nvim_buf_set_option, buf_id, 'buflisted', false)
-            end
+            -- VBL should not hide unnamed buffers - users might be editing them
         end
     end
 
@@ -603,6 +615,21 @@ function M.smart_close_buffer(target_buf)
     end
 
     return true
+end
+
+-- Get status for debugging
+function M.get_status()
+    return {
+        enabled = is_enabled,
+        has_timer = sync_timer ~= nil,
+        timer_active = sync_timer and sync_timer:is_active() or false,
+        target_group_id = sync_target_group_id
+    }
+end
+
+-- Manual sync trigger for debugging
+function M.sync_once()
+    sync_bufferline_to_group()
 end
 
 -- Save global instance

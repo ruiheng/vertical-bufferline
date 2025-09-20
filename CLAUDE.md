@@ -78,3 +78,18 @@ VBL侧边栏有时无法跟随bufferline更新当前buffer状态 - 高亮显示�
 1. 增强路径匹配算法 - 支持相对/绝对路径混合匹配
 2. 详细日志追踪 - 自动记录session恢复和同步过程
 3. 智能buffer查找 - 文件名+路径后缀匹配算法
+
+## VBL Synchronization Logic
+
+**CORE PRINCIPLE**: bufferline ↔ VBL bidirectional sync
+- **Primary**: bufferline → VBL (timer every 100ms)
+- **Secondary**: VBL → bufferline (when switching groups)
+
+### Current Unnamed Buffer Issue
+**Problem**: Unnamed buffer disappears when opening new files
+- Works fine with bufferline only
+- Breaks when VBL is added
+- Our code incorrectly unlists the unnamed buffer somewhere
+
+# important-instruction-reminders
+**LANGUAGE REQUIREMENT**: ALWAYS use English for responses and code. Never use Chinese or other languages unless explicitly requested.
