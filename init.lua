@@ -773,13 +773,9 @@ local function get_buffer_path_info(component)
         relative_dir = "~" .. directory:sub(#vim.fn.expand("~") + 1)
     end
     
-    -- Limit path length if too long
-    if #relative_dir > config_module.DEFAULTS.path_max_length then
-        local parts = vim.split(relative_dir, "/")
-        if #parts > 2 then
-            relative_dir = ".../" .. table.concat({parts[#parts-1], parts[#parts]}, "/")
-        end
-    end
+    -- Use smart path compression instead of crude truncation
+    local filename_utils = require('vertical-bufferline.filename_utils')
+    relative_dir = filename_utils.compress_path_smart(relative_dir, config_module.DEFAULTS.path_max_length, 1)
     
     return relative_dir, filename
 end
@@ -967,7 +963,26 @@ local function create_buffer_line(component, j, total_components, current_buffer
                 base_indent = base_indent + 2  -- "🌙 " (emoji + space)
             end
             
-            local display_path = path_dir == "." and "./" or path_dir .. "/"
+            -- Apply contextual compression based on available space
+            local raw_path = path_dir == "." and "./" or path_dir .. "/"
+
+            -- Get window width for contextual compression
+            local win_id = state_module.get_win_id()
+            local window_width = 40  -- fallback
+            if win_id and api.nvim_win_is_valid(win_id) then
+                window_width = api.nvim_win_get_width(win_id)
+            end
+
+            -- Calculate UI context for better compression
+            local ui_context = {
+                base_indent = base_indent,
+                tree_chars = config_module.DEFAULTS.show_tree_lines and 2 or 0,
+                numbering_width = max_global_digits + 2,  -- [N] format
+                preserve_segments = 1
+            }
+
+            local filename_utils = require('vertical-bufferline.filename_utils')
+            local display_path = filename_utils.compress_path_contextual(raw_path, window_width, ui_context)
             
             -- Only add tree continuation if tree lines are enabled
             if config_module.DEFAULTS.show_tree_lines then
@@ -1256,7 +1271,14 @@ local function render_all_groups(active_group, components, current_buffer_id, is
                 end
 
                 if #buffer_ids > 1 then
-                    local minimal_prefixes = filename_utils.generate_minimal_prefixes(buffer_ids)
+                    -- Get window width for dynamic space calculation
+                    local win_id = state_module.get_win_id()
+                    local window_width = 40  -- fallback
+                    if win_id and api.nvim_win_is_valid(win_id) then
+                        window_width = api.nvim_win_get_width(win_id)
+                    end
+
+                    local minimal_prefixes = filename_utils.generate_minimal_prefixes(buffer_ids, window_width)
                     -- Update component names with minimal prefixes
                     for j, comp in ipairs(group_components) do
                         if comp.id and minimal_prefixes[j] then
@@ -1282,7 +1304,14 @@ local function render_all_groups(active_group, components, current_buffer_id, is
                 end
 
                 -- Generate minimal prefixes for conflict resolution
-                local minimal_prefixes = filename_utils.generate_minimal_prefixes(valid_buffers)
+                -- Get window width for dynamic space calculation
+                local win_id = state_module.get_win_id()
+                local window_width = 40  -- fallback
+                if win_id and api.nvim_win_is_valid(win_id) then
+                    window_width = api.nvim_win_get_width(win_id)
+                end
+
+                local minimal_prefixes = filename_utils.generate_minimal_prefixes(valid_buffers, window_width)
 
                 -- Construct components
                 for j, buf_id in ipairs(valid_buffers) do

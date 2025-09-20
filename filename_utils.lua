@@ -255,20 +255,42 @@ function M.get_smart_buffer_name(buffer_id, all_group_buffers)
 end
 
 -- Find the minimal prefix that distinguishes current_dir from all conflicting_dirs
-local function find_minimal_distinguishing_prefix(current_dir, conflicting_dirs)
+local function find_minimal_distinguishing_prefix(current_dir, conflicting_dirs, available_width)
     if current_dir == "" or current_dir == "." then
         return ""
     end
-    
+
     local current_parts = split_path(current_dir)
     if #current_parts == 0 then
         return ""
     end
 
-    -- Simple approach: just use the last directory component and find minimal distinguishing prefix
+    -- Get the last directory component
     local target_part = current_parts[#current_parts]
-    
-    -- Collect all conflicting last parts that we need to distinguish from
+
+    -- If we have enough space for the full name, use it (unless there are true conflicts)
+    available_width = available_width or 20  -- default fallback
+    if #target_part + 1 <= available_width then  -- +1 for the "/"
+        -- Check if there are actual conflicts that require abbreviation
+        local has_real_conflicts = false
+        for _, conflict_dir in ipairs(conflicting_dirs) do
+            local conflict_parts = split_path(conflict_dir)
+            if #conflict_parts > 0 then
+                local conflict_part = conflict_parts[#conflict_parts]
+                if conflict_part == target_part then
+                    has_real_conflicts = true
+                    break
+                end
+            end
+        end
+
+        -- If no real conflicts (different directory names), use full name
+        if not has_real_conflicts then
+            return target_part
+        end
+    end
+
+    -- Collect all conflicting last parts
     local conflicting_parts = {}
     for _, conflict_dir in ipairs(conflicting_dirs) do
         local conflict_parts = split_path(conflict_dir)
@@ -276,34 +298,39 @@ local function find_minimal_distinguishing_prefix(current_dir, conflicting_dirs)
             table.insert(conflicting_parts, conflict_parts[#conflict_parts])
         end
     end
-    
-    -- Find minimal prefix that makes target_part unique
-    for prefix_len = 1, #target_part do
-        local candidate = string.sub(target_part, 1, prefix_len)
-        
-        local is_unique = true
-        for _, conflict_part in ipairs(conflicting_parts) do
-            if #conflict_part >= prefix_len then
-                local conflict_prefix = string.sub(conflict_part, 1, prefix_len)
-                if candidate == conflict_prefix then
-                    is_unique = false
-                    break
+
+
+    -- Try progressive abbreviation lengths (3, 2, then 1 character)
+    local max_attempts = {3, 2, 1}
+
+    for _, prefix_len in ipairs(max_attempts) do
+        if prefix_len <= #target_part then
+            local candidate = string.sub(target_part, 1, prefix_len)
+
+            local is_unique = true
+            for _, conflict_part in ipairs(conflicting_parts) do
+                if #conflict_part >= prefix_len then
+                    local conflict_prefix = string.sub(conflict_part, 1, prefix_len)
+                    if candidate == conflict_prefix then
+                        is_unique = false
+                        break
+                    end
                 end
             end
-        end
-        
-        if is_unique then
-            return candidate
+
+            if is_unique then
+                return candidate
+            end
         end
     end
-    
+
     -- Fallback: use full directory name
     return target_part
 end
 
 -- Generate minimal distinguishing prefixes for files with same names
 -- Returns: { {prefix = "s/", filename = "config.lua"}, {prefix = "t/", filename = "config.lua"} }
-function M.generate_minimal_prefixes(buffer_list)
+function M.generate_minimal_prefixes(buffer_list, window_width)
     if not buffer_list or #buffer_list == 0 then
         return {}
     end
@@ -406,7 +433,15 @@ function M.generate_minimal_prefixes(buffer_list)
                     end
                 end
 
-                local minimal_prefix = find_minimal_distinguishing_prefix(current_dir, conflicting_dirs)
+                -- Calculate available width based on window size
+                window_width = window_width or 40  -- fallback
+                local base_indent = 4  -- approximate indent
+                local tree_chars = 2   -- tree symbols
+                local numbering_width = 4  -- [N] format
+                local filename_space = 15  -- reserve space for filename
+                local available_width = math.max(8, window_width - base_indent - tree_chars - numbering_width - filename_space)
+
+                local minimal_prefix = find_minimal_distinguishing_prefix(current_dir, conflicting_dirs, available_width)
                 results[i] = { 
                     prefix = minimal_prefix ~= "" and (minimal_prefix .. "/") or "",
                     filename = filename 
@@ -416,6 +451,147 @@ function M.generate_minimal_prefixes(buffer_list)
     end
 
     return results
+end
+
+-- Smart path compression with dynamic width and intelligent abbreviation
+-- Gradually compresses path components to fit available space
+function M.compress_path_smart(path, max_width, preserve_segments)
+    if not path or path == "" or path == "." then
+        return path or ""
+    end
+
+    if #path <= max_width then
+        return path
+    end
+
+    preserve_segments = preserve_segments or 1
+    local parts = split_path(path)
+
+    if #parts <= preserve_segments then
+        return path
+    end
+
+    -- Strategy 1: Try abbreviating with progressive length (2-3 chars)
+    local function abbreviate_progressive(segments, keep_first, keep_last, max_abbrev_len)
+        max_abbrev_len = max_abbrev_len or 3
+        local result = {}
+        for i = 1, #segments do
+            if i <= keep_first or i > (#segments - keep_last) then
+                table.insert(result, segments[i])
+            else
+                local abbrev_len = math.min(max_abbrev_len, #segments[i])
+                table.insert(result, string.sub(segments[i], 1, abbrev_len))
+            end
+        end
+        return table.concat(result, "/")
+    end
+
+    -- Strategy 2: Try abbreviating all but preserved segments with variable length
+    local function abbreviate_with_length(segments, preserve_count, abbrev_len)
+        abbrev_len = abbrev_len or 2
+        local result = {}
+        local preserve_start = #segments - preserve_count + 1
+        for i = 1, #segments do
+            if i >= preserve_start then
+                table.insert(result, segments[i])
+            else
+                local actual_len = math.min(abbrev_len, #segments[i])
+                table.insert(result, string.sub(segments[i], 1, actual_len))
+            end
+        end
+        return table.concat(result, "/")
+    end
+
+    -- Strategy 3: Ellipsis with preserved segments
+    local function ellipsis_compress(segments, preserve_count)
+        if #segments <= preserve_count + 1 then
+            return table.concat(segments, "/")
+        end
+
+        local preserved = {}
+        for i = #segments - preserve_count + 1, #segments do
+            table.insert(preserved, segments[i])
+        end
+
+        return ".../" .. table.concat(preserved, "/")
+    end
+
+    -- Try strategies in order of preference with progressive abbreviation lengths
+    local strategies = {
+        -- Try 3-char abbreviations first (most readable)
+        function() return abbreviate_progressive(parts, 1, preserve_segments, 3) end,
+        function() return abbreviate_with_length(parts, preserve_segments, 3) end,
+
+        -- Fall back to 2-char abbreviations
+        function() return abbreviate_progressive(parts, 1, preserve_segments, 2) end,
+        function() return abbreviate_with_length(parts, preserve_segments, 2) end,
+
+        -- Single character as last resort before ellipsis
+        function() return abbreviate_progressive(parts, 1, preserve_segments, 1) end,
+        function() return abbreviate_with_length(parts, preserve_segments, 1) end,
+
+        -- Ellipsis strategies
+        function() return ellipsis_compress(parts, preserve_segments) end,
+        function() return ellipsis_compress(parts, math.max(1, preserve_segments - 1)) end,
+    }
+
+    for _, strategy in ipairs(strategies) do
+        local compressed = strategy()
+        if #compressed <= max_width then
+            return compressed
+        end
+    end
+
+    -- Last resort: just take the end
+    if preserve_segments > 0 then
+        local end_parts = {}
+        for i = math.max(1, #parts - preserve_segments + 1), #parts do
+            table.insert(end_parts, parts[i])
+        end
+        local result = table.concat(end_parts, "/")
+        if #result <= max_width then
+            return result
+        end
+    end
+
+    -- Ultimate fallback: truncate with ellipsis
+    if max_width > 3 then
+        return "..." .. string.sub(path, -(max_width - 3))
+    else
+        return string.sub(path, -max_width)
+    end
+end
+
+-- Calculate available width for path display based on window and UI elements
+function M.calculate_available_path_width(window_width, base_indent, tree_chars, numbering_width)
+    window_width = window_width or 40  -- default fallback
+    base_indent = base_indent or 0
+    tree_chars = tree_chars or 0  -- space for tree characters like ├─
+    numbering_width = numbering_width or 0  -- space for [1] etc.
+
+    -- Reserve space for: indent + tree + numbering + filename + some padding
+    local reserved_space = base_indent + tree_chars + numbering_width + 4  -- 4 for padding/margins
+    local available = window_width - reserved_space
+
+    -- Ensure minimum usable width
+    return math.max(10, available)
+end
+
+-- Enhanced path compression that considers UI context
+function M.compress_path_contextual(path, window_width, ui_context)
+    ui_context = ui_context or {}
+
+    local available_width = M.calculate_available_path_width(
+        window_width,
+        ui_context.base_indent or 0,
+        ui_context.tree_chars or 0,
+        ui_context.numbering_width or 0
+    )
+
+    -- Use larger proportion of available width for paths
+    local max_path_width = math.floor(available_width * 0.6)  -- 60% of available space
+
+    return M.compress_path_smart(path, max_path_width, ui_context.preserve_segments or 1)
 end
 
 return M
