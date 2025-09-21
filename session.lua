@@ -1233,17 +1233,22 @@ local function setup_session_integration()
         -- Restore state after session load with delay to ensure buffers are loaded
         vim.api.nvim_create_autocmd("SessionLoadPost", {
             callback = function()
+                -- Only respond to real session loads, not loadview commands
+                -- v:this_session is only set during actual session loading
+                if not vim.v.this_session or vim.v.this_session == "" then
+                    return -- This is from loadview or similar, ignore
+                end
+
                 -- CRITICAL: Save original session data IMMEDIATELY before anything can overwrite it
                 local original_session_data = vim.g.VerticalBufferlineSession
-                
+
                 -- IMPORTANT: Stop any running auto-serialization timer IMMEDIATELY
                 stop_auto_serialize()
-                
+
                 vim.defer_fn(function()
                     -- Restore the original data in case it was overwritten
                     vim.g.VerticalBufferlineSession = original_session_data
-                    
-                    
+
                     if vim.g.VerticalBufferlineSession and not _G._vbl_session_restore_completed then
                         restore_state_from_global()
                         _G._vbl_session_restore_completed = true
