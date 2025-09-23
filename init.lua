@@ -1138,7 +1138,8 @@ local function render_group_header(group, i, is_active, buffer_count, lines_text
 end
 
 -- Render current group's history as a unified group
-local function render_current_group_history(active_group, current_buffer_id, is_picking, lines_text, new_line_map, group_header_lines, line_types, all_components, line_components, line_group_context, line_infos)
+-- @param current_components: Current bufferline components (for filtering history to match display)
+local function render_current_group_history(active_group, current_buffer_id, is_picking, lines_text, new_line_map, group_header_lines, line_types, all_components, line_components, line_group_context, line_infos, current_components)
     if not active_group or not groups.should_show_history(active_group.id) then
         return
     end
@@ -1148,11 +1149,19 @@ local function render_current_group_history(active_group, current_buffer_id, is_
     if not history or #history == 0 then
         return
     end
-    
-    -- Filter valid history items
+
+    -- Use the same data source as the interface display (current_components from bufferline)
+    local current_buffer_ids = {}
+    for _, comp in ipairs(current_components or {}) do
+        if comp and comp.id then
+            table.insert(current_buffer_ids, comp.id)
+        end
+    end
+
+    -- Filter valid history items and ensure they're still in the current display
     local valid_history = {}
     for _, buffer_id in ipairs(history) do
-        if api.nvim_buf_is_valid(buffer_id) then
+        if api.nvim_buf_is_valid(buffer_id) and vim.tbl_contains(current_buffer_ids, buffer_id) then
             table.insert(valid_history, buffer_id)
         end
     end
@@ -1220,6 +1229,7 @@ local function render_all_groups(active_group, components, current_buffer_id, is
     for i, group in ipairs(all_groups) do
         local is_active = group.id == active_group.id
         local group_buffers = groups.get_group_buffers(group.id) or {}
+
 
         -- Calculate valid buffer count (filter out special buffers only)
         local valid_buffer_count = 0
@@ -1563,7 +1573,7 @@ function M.refresh(reason)
     local line_group_context = {}  -- Store which group each line belongs to
 
     -- Render current group's history first (at the top)
-    render_current_group_history(active_group, current_buffer_id, is_picking, lines_text, new_line_map, group_header_lines, line_types, all_components, line_components, line_group_context, line_infos)
+    render_current_group_history(active_group, current_buffer_id, is_picking, lines_text, new_line_map, group_header_lines, line_types, all_components, line_components, line_group_context, line_infos, components)
     
     -- Render all groups with their buffers (without applying highlights yet)
     local remaining_components = render_all_groups(active_group, components, current_buffer_id, is_picking, lines_text, new_line_map, group_header_lines, line_types, all_components, line_components, line_group_context, line_infos)

@@ -55,6 +55,24 @@ local groups_data = {
     history_sync_disabled = false,
 }
 
+--- Update group's buffer list and sync history accordingly
+--- @param group table Group object
+--- @param new_buffers table Array of buffer IDs
+local function update_group_buffers_internal(group, new_buffers)
+    group.buffers = new_buffers
+
+    -- Sync history with updated buffers
+    if group.history then
+        local updated_history = {}
+        for _, hist_buf_id in ipairs(group.history) do
+            if vim.tbl_contains(new_buffers, hist_buf_id) then
+                table.insert(updated_history, hist_buf_id)
+            end
+        end
+        group.history = updated_history
+    end
+end
+
 -- Initialize default group
 local function init_default_group()
     if #groups_data.groups == 0 then
@@ -619,23 +637,9 @@ function M.get_group_buffers(group_id)
         return {}
     end
 
-    -- Only filter invalid buffers, don't modify original list
-    local valid_buffers = {}
-    local found_invalid = false
-    for _, buffer_id in ipairs(group.buffers) do
-        if api.nvim_buf_is_valid(buffer_id) then
-            table.insert(valid_buffers, buffer_id)
-        else
-            found_invalid = true
-        end
-    end
-
-    -- Only update group's buffer list when invalid buffers are found
-    if found_invalid then
-        group.buffers = valid_buffers
-    end
-
-    return group.buffers
+    -- Simply return the current buffer list
+    -- All cleanup should be done via update_group_buffers, not here
+    return group.buffers or {}
 end
 
 -- Get all buffers from current group
@@ -790,7 +794,7 @@ function M.sync_active_group_with_bufferline(buffer_list)
     end
 
     -- Directly update current active group's buffer list to bufferline result
-    active_group.buffers = buffer_list or {}
+    update_group_buffers_internal(active_group, buffer_list or {})
 
     vim.schedule(function()
         if require('vertical-bufferline').refresh then
@@ -814,7 +818,7 @@ function M.cleanup_invalid_buffers()
                 table.insert(valid_buffers, buffer_id)
             end
         end
-        group.buffers = valid_buffers
+        update_group_buffers_internal(group, valid_buffers)
     end
 end
 
@@ -1012,6 +1016,16 @@ function M.get_group_history(group_id)
     group.history = valid_history
     
     return valid_history
+end
+
+--- Update group's buffer list and sync history accordingly
+--- @param group_id string Group ID
+--- @param new_buffers table Array of buffer IDs
+function M.update_group_buffers(group_id, new_buffers)
+    local group = find_group_by_id(group_id)
+    if group then
+        update_group_buffers_internal(group, new_buffers)
+    end
 end
 
 --- Remove buffer from history of all groups

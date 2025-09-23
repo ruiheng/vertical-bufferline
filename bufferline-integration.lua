@@ -213,19 +213,12 @@ local function sync_bufferline_to_group()
                 end
             end
 
-            -- Then, add any existing VBL buffers that bufferline might have missed
-            for _, buf_id in ipairs(target_group.buffers) do
-                if vim.api.nvim_buf_is_valid(buf_id) and not seen_buffers[buf_id] and not is_special_buffer(buf_id) then
-                    table.insert(merged_buffers, buf_id)
-                    logger.debug("sync", "preserved buffer not in bufferline", {
-                        buf_id = buf_id,
-                        buf_name = vim.api.nvim_buf_get_name(buf_id)
-                    })
-                end
-            end
+            -- Use only bufferline buffers for strict synchronization
+            -- If user removes buffer from bufferline, it should also be removed from VBL
 
-            target_group.buffers = merged_buffers
-            
+            -- Update buffers and automatically sync history
+            groups.update_group_buffers(sync_target_group_id, merged_buffers)
+
             -- Sync group history with current buffer (only when current buffer is actually in the group)
             local current_buffer_in_group = vim.tbl_contains(filtered_buffer_ids, current_buf) and current_buf or nil
             if current_buffer_in_group then
