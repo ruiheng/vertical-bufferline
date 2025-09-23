@@ -1378,7 +1378,7 @@ local function apply_group_highlights(group_header_lines, lines_text)
 end
 
 -- Calculate vertical offset to align VBL content with main window cursor
-local function calculate_cursor_based_offset()
+local function calculate_cursor_based_offset(content_length)
     -- Check if cursor alignment is enabled
     if not config_module.DEFAULTS.align_with_cursor then
         return 0
@@ -1434,7 +1434,11 @@ local function calculate_cursor_based_offset()
 
     -- Calculate desired offset with conservative bounds
     local desired_offset = math.max(0, cursor_relative_to_window - 5)  -- More space above
-    local max_offset = math.max(0, sidebar_height - 15)  -- More space reserved for content
+
+    -- Ensure we don't push content out of the visible area
+    -- Reserve space for content to be fully visible
+    local content_len = content_length or 0
+    local max_offset = math.max(0, sidebar_height - content_len - 2)  -- Reserve 2 lines buffer
 
     return math.min(desired_offset, max_offset)
 end
@@ -1444,7 +1448,8 @@ local function finalize_buffer_display(lines_text, new_line_map, line_group_cont
     api.nvim_buf_set_option(state_module.get_buf_id(), "modifiable", true)
 
     -- Calculate vertical offset to align with cursor
-    local offset = calculate_cursor_based_offset()
+    local content_length = #lines_text
+    local offset = calculate_cursor_based_offset(content_length)
 
     -- Add empty lines at the beginning if offset is needed
     local final_lines = {}
