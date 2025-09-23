@@ -679,7 +679,7 @@ function M.setup()
         -- Clear buffer lists of all groups
         for _, group in ipairs(all_groups) do
             vim.notify(string.format("Clearing group '%s' (%d buffers)", group.name, #group.buffers), vim.log.levels.INFO)
-            group.buffers = {}
+            groups.update_group_buffers(group.id, {})
         end
 
         -- Reassign: each buffer belongs only to the first group
@@ -1152,7 +1152,17 @@ function M.setup()
         -- Create a new buffer to display logs
         local buf = vim.api.nvim_create_buf(false, true)
         vim.api.nvim_buf_set_name(buf, "VBL Debug Logs")
-        vim.api.nvim_buf_set_lines(buf, 0, -1, false, logs)
+
+        -- Split multi-line log entries into separate lines
+        local split_logs = {}
+        for _, log_line in ipairs(logs) do
+            local lines = vim.split(log_line, '\n', { plain = true })
+            for _, line in ipairs(lines) do
+                table.insert(split_logs, line)
+            end
+        end
+
+        vim.api.nvim_buf_set_lines(buf, 0, -1, false, split_logs)
         vim.api.nvim_buf_set_option(buf, 'filetype', 'log')
         vim.api.nvim_buf_set_option(buf, 'modifiable', false)
         
