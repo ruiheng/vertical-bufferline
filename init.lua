@@ -71,20 +71,21 @@ local function setup_highlights()
     local title_attrs = vim.api.nvim_get_hl(0, {name = 'Title'})
     local comment_attrs = vim.api.nvim_get_hl(0, {name = 'Comment'})
     
-    api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_ACTIVE, { 
-        bg = pmenusel_attrs.bg,
-        fg = title_attrs.fg or pmenusel_attrs.fg,
-        bold = title_attrs.bold,
-        italic = title_attrs.italic
+    -- Subtle group header highlights for less eye-catching appearance
+    api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_ACTIVE, {
+        fg = config_module.COLORS.BLUE,
+        bold = true,
+        default = true
     })
-    api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_INACTIVE, { 
-        bg = pmenu_attrs.bg,
+    api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_INACTIVE, {
         fg = comment_attrs.fg or pmenu_attrs.fg,
-        italic = comment_attrs.italic
+        default = true
     })
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_NUMBER, { link = "Number", bold = true, default = true })
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_SEPARATOR, { link = "Comment", default = true })
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_MARKER, { link = "Special", bold = true, default = true })
+
+    -- Recent Files header highlight removed - kept subtle without special highlighting
 end
 
 -- Call setup function immediately
@@ -1119,22 +1120,24 @@ local function render_group_header(group, i, is_active, buffer_count, lines_text
     -- Add spacing between groups (except for first group)
     if i > config_module.SYSTEM.FIRST_INDEX then
         table.insert(lines_text, "")  -- Empty line separator
-        local separator_line_num = #lines_text
-        table.insert(group_header_lines, {line = separator_line_num, type = "separator"})
+        local separator_line_num = #lines_text - config_module.SYSTEM.ZERO_BASED_OFFSET  -- 0-based line number
+        group_header_lines[separator_line_num] = {line = separator_line_num, type = "separator"}
     end
 
-    local group_line = string.format("[%d] %s %s (%d buffers)",
+    -- Clean group header format without borders
+    local group_line = string.format("[%d] %s %s (%d)",
         group.display_number, group_marker, group_name_display, buffer_count)
     table.insert(lines_text, group_line)
 
-    -- Record group header line info
-    table.insert(group_header_lines, {
-        line = #lines_text - config_module.SYSTEM.ZERO_BASED_OFFSET,  -- 0-based line number
+    -- Record group header line info (use hash table indexed by line number for consistency)
+    local header_line_num = #lines_text - config_module.SYSTEM.ZERO_BASED_OFFSET  -- 0-based line number
+    group_header_lines[header_line_num] = {
+        line = header_line_num,
         type = "header",
         is_active = is_active,
         group_id = group.id,
         group_number = group.display_number
-    })
+    }
 end
 
 -- Render current group's history as a unified group
@@ -1168,13 +1171,16 @@ local function render_current_group_history(active_group, current_buffer_id, is_
     
     -- Only render if we have valid history items
     if #valid_history > 0 then
-        -- Render history group header
-        local header_text = string.format("[H] 📋 Recent Files (%d)", math.min(#valid_history, config_module.DEFAULTS.history_display_count))
+        -- Render history group header with enhanced styling
+        local header_text = string.format("📋 Recent Files (%d)", math.min(#valid_history, config_module.DEFAULTS.history_display_count))
         table.insert(lines_text, header_text)
         local header_line_num = #lines_text
         group_header_lines[header_line_num] = {
             group_id = "history",
-            group_number = "H"
+            group_number = "H",
+            type = "header",
+            is_recent_files = true,  -- Special flag for Recent Files
+            line = header_line_num - 1  -- 0-based line number
         }
         
         -- Render history items
@@ -1370,14 +1376,17 @@ end
 
 -- Apply group header highlights
 local function apply_group_highlights(group_header_lines, lines_text)
-    for _, header_info in ipairs(group_header_lines) do
+    for _, header_info in pairs(group_header_lines) do
         if header_info.type == "separator" then
             -- Empty separator line - no highlight needed
             -- Just a space line for visual separation
         elseif header_info.type == "header" then
-            -- Group title line overall highlight with background
-            local group_highlight = header_info.is_active and config_module.HIGHLIGHTS.GROUP_ACTIVE or config_module.HIGHLIGHTS.GROUP_INACTIVE
-            api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, group_highlight, header_info.line, 0, -1)
+            -- Skip highlighting for Recent Files header (keep it subtle)
+            if not header_info.is_recent_files then
+                -- Only highlight regular group headers
+                local group_highlight = header_info.is_active and config_module.HIGHLIGHTS.GROUP_ACTIVE or config_module.HIGHLIGHTS.GROUP_INACTIVE
+                api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, group_highlight, header_info.line, 0, -1)
+            end
 
             -- Note: We no longer highlight individual parts (number, marker) to preserve the background color
             -- The overall group highlight already provides the visual distinction
@@ -1496,7 +1505,13 @@ local function finalize_buffer_display(lines_text, new_line_map, line_group_cont
 
     -- Adjust group header line mappings
     for line_num, header_info in pairs(group_header_lines or {}) do
-        adjusted_header_lines[line_num + offset] = header_info
+        -- Create a copy of header_info with adjusted line number
+        local adjusted_header_info = {}
+        for k, v in pairs(header_info) do
+            adjusted_header_info[k] = v
+        end
+        adjusted_header_info.line = line_num + offset
+        adjusted_header_lines[line_num + offset] = adjusted_header_info
     end
 
     -- Adjust line_infos mappings to account for offset
@@ -1521,7 +1536,7 @@ local function finalize_buffer_display(lines_text, new_line_map, line_group_cont
     state_module.set_group_header_lines(adjusted_header_lines)
 
     -- Return adjusted data so the caller can use it for highlighting
-    return adjusted_line_infos, adjusted_line_map, adjusted_line_types, adjusted_line_components
+    return adjusted_line_infos, adjusted_line_map, adjusted_line_types, adjusted_line_components, adjusted_header_lines
 end
 
 -- Complete buffer setup and make it read-only
@@ -1579,7 +1594,7 @@ function M.refresh(reason)
     local remaining_components = render_all_groups(active_group, components, current_buffer_id, is_picking, lines_text, new_line_map, group_header_lines, line_types, all_components, line_components, line_group_context, line_infos)
 
     -- Finalize buffer display (set lines but keep modifiable) - this clears highlights
-    line_infos, new_line_map, line_types, line_components = finalize_buffer_display(lines_text, new_line_map, line_group_context, group_header_lines, line_infos, line_types, line_components)
+    line_infos, new_line_map, line_types, line_components, group_header_lines = finalize_buffer_display(lines_text, new_line_map, line_group_context, group_header_lines, line_infos, line_types, line_components)
     
     -- Clear old highlights and apply all highlights AFTER buffer content is set
     api.nvim_buf_clear_namespace(state_module.get_buf_id(), ns_id, 0, -1)

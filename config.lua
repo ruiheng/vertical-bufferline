@@ -55,6 +55,9 @@ M.COLORS = {
     PURPLE = "#c678dd",      -- Used for group numbers
     GRAY = "#5c6370",        -- Used for inactive groups
     DARK_GRAY = "#3e4452",   -- Used for separators
+    WHITE = "#abb2bf",       -- Used for active group text
+    BLACK = "#282c34",       -- Used for Recent Files header text
+    CYAN = "#56b6c2",        -- Used for Recent Files header background
 }
 
 -- Highlight group names
@@ -73,6 +76,9 @@ M.HIGHLIGHTS = {
     GROUP_NUMBER = "VBufferLineGroupNumber",
     GROUP_SEPARATOR = "VBufferLineGroupSeparator",
     GROUP_MARKER = "VBufferLineGroupMarker",
+
+    -- Recent Files highlights
+    RECENT_FILES_HEADER = "VBufferLineRecentFilesHeader",
 
     -- Pick mode highlights
     PICK = "VBufferLinePick",
