@@ -1183,19 +1183,36 @@ local function render_current_group_history(active_group, current_buffer_id, is_
             line = header_line_num - 1  -- 0-based line number
         }
         
+        -- Generate minimal prefixes for history items (same logic as regular groups)
+        local history_buffer_ids = {}
+        for i, buffer_id in ipairs(valid_history) do
+            if i <= config_module.DEFAULTS.history_display_count then
+                table.insert(history_buffer_ids, buffer_id)
+            end
+        end
+
+        local win_id = state_module.get_win_id()
+        local window_width = 40  -- fallback
+        if win_id and api.nvim_win_is_valid(win_id) then
+            window_width = api.nvim_win_get_width(win_id)
+        end
+
+        local minimal_prefixes = filename_utils.generate_minimal_prefixes(history_buffer_ids, window_width)
+
         -- Render history items
         for i, buffer_id in ipairs(valid_history) do
             if i > config_module.DEFAULTS.history_display_count then break end
-            
+
             local buf_name = api.nvim_buf_get_name(buffer_id)
             local filename = buf_name == "" and "[No Name]" or vim.fn.fnamemodify(buf_name, ":t")
             local is_current = buffer_id == current_buffer_id
             local is_last = (i == math.min(#valid_history, config_module.DEFAULTS.history_display_count))
-            
+
             -- Create component object for history buffer
             local history_component = {
                 id = buffer_id,
                 name = filename,
+                minimal_prefix = minimal_prefixes[i],  -- Add minimal prefix for path disambiguation
                 focused = is_current  -- Current buffer should be focused for proper highlighting
             }
             
