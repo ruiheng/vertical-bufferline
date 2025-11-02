@@ -1885,6 +1885,10 @@ function M.close_sidebar()
     local all_windows = api.nvim_list_wins()
     local sidebar_win_id = state_module.get_win_id()
 
+    -- Save the current width before closing
+    local current_width = api.nvim_win_get_width(sidebar_win_id)
+    state_module.set_last_width(current_width)
+
     -- Check if only one window remains (sidebar is the last window)
     if #all_windows == 1 then
         -- If only sidebar window remains, exit nvim completely
@@ -1955,14 +1959,16 @@ local function open_sidebar()
     api.nvim_buf_set_option(buf_id, 'bufhidden', 'wipe')
     api.nvim_buf_set_option(buf_id, 'filetype', 'vertical-bufferline')
     local current_win = api.nvim_get_current_win()
-    
+
+    -- Use saved width if available, otherwise use default width
+    local width = state_module.get_last_width() or config_module.DEFAULTS.width
+
     local new_win_id
-    
+
     if config_module.DEFAULTS.floating then
         -- Create floating sidebar (right side, focusable=false)
         local screen_width = vim.o.columns
         local screen_height = vim.o.lines
-        local width = config_module.DEFAULTS.width
         local height = screen_height - 2  -- Leave space for command line
         local col = screen_width - width  -- Always on right side for floating
         
@@ -1986,7 +1992,7 @@ local function open_sidebar()
         end
         new_win_id = api.nvim_get_current_win()
         api.nvim_win_set_buf(new_win_id, buf_id)
-        api.nvim_win_set_width(new_win_id, config_module.DEFAULTS.width)
+        api.nvim_win_set_width(new_win_id, width)
     end
     
     -- Configure window options after creation
@@ -2017,14 +2023,15 @@ local function open_sidebar()
                     local new_screen_width = vim.o.columns
                     local new_screen_height = vim.o.lines
                     local new_height = new_screen_height - 2
-                    local width = config_module.DEFAULTS.width
-                    
+                    -- Use current window width to preserve user adjustments
+                    local current_width = api.nvim_win_get_width(new_win_id)
+
                     -- Always position on right side for floating sidebar
-                    local new_col = new_screen_width - width
-                    
+                    local new_col = new_screen_width - current_width
+
                     api.nvim_win_set_config(new_win_id, {
                         relative = 'editor',
-                        width = width,
+                        width = current_width,
                         height = new_height,
                         col = new_col,
                         row = 0

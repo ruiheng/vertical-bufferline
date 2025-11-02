@@ -11,6 +11,7 @@ local state = {
     win_id = nil,
     buf_id = nil,
     is_sidebar_open = false,
+    last_width = nil, -- Remember the last width before closing sidebar
     line_to_buffer_id = {}, -- Maps a line number in our window to a buffer ID
     hint_to_buffer_id = {}, -- Maps a hint character to a buffer ID
     line_group_context = {}, -- Maps a line number to the group ID it belongs to
@@ -18,7 +19,7 @@ local state = {
     was_picking = false, -- Track picking mode state to avoid spam
     session_loading = false, -- Flag to prevent interference during session loading
     highlight_timer = nil, -- Timer for picking highlights
-    
+
     -- Extended picking mode state
     extended_picking = {
         is_active = false,
@@ -102,6 +103,18 @@ end
 function M.close_sidebar()
     state.is_sidebar_open = false
     state.win_id = nil
+end
+
+-- Last width management
+function M.get_last_width()
+    return state.last_width
+end
+
+function M.set_last_width(width)
+    if width and (type(width) ~= "number" or width <= 0) then
+        error("last_width must be a positive number, got: " .. tostring(width))
+    end
+    state.last_width = width
 end
 
 -- Line to buffer mapping
@@ -262,6 +275,7 @@ function M.reset_state()
     state.win_id = nil
     state.buf_id = nil
     state.is_sidebar_open = false
+    state.last_width = nil
     state.line_to_buffer_id = {}
     state.hint_to_buffer_id = {}
     state.was_picking = false
@@ -296,6 +310,7 @@ function M.get_state_summary()
         win_id = state.win_id,
         buf_id = state.buf_id,
         is_sidebar_open = state.is_sidebar_open,
+        last_width = state.last_width,
         was_picking = state.was_picking,
         session_loading = state.session_loading,
         has_highlight_timer = state.highlight_timer ~= nil,
