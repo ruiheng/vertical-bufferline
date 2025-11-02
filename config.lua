@@ -38,8 +38,8 @@ M.UI = {
     PATH_MAX_LENGTH = 50,
 
     -- Group display
-    ACTIVE_GROUP_MARKER = "●●",        -- Double marker for more prominence
-    INACTIVE_GROUP_MARKER = "○",
+    ACTIVE_GROUP_MARKER = "••",        -- Double marker for more prominence
+    INACTIVE_GROUP_MARKER = "◦",
     GROUP_SEPARATOR = "────────────────────────────────────",
     ACTIVE_GROUP_SEPARATOR = "════════════════════════════════════",  -- Different separator for active group
     UNNAMED_GROUP_DISPLAY = "(unnamed)",

@@ -120,7 +120,7 @@ end
 function M.create_modified_indicator(is_modified)
     if is_modified then
         return {
-            renderer.create_part("● ", config_module.HIGHLIGHTS.MODIFIED)
+            renderer.create_part("• ", config_module.HIGHLIGHTS.MODIFIED)
         }
     else
         return {}
