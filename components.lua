@@ -43,36 +43,48 @@ end
 ---@param max_global_digits number Maximum digits in global positions for alignment
 ---@param has_any_local_info boolean Whether any buffer in group has local position info
 ---@param should_hide_local_numbering boolean Whether to hide local numbering for entire group
+---@param is_current boolean Whether this is the current buffer
+---@param is_visible boolean Whether this buffer is visible in a window
 ---@return LinePart[]
-function M.create_smart_numbering(local_pos, global_pos, max_local_digits, max_global_digits, has_any_local_info, should_hide_local_numbering)
+function M.create_smart_numbering(local_pos, global_pos, max_local_digits, max_global_digits, has_any_local_info, should_hide_local_numbering, is_current, is_visible)
     local global_num = tostring(global_pos)
     local global_padding = max_global_digits - #global_num
     local padded_global_num = string.rep(" ", global_padding) .. global_num
-    
+
+    -- Determine highlight based on buffer state
+    local number_highlight
+    if is_current then
+        number_highlight = config_module.HIGHLIGHTS.FILENAME_CURRENT
+    elseif is_visible then
+        number_highlight = config_module.HIGHLIGHTS.FILENAME_VISIBLE
+    else
+        number_highlight = config_module.HIGHLIGHTS.FILENAME
+    end
+
     -- Case 1: No local info exists for any buffer in group - show only global
     if not has_any_local_info then
         return {
-            renderer.create_part(padded_global_num, config_module.HIGHLIGHTS.NUMBER_GLOBAL)
+            renderer.create_part(padded_global_num, number_highlight)
         }
     end
-    
+
     -- Case 2: Should hide local numbering for entire group - show only global
     if should_hide_local_numbering then
         return {
-            renderer.create_part(padded_global_num, config_module.HIGHLIGHTS.NUMBER_GLOBAL)
+            renderer.create_part(padded_global_num, number_highlight)
         }
     end
-    
+
     -- Case 3: Show dual numbering
     local local_num = local_pos and tostring(local_pos) or "-"
     local local_padding = max_local_digits - #local_num
     local padded_local_num = string.rep(" ", local_padding) .. local_num
-    
+
     return {
-        renderer.create_part(padded_local_num, 
-            local_num == "-" and config_module.HIGHLIGHTS.NUMBER_HIDDEN or config_module.HIGHLIGHTS.NUMBER_LOCAL),
+        renderer.create_part(padded_local_num,
+            local_num == "-" and config_module.HIGHLIGHTS.NUMBER_HIDDEN or number_highlight),
         renderer.create_part("|", config_module.HIGHLIGHTS.NUMBER_SEPARATOR),
-        renderer.create_part(padded_global_num, config_module.HIGHLIGHTS.NUMBER_GLOBAL)
+        renderer.create_part(padded_global_num, number_highlight)
     }
 end
 
@@ -103,14 +115,26 @@ end
 -- Create simple numbering component (fallback) with alignment
 ---@param position number
 ---@param max_digits number Maximum digits for alignment
+---@param is_current boolean Whether this is the current buffer
+---@param is_visible boolean Whether this buffer is visible in a window
 ---@return LinePart[]
-function M.create_simple_numbering(position, max_digits)
+function M.create_simple_numbering(position, max_digits, is_current, is_visible)
     local num_str = tostring(position)
     local padding = max_digits - #num_str
     local padded_num = string.rep(" ", padding) .. num_str
-    
+
+    -- Determine highlight based on buffer state
+    local number_highlight
+    if is_current then
+        number_highlight = config_module.HIGHLIGHTS.FILENAME_CURRENT
+    elseif is_visible then
+        number_highlight = config_module.HIGHLIGHTS.FILENAME_VISIBLE
+    else
+        number_highlight = config_module.HIGHLIGHTS.FILENAME
+    end
+
     return {
-        renderer.create_part(padded_num, config_module.HIGHLIGHTS.NUMBER_LOCAL)
+        renderer.create_part(padded_num, number_highlight)
     }
 end
 

@@ -851,13 +851,13 @@ local function create_buffer_line(component, j, total_components, current_buffer
         if ok and position_info then
             local local_pos = position_info[component.id]  -- nil if not visible in bufferline
             local global_pos = j  -- Global position is just the index in current group
-            local numbering_parts = components.create_smart_numbering(local_pos, global_pos, max_local_digits or 1, max_global_digits or 1, has_any_local_info, should_hide_local_numbering)
+            local numbering_parts = components.create_smart_numbering(local_pos, global_pos, max_local_digits or 1, max_global_digits or 1, has_any_local_info, should_hide_local_numbering, is_current, is_visible)
             for _, part in ipairs(numbering_parts) do
                 table.insert(parts, part)
             end
         else
             -- Fallback to simple numbering
-            local numbering_parts = components.create_simple_numbering(j, max_global_digits or 1)
+            local numbering_parts = components.create_simple_numbering(j, max_global_digits or 1, is_current, is_visible)
             for _, part in ipairs(numbering_parts) do
                 table.insert(parts, part)
             end
