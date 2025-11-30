@@ -30,7 +30,30 @@ git commit -m "message"
 
 ## Current Status
 
-### Recently Implemented: Debug Logging System
+### Recently Implemented: Adaptive Width Feature (2025-11-29)
+
+Added adaptive sidebar width that automatically adjusts based on content:
+
+#### New Configuration Options
+- `width` - Minimum sidebar width (default: 25, was 40)
+- `max_width` - Maximum sidebar width (default: 60)
+- `adaptive_width` - Enable/disable adaptive sizing (default: true)
+
+#### New Command
+```vim
+:VBufferLineToggleAdaptiveWidth  # Toggle adaptive width on/off
+```
+
+#### Implementation Details
+- `calculate_content_width()` - Calculates max display width of all lines
+- `apply_adaptive_width()` - Applies calculated width within min/max bounds
+- Integrated into `finalize_buffer_display()` for automatic updates
+- Supports both split and floating window modes
+- Preserves width state across sidebar open/close cycles
+
+See `ADAPTIVE_WIDTH.md` for detailed documentation.
+
+### Previously Implemented: Debug Logging System
 
 Added comprehensive debug logging system to help troubleshoot buffer state synchronization issues:
 

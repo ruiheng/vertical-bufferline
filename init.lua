@@ -1479,6 +1479,71 @@ local function calculate_cursor_based_offset(content_length)
     return math.min(desired_offset, max_offset)
 end
 
+-- Calculate the maximum display width of all lines in the content
+local function calculate_content_width(lines_text)
+    local max_width = 0
+    for _, line in ipairs(lines_text) do
+        -- Use vim.fn.strdisplaywidth to properly handle multi-byte characters
+        local display_width = vim.fn.strdisplaywidth(line)
+        if display_width > max_width then
+            max_width = display_width
+        end
+    end
+    return max_width
+end
+
+-- Calculate and apply adaptive width to the sidebar window
+local function apply_adaptive_width(content_width)
+    if not config_module.DEFAULTS.adaptive_width then
+        return
+    end
+
+    local win_id = state_module.get_win_id()
+    if not win_id or not api.nvim_win_is_valid(win_id) then
+        return
+    end
+
+    -- Get min and max width from configuration
+    local min_width = config_module.DEFAULTS.width
+    local max_width = config_module.DEFAULTS.max_width
+
+    -- Calculate desired width: content width + 2 for padding
+    local desired_width = content_width + 2
+
+    -- Clamp to min/max bounds
+    local new_width = math.max(min_width, math.min(desired_width, max_width))
+
+    -- Get current width to avoid unnecessary updates
+    local current_width = api.nvim_win_get_width(win_id)
+
+    -- Only update if width actually changed
+    if new_width ~= current_width then
+        api.nvim_win_set_width(win_id, new_width)
+
+        -- Update saved width for next open
+        state_module.set_last_width(new_width)
+
+        -- For floating windows, also update position to keep it aligned
+        if config_module.DEFAULTS.floating then
+            local win_config = api.nvim_win_get_config(win_id)
+            if win_config and win_config.relative ~= "" then
+                local screen_width = vim.o.columns
+                local new_col = screen_width - new_width
+                api.nvim_win_set_config(win_id, {
+                    relative = 'editor',
+                    width = new_width,
+                    height = win_config.height,
+                    col = new_col,
+                    row = win_config.row,
+                    style = 'minimal',
+                    border = 'none',
+                    focusable = false,
+                })
+            end
+        end
+    end
+end
+
 -- Finalize buffer display with lines and mapping
 local function finalize_buffer_display(lines_text, new_line_map, line_group_context, group_header_lines, line_infos, line_types, line_components)
     api.nvim_buf_set_option(state_module.get_buf_id(), "modifiable", true)
@@ -1547,6 +1612,12 @@ local function finalize_buffer_display(lines_text, new_line_map, line_group_cont
     end
 
     api.nvim_buf_set_lines(state_module.get_buf_id(), 0, -1, false, final_lines)
+
+    -- Calculate and apply adaptive width based on content
+    if config_module.DEFAULTS.adaptive_width then
+        local content_width = calculate_content_width(lines_text)
+        apply_adaptive_width(content_width)
+    end
 
     state_module.set_line_to_buffer_id(adjusted_line_map)
     state_module.set_line_group_context(adjusted_group_context)

@@ -6,6 +6,7 @@ A Neovim plugin that provides a vertical sidebar displaying buffer groups with e
 
 ### Core Features
 - **Vertical sidebar** showing buffer groups and their contents
+- **Adaptive width** - sidebar automatically adjusts width based on content (configurable min/max)
 - **Dynamic buffer grouping** with automatic management
 - **Seamless bufferline integration** - bufferline only shows current group's buffers
 - **Perfect picking mode compatibility** with synchronized highlighting
@@ -83,6 +84,7 @@ A Neovim plugin that provides a vertical sidebar displaying buffer groups with e
 - `:VBufferLineRefreshBuffers` - Manually refresh and add current buffers to active group
 - `:VBufferLineClearHistory [group_name]` - Clear history for all groups or specific group
 - `:VBufferLineToggleCursorAlign` - Toggle cursor alignment for VBL content
+- `:VBufferLineToggleAdaptiveWidth` - Toggle adaptive width for VBL sidebar
 
 ## Display Modes
 
@@ -294,6 +296,62 @@ Each group maintains its own history of recently accessed files. The current act
 3 📄 index.html
 ```
 
+## Adaptive Width
+
+The sidebar automatically adjusts its width based on the content being displayed, providing an optimal balance between space efficiency and readability.
+
+### How It Works
+
+1. **Content Analysis**: The plugin calculates the display width of all visible lines
+2. **Smart Sizing**: Width adjusts between configured min/max bounds to fit content
+3. **Automatic Updates**: Width recalculates whenever content changes (switching groups, adding buffers, etc.)
+4. **State Persistence**: Width is preserved when closing and reopening the sidebar
+
+### Configuration
+
+```lua
+require('vertical-bufferline').setup({
+    width = 25,              -- Minimum width
+    max_width = 60,          -- Maximum width
+    adaptive_width = true,   -- Enable adaptive sizing (default: true)
+})
+```
+
+### Examples
+
+**Narrow content** - Sidebar uses minimal space:
+```
+[1] ● Frontend (3)
+► 1 App.tsx
+  2 util.js
+  3 api.py
+```
+Width: ~25 chars
+
+**Wide content** - Sidebar expands to show full paths:
+```
+[1] ● Frontend (3)
+► 1 src/components/Button.tsx
+  2 src/utils/formatting.js
+  3 src/api/endpoints.py
+```
+Width: ~45 chars (auto-adjusted)
+
+### Runtime Control
+
+Toggle adaptive width on/off:
+```vim
+:VBufferLineToggleAdaptiveWidth
+```
+
+Or disable it in configuration for fixed width behavior:
+```lua
+require('vertical-bufferline').setup({
+    width = 40,
+    adaptive_width = false,  -- Fixed width mode
+})
+```
+
 ## Smart Filename Disambiguation
 
 When you have multiple files with the same name in different directories, the plugin automatically shows just enough path context to make them distinguishable:
@@ -319,7 +377,9 @@ For lazy.nvim users, you can configure the plugin with custom options:
   "your-username/vertical-bufferline",
   opts = {
     -- UI settings
-    width = 40,                     -- Sidebar width
+    width = 25,                     -- Minimum sidebar width (for adaptive sizing)
+    max_width = 60,                 -- Maximum sidebar width (for adaptive sizing)
+    adaptive_width = true,          -- Enable adaptive width based on content
     expand_all_groups = true,       -- Default to expand all groups mode
     show_inactive_groups = false,   -- Show buffer lists for inactive groups (default: only active group)
     show_icons = false,             -- Show file type emoji icons
@@ -386,12 +446,14 @@ For lazy.nvim users, you can configure the plugin with custom options:
 {
   "your-username/vertical-bufferline",
   opts = {
-    width = 50,
+    width = 30,
+    max_width = 70,
+    adaptive_width = true,
     position = "right",
     show_icons = true,
     show_tree_lines = true,
     show_path = "yes",
-    show_history = "yes", 
+    show_history = "yes",
     history_size = 15,
     history_display_count = 8,
     auto_save = true,
@@ -418,7 +480,9 @@ For lazy.nvim users, you can configure the plugin with custom options:
 {
   "your-username/vertical-bufferline",
   opts = {
-    width = 45,
+    width = 25,
+    max_width = 50,
+    adaptive_width = true,
     position = "left",
     expand_all_groups = false,  -- Start with collapsed groups
     show_icons = true,
@@ -438,6 +502,19 @@ For lazy.nvim users, you can configure the plugin with custom options:
 }
 ```
 
+#### Fixed Width Setup (Disable Adaptive Width)
+```lua
+{
+  "your-username/vertical-bufferline",
+  opts = {
+    width = 40,
+    adaptive_width = false,  -- Use traditional fixed width
+    position = "left",
+    show_icons = true,
+  }
+}
+```
+
 ### Manual Configuration
 
 If you prefer manual setup, the plugin initializes automatically when the sidebar is first opened. Default settings:
@@ -445,7 +522,9 @@ If you prefer manual setup, the plugin initializes automatically when the sideba
 ```lua
 {
     -- UI settings
-    width = 40,                     -- Sidebar width  
+    width = 25,                     -- Minimum sidebar width (for adaptive sizing)
+    max_width = 60,                 -- Maximum sidebar width (for adaptive sizing)
+    adaptive_width = true,          -- Enable adaptive width based on content
     expand_all_groups = true,       -- Default to expand all groups mode
     show_icons = false,             -- Show file type emoji icons
     position = "left",              -- Sidebar position: "left" or "right"

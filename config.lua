@@ -6,7 +6,8 @@ local M = {}
 -- UI Configuration
 M.UI = {
     -- Sidebar dimensions
-    DEFAULT_WIDTH = 40,
+    DEFAULT_WIDTH = 25,  -- Minimum width for adaptive sizing
+    DEFAULT_MAX_WIDTH = 60,  -- Maximum width for adaptive sizing
 
 
     -- Timing constants (in milliseconds)
@@ -131,7 +132,9 @@ M.DEFAULTS = {
     session_name_strategy = "cwd_hash", -- "cwd_hash" or "cwd_path" or "manual"
 
     -- UI settings
-    width = M.UI.DEFAULT_WIDTH,
+    width = M.UI.DEFAULT_WIDTH,  -- Minimum width (adaptive sizing will use this as base)
+    max_width = M.UI.DEFAULT_MAX_WIDTH,  -- Maximum width for adaptive sizing
+    adaptive_width = true,  -- Enable adaptive width based on content
     show_inactive_group_buffers = false,  -- Show buffer list for inactive groups (default: only show active group)
     show_icons = false,  -- Show file type icons (emoji)
     position = "left",  -- Sidebar position: "left" or "right"
@@ -206,6 +209,14 @@ M.SYSTEM = {
 -- Validation functions
 function M.validate_width(width)
     return type(width) == "number" and width > 0 and width <= 200
+end
+
+function M.validate_max_width(max_width)
+    return type(max_width) == "number" and max_width > 0 and max_width <= 200
+end
+
+function M.validate_adaptive_width(adaptive_width)
+    return type(adaptive_width) == "boolean"
 end
 
 function M.validate_color(color)

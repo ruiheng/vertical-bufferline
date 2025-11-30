@@ -1218,6 +1218,20 @@ function M.setup()
         nargs = 0,
         desc = "Toggle cursor alignment for VBL content"
     })
+
+    -- Toggle adaptive width
+    vim.api.nvim_create_user_command("VBufferLineToggleAdaptiveWidth", function()
+        local config = require('vertical-bufferline.config')
+        config.DEFAULTS.adaptive_width = not config.DEFAULTS.adaptive_width
+        local status = config.DEFAULTS.adaptive_width and "enabled" or "disabled"
+        vim.notify(string.format("VBL adaptive width: %s", status), vim.log.levels.INFO)
+
+        -- Refresh to apply the change
+        require('vertical-bufferline').refresh("adaptive_width_toggle")
+    end, {
+        nargs = 0,
+        desc = "Toggle adaptive width for VBL sidebar"
+    })
 end
 
 -- Export functions for use by other modules
