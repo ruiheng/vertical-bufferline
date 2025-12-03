@@ -59,6 +59,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Default minimum width changed from 40 to 25 (better space efficiency with adaptive width)
 - Disabled BufEnter autocmd after review
 
+### Removed
+- **Manual session commands** (obsolete due to auto-serialization)
+  - Removed `:VBufferLineSaveSession`, `:VBufferLineLoadSession`, `:VBufferLineDeleteSession`, `:VBufferLineListSessions`
+  - Sessions now automatically managed via `auto_serialize` and Neovim's `:mksession`
+  - Users simply use native `:mksession` and `:source` - VBL state is included automatically
+
+### Documentation Improvements
+- **Clarified keymaps documentation** - separated built-in vs user-configured vs bufferline keymaps
+- **Added comprehensive session management explanation** - how auto-serialization works
+- **Clear BufferLine integration section** - shows recommended bufferline keymaps with examples
+- **New help tag**: `*vertical-bufferline-bufferline-keymaps*` for BufferLine integration
+- **Updated all examples** to show correct usage of `:mksession` instead of manual commands
+
 ## [1.1.0] - 2024-XX-XX
 
 ### Added
