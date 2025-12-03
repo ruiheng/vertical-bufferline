@@ -100,12 +100,6 @@ vim.keymap.set('n', '<leader>p', '<cmd>BufferLinePick<cr>', { desc = "Pick buffe
 - `:VBufferLineMoveGroupDown` - Move current group down in the list
 - `:VBufferLineMoveGroupToPosition <position>` - Move current group to specified position
 
-### Session Management
-- `:VBufferLineSaveSession [filename]` - Save current groups configuration
-- `:VBufferLineLoadSession [filename]` - Load groups configuration from session
-- `:VBufferLineDeleteSession [filename]` - Delete a session file
-- `:VBufferLineListSessions` - List all available sessions
-
 ### Utilities
 - `:VBufferLineDebug` - Show debug information
 - `:VBufferLineRefreshBuffers` - Manually refresh and add current buffers to active group
@@ -203,14 +197,16 @@ When using `<leader>p` (BufferLine picking), the sidebar shows hint characters:
 
 ### Session Persistence
 ```bash
-# Sessions are automatically saved on exit and loaded on startup
-# Manual session management:
-:VBufferLineSaveSession          # Save current configuration
-:VBufferLineLoadSession          # Load saved configuration
-:VBufferLineListSessions         # View all available sessions
+# Sessions are automatically managed via Neovim's :mksession
+# The plugin auto-serializes state every 3 seconds to vim.g.VerticalBufferlineSession
+# When you use :mksession, your group configuration is automatically saved
+# When you restore a session, your groups are automatically restored
 
-# Each working directory gets its own session file automatically
-# Sessions include: group structure, buffer assignments, active group, display mode
+# Example: Save and restore a Neovim session
+:mksession ~/my-project.vim      # Saves everything including VBL groups
+:source ~/my-project.vim         # Restores everything including VBL groups
+
+# Sessions include: group structure, buffer assignments, active group, display mode, history
 ```
 
 ### Advanced Workflow Examples

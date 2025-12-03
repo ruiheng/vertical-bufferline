@@ -297,12 +297,6 @@ Group Reordering:
 :VBufferLineMoveGroupDown             Move current group down in the list
 :VBufferLineMoveGroupToPosition <pos> Move current group to specified position
 
-Session Management:
-:VBufferLineSaveSession [filename]    Save current groups configuration
-:VBufferLineLoadSession [filename]    Load groups configuration from session
-:VBufferLineDeleteSession [filename]  Delete a session file
-:VBufferLineListSessions              List all available sessions
-
 History Management:                            *vertical-bufferline-history-commands*
 :VBufferLineClearHistory [group_name] Clear history for all groups or specific group
 
@@ -473,23 +467,31 @@ Example History Display:
 ==============================================================================
 10. SESSION MANAGEMENT                         *vertical-bufferline-sessions*
 
-Sessions automatically save and restore your group configurations:
+Sessions are automatically managed via Neovim's native :mksession command.
+No manual session commands are needed.
 
-Features:
-- Group structure preservation
-- Buffer assignments
+How it works:
+- The plugin auto-serializes state every 3 seconds to vim.g.VerticalBufferlineSession
+- When you use :mksession, this global variable is saved automatically
+- When you restore a session with :source, groups are restored automatically
+
+What is saved:
+- Group structure and names
+- Buffer assignments to groups
 - Active group tracking
 - Display mode settings
 - History data per group
 
-Session Types:
-- *Automatic*: Based on current working directory
-- *Manual*: Custom named sessions
-- *Integration*: Works with mini.sessions and native mksession
+Example usage:
+>vim
+    :mksession ~/my-project.vim      " Saves everything including VBL groups
+    :source ~/my-project.vim         " Restores everything including VBL groups
+<
 
-Session Files:
-Sessions are stored in Neovim's data directory under 'vertical-bufferline/'.
-Each working directory gets its own session file automatically.
+Integration:
+- Works seamlessly with mini.sessions plugin
+- Compatible with native Neovim session management
+- Auto-restore prompt when session data changes (configurable)
 
 ==============================================================================
 11. INTEGRATION                              *vertical-bufferline-integration*

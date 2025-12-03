@@ -363,46 +363,9 @@ local function move_group_to_position_command(args)
     end
 end
 
--- Session management commands
-local function save_session_command(args)
-    local session = require('vertical-bufferline.session')
-    local filename = args.args ~= "" and args.args or nil
-    session.save_session(filename)
-end
-
-local function load_session_command(args)
-    local session = require('vertical-bufferline.session')
-    local filename = args.args ~= "" and args.args or nil
-    session.load_session(filename)
-end
-
-local function delete_session_command(args)
-    local session = require('vertical-bufferline.session')
-    local filename = args.args ~= "" and args.args or nil
-    session.delete_session(filename)
-end
-
-local function list_sessions_command()
-    local session = require('vertical-bufferline.session')
-    local sessions = session.list_sessions()
-
-    if #sessions == 0 then
-        vim.notify("No sessions found", vim.log.levels.INFO)
-        return
-    end
-
-    local lines = {"Available sessions:"}
-    for i, sess in ipairs(sessions) do
-        local time_str = os.date("%Y-%m-%d %H:%M:%S", sess.timestamp or sess.modified)
-        local group_info = sess.group_count and (" (" .. sess.group_count .. " groups)") or ""
-        local cwd_info = sess.working_directory and (" - " .. sess.working_directory) or ""
-        local line = string.format("  %d. %s%s%s [%s]",
-            i, sess.name, group_info, cwd_info, time_str)
-        table.insert(lines, line)
-    end
-
-    vim.notify(table.concat(lines, "\n"), vim.log.levels.INFO)
-end
+-- Session management commands removed - sessions are now automatically managed
+-- via auto_serialize and Neovim's native :mksession command
+-- The plugin automatically serializes state to vim.g.VerticalBufferlineSession
 
 -- Group completion function (for command completion)
 local function group_complete(arglead, cmdline, cursorpos)
@@ -502,26 +465,9 @@ function M.setup()
         desc = "Move current group to specified position (interactive if no position given)"
     })
 
-    -- Session management commands
-    vim.api.nvim_create_user_command("VBufferLineSaveSession", save_session_command, {
-        nargs = "?",
-        desc = "Save current groups configuration to session"
-    })
-
-    vim.api.nvim_create_user_command("VBufferLineLoadSession", load_session_command, {
-        nargs = "?",
-        desc = "Load groups configuration from session"
-    })
-
-    vim.api.nvim_create_user_command("VBufferLineDeleteSession", delete_session_command, {
-        nargs = "?",
-        desc = "Delete a session file"
-    })
-
-    vim.api.nvim_create_user_command("VBufferLineListSessions", list_sessions_command, {
-        nargs = 0,
-        desc = "List all available sessions"
-    })
+    -- Session management commands removed
+    -- Sessions are now automatically managed via auto_serialize and :mksession
+    -- No user commands needed - everything is automatic
 
     -- Debug information
     vim.api.nvim_create_user_command("VBufferLineDebug", function()
