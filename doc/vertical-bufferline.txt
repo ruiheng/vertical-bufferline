@@ -321,9 +321,25 @@ Debug Commands:                                *vertical-bufferline-debug-comman
 ==============================================================================
 7. KEYMAPS                                       *vertical-bufferline-keymaps*
 
+NOTE: Most keymaps below require user configuration. Only sidebar internal
+keymaps are built-in. See |vertical-bufferline-installation| for setup
+examples with keymaps.
+
+Built-in Keymaps (Sidebar Internal):        *vertical-bufferline-builtin-keys*
+These work automatically when the sidebar is open:
+j/k                                   Navigate up/down in sidebar
+<CR>                                  Switch to selected buffer
+d                                     Close selected buffer
+q                                     Close sidebar
+h                                     Toggle history display mode
+p                                     Toggle path display mode
+
+Recommended Keymaps (User Configuration Required):
+
 Sidebar Control:
 <leader>vb                            Toggle vertical bufferline sidebar
 <leader>ve                            Toggle expand all groups mode
+<leader>vi                            Toggle showing inactive groups
 
 Group Management:
 <leader>gc                            Create new unnamed group
@@ -334,14 +350,6 @@ Group Management:
 <leader>gU                            Move current group up in the list
 <leader>gD                            Move current group down in the list
 
-Buffer Navigation (within sidebar):
-<CR>                                  Switch to selected buffer
-d                                     Close selected buffer
-q                                     Close sidebar
-j/k                                   Navigate up/down
-h                                     Toggle history display mode
-p                                     Toggle path display mode
-
 Buffer Quick Access:
 <leader>1 to <leader>9                Quick switch to buffers 1-9 in current group
 <leader>0                             Switch to 10th buffer in current group
@@ -350,6 +358,20 @@ Buffer Quick Access:
 History Quick Access:                          *vertical-bufferline-history-keymaps*
 <leader>h1 to <leader>h9              Quick switch to recent files 1-9 in history
                                       (<leader>h1 = most recent, <leader>h2 = second most recent, etc.)
+
+Example keymap configuration:
+>lua
+    -- Using lazy.nvim
+    keys = {
+      { "<leader>vb", "<cmd>lua require('vertical-bufferline').toggle()<cr>",
+        desc = "Toggle vertical bufferline" },
+      { "<leader>gc", "<cmd>lua require('vertical-bufferline').create_group()<cr>",
+        desc = "Create new group" },
+      { "<leader>gn", "<cmd>lua require('vertical-bufferline').switch_to_next_group()<cr>",
+        desc = "Next group" },
+      -- Add more keymaps as needed
+    }
+<
 
 ==============================================================================
 8. ADAPTIVE WIDTH                         *vertical-bufferline-adaptive-width*

@@ -23,12 +23,28 @@ A Neovim plugin that provides a vertical sidebar displaying buffer groups with e
 
 ## Keymaps
 
-### Sidebar Control
+**Note**: Most keymaps below are **not provided by the plugin** - you need to configure them yourself (see Installation section). Only the sidebar internal keymaps are built-in.
+
+### Built-in Keymaps (Sidebar Internal Only)
+
+These work automatically when you open the sidebar:
+- `j/k` - Navigate up/down in sidebar
+- `<CR>` - Switch to selected buffer
+- `d` - Close selected buffer (with modification check)
+- `q` - Close sidebar
+- `h` - Toggle history display mode (yes/no/auto)
+- `p` - Toggle path display mode (yes/no/auto)
+
+### Recommended Keymaps (User Configuration Required)
+
+You need to configure these in your plugin manager setup (see Installation examples):
+
+**Sidebar Control:**
 - `<leader>vb` - Toggle vertical bufferline sidebar
 - `<leader>ve` - Toggle expand all groups mode
-- `<leader>vi` - Toggle showing inactive groups (default: only show active group)
+- `<leader>vi` - Toggle showing inactive groups
 
-### Group Management
+**Group Management:**
 - `<leader>gc` - Create new unnamed group (instant creation)
 - `<leader>gr` - Rename current group (with input prompt)
 - `<leader>gn` - Switch to next group
@@ -37,20 +53,12 @@ A Neovim plugin that provides a vertical sidebar displaying buffer groups with e
 - `<leader>gU` - Move current group up in the list
 - `<leader>gD` - Move current group down in the list
 
-### Buffer Navigation (within sidebar)
-- `<CR>` - Switch to selected buffer
-- `d` - Close selected buffer (with modification check)
-- `q` - Close sidebar
-- `j/k` - Navigate up/down
-- `h` - Toggle history display mode (yes/no/auto)
-- `p` - Toggle path display mode (yes/no/auto)
-
-### Buffer Quick Access
+**Buffer Quick Access:**
 - `<leader>1` to `<leader>9` - Quick switch to buffers 1-9 in current group
 - `<leader>0` - Switch to 10th buffer in current group
 - `<leader>p` - BufferLine picking mode (shows only current group buffers)
 
-### History Quick Access
+**History Quick Access:**
 - `<leader>h1` to `<leader>h9` - Quick switch to recent files 1-9 in current group history
 
 ## Commands
