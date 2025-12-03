@@ -319,6 +319,61 @@ Each group maintains its own history of recently accessed files. The current act
 3 📄 index.html
 ```
 
+## Session Management
+
+The plugin **automatically manages sessions** - no manual commands needed!
+
+### How It Works
+
+**Auto-Serialization (Enabled by Default):**
+- Every 3 seconds, the plugin automatically saves your group configuration to `vim.g.VerticalBufferlineSession`
+- When you use Neovim's `:mksession`, this global variable is automatically saved
+- When you restore a session with `:source`, your groups are automatically restored
+
+**What Gets Saved:**
+- All group structures and names
+- Buffer assignments to each group
+- Active group
+- Display mode settings
+- History data per group
+
+### Usage
+
+Simply use Neovim's native session commands:
+
+```vim
+" Save a session (includes all VBL state automatically)
+:mksession ~/my-project.vim
+
+" Restore a session (restores all VBL state automatically)
+:source ~/my-project.vim
+```
+
+That's it! No need to manually save or load VBL-specific sessions.
+
+### Configuration
+
+Session behavior can be customized:
+
+```lua
+require('vertical-bufferline').setup({
+  session = {
+    auto_serialize = true,              -- Auto-save state every 3 seconds (default: true)
+    serialize_interval = 3000,          -- How often to save (milliseconds)
+    optimize_serialize = true,          -- Only save when state changes (default: true)
+    mini_sessions_integration = true,   -- Works with mini.sessions (default: true)
+    auto_restore_prompt = true,         -- Show prompt when restoring (default: true)
+    confirm_restore = true,             -- Ask confirmation (default: true)
+  }
+})
+```
+
+### Integration
+
+- **mini.sessions**: Automatically integrates if you use mini.sessions plugin
+- **Native :mksession**: Works seamlessly with Neovim's built-in session management
+- **No conflicts**: The plugin state is saved as a global variable that doesn't interfere with other plugins
+
 ## Adaptive Width
 
 The sidebar automatically adjusts its width based on the content being displayed, providing an optimal balance between space efficiency and readability.
