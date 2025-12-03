@@ -364,7 +364,8 @@ function M.get_active_group()
     return find_group_by_id(groups_data.active_group_id)
 end
 
--- Get current active group ID
+--- Get current active group ID
+--- @return string|nil Active group ID or nil if none
 function M.get_active_group_id()
     return groups_data.active_group_id
 end

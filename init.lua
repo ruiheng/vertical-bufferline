@@ -1,5 +1,23 @@
 -- /home/ruiheng/config_files/nvim/lua/vertical-bufferline/init.lua
 
+---@class VerticalBufferline
+---@field setup fun(config?: table): nil Setup the plugin with configuration
+---@field toggle fun(): nil Toggle the sidebar on/off
+---@field refresh fun(reason?: string): nil Refresh the sidebar display
+---@field toggle_expand_all fun(): nil Toggle showing all groups expanded
+---@field create_group fun(name?: string): table|nil Create a new buffer group
+---@field delete_current_group fun(): nil Delete the currently active group
+---@field switch_to_next_group fun(): nil Switch to the next group
+---@field switch_to_prev_group fun(): nil Switch to the previous group
+---@field add_current_buffer_to_group fun(group_name: string): nil Add current buffer to a group
+---@field move_group_up fun(): nil Move current group up in the list
+---@field move_group_down fun(): nil Move current group down in the list
+---@field clear_history fun(group_id?: number|string): boolean Clear group history
+---@field switch_to_history_file fun(position: number): boolean Switch to a file from history
+---@field groups table Group management functions
+---@field commands table Command functions
+---@field session table Session management functions
+
 -- Anti-reload protection
 if _G._vertical_bufferline_init_loaded then
     return _G._vertical_bufferline_init_instance
@@ -1632,7 +1650,10 @@ local function complete_buffer_setup()
     api.nvim_buf_set_option(state_module.get_buf_id(), "modifiable", false)
 end
 
---- Refreshes the sidebar content with the current list of buffers.
+--- Refresh the sidebar display
+--- Updates all buffer states, group information, and highlights
+--- @param reason? string Optional reason for the refresh (for debugging)
+--- @return nil
 function M.refresh(reason)
     -- Auto-enable logging for refresh debugging (disabled for normal use)
     -- if not logger.is_enabled() and not _G._vbl_auto_logging_enabled then
@@ -2540,7 +2561,10 @@ function M.smart_close_buffer()
     end
 end
 
---- Toggle expand all groups mode (now equivalent to show inactive group buffers)
+--- Toggle between showing all groups expanded vs only active group
+--- When enabled, all groups show their buffer lists
+--- When disabled, only the active group shows its buffer list
+--- @return nil
 function M.toggle_expand_all()
     config_module.DEFAULTS.show_inactive_group_buffers = not config_module.DEFAULTS.show_inactive_group_buffers
     local status = config_module.DEFAULTS.show_inactive_group_buffers and "enabled" or "disabled"
@@ -2554,7 +2578,8 @@ function M.toggle_expand_all()
     end
 end
 
---- Toggle show inactive group buffers mode
+--- Toggle show inactive group buffers mode (alias for toggle_expand_all)
+--- @return nil
 function M.toggle_show_inactive_group_buffers()
     if not state_module.is_sidebar_open() then 
         return 
@@ -2734,7 +2759,9 @@ function M.check_quit_condition()
     end)
 end
 
---- Toggles the visibility of the sidebar.
+--- Toggle the vertical bufferline sidebar on/off
+--- Opens the sidebar if closed, closes it if open
+--- @return nil
 function M.toggle()
     if state_module.is_sidebar_open() then
         M.close_sidebar()
@@ -2790,18 +2817,45 @@ M.session = session
 M.state = state_module.get_raw_state()  -- Export state for session module use
 
 -- Convenient group operation functions
+
+--- Create a new buffer group
+--- @param name? string Optional name for the group (defaults to unnamed)
+--- @return table|nil group The created group object, or nil on failure
 M.create_group = function(name)
     return commands.create_group({args = name or ""})
 end
+
+--- Delete the currently active group
+--- @return nil
 M.delete_current_group = function() commands.delete_current_group() end
+
+--- Switch to the next group in the list
+--- @return nil
 M.switch_to_next_group = function() commands.next_group() end
+
+--- Switch to the previous group in the list
+--- @return nil
 M.switch_to_prev_group = function() commands.prev_group() end
+
+--- Add current buffer to a specific group
+--- @param group_name string Name or ID of the target group
+--- @return nil
 M.add_current_buffer_to_group = function(group_name)
     commands.add_buffer_to_group({args = group_name})
 end
+
+--- Move current group up in the group list
+--- @return nil
 M.move_group_up = function() commands.move_group_up() end
+
+--- Move current group down in the group list
+--- @return nil
 M.move_group_down = function() commands.move_group_down() end
-M.clear_history = function(group_id) 
+
+--- Clear history for a specific group or all groups
+--- @param group_id? number|string Group ID to clear history for (nil clears all groups)
+--- @return boolean success True if history was cleared successfully
+M.clear_history = function(group_id)
     local groups = require('vertical-bufferline.groups')
     local success = groups.clear_group_history(group_id)
     if success then
@@ -2809,10 +2863,40 @@ M.clear_history = function(group_id)
     end
     return success
 end
+
+--- Cycle through path display modes (yes/no/auto)
+--- @return nil
 M.cycle_show_path = M.cycle_show_path_setting
+
+--- Cycle through history display modes (yes/no/auto)
+--- @return nil
 M.cycle_show_history = M.cycle_show_history_setting
 
 --- Setup function for user configuration (e.g., from lazy.nvim)
+--- @param user_config? table Configuration options
+--- @field user_config.width? number Minimum sidebar width (default: 25)
+--- @field user_config.max_width? number Maximum sidebar width (default: 60)
+--- @field user_config.adaptive_width? boolean Enable adaptive width sizing (default: true)
+--- @field user_config.show_inactive_group_buffers? boolean Show buffer list for inactive groups (default: false)
+--- @field user_config.show_icons? boolean Show file type emoji icons (default: false)
+--- @field user_config.position? "left"|"right" Sidebar position (default: "left")
+--- @field user_config.show_tree_lines? boolean Show tree-style connection lines (default: false)
+--- @field user_config.floating? boolean Use floating window instead of split (default: false)
+--- @field user_config.auto_create_groups? boolean Enable automatic group creation (default: true)
+--- @field user_config.auto_add_new_buffers? boolean Auto-add new buffers to active group (default: true)
+--- @field user_config.show_path? "yes"|"no"|"auto" Path display mode (default: "auto")
+--- @field user_config.path_style? "relative"|"absolute"|"smart" Path display style (default: "relative")
+--- @field user_config.path_max_length? number Maximum path display length (default: 50)
+--- @field user_config.align_with_cursor? boolean Align content with cursor position (default: true)
+--- @field user_config.show_history? "yes"|"no"|"auto" History display mode (default: "auto")
+--- @field user_config.history_size? number Maximum files to track per group (default: 10)
+--- @field user_config.history_auto_threshold? number Min files for auto mode to show history (default: 2)
+--- @field user_config.history_display_count? number Max history items to display (default: 7)
+--- @field user_config.auto_save? boolean Auto-save session on exit (default: false)
+--- @field user_config.auto_load? boolean Auto-load session on startup (default: false)
+--- @field user_config.session_name_strategy? "cwd_hash"|"cwd_path"|"manual" Session naming strategy (default: "cwd_hash")
+--- @field user_config.session? table Session integration settings
+--- @return nil
 function M.setup(user_config)
     if user_config then
         -- Merge user configuration with defaults
