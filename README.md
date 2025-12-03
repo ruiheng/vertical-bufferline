@@ -23,11 +23,9 @@ A Neovim plugin that provides a vertical sidebar displaying buffer groups with e
 
 ## Keymaps
 
-**Note**: Most keymaps below are **not provided by the plugin** - you need to configure them yourself (see Installation section). Only the sidebar internal keymaps are built-in.
-
 ### Built-in Keymaps (Sidebar Internal Only)
 
-These work automatically when you open the sidebar:
+These keymaps are **hardcoded** and work automatically when the sidebar is open:
 - `j/k` - Navigate up/down in sidebar
 - `<CR>` - Switch to selected buffer
 - `d` - Close selected buffer (with modification check)
@@ -35,9 +33,9 @@ These work automatically when you open the sidebar:
 - `h` - Toggle history display mode (yes/no/auto)
 - `p` - Toggle path display mode (yes/no/auto)
 
-### Recommended Keymaps (User Configuration Required)
+### Plugin Functions (Require User Configuration)
 
-You need to configure these in your plugin manager setup (see Installation examples):
+The following keymaps are **not automatically configured** - you need to set them up in your plugin manager. See Installation section for examples.
 
 **Sidebar Control:**
 - `<leader>vb` - Toggle vertical bufferline sidebar
@@ -45,21 +43,42 @@ You need to configure these in your plugin manager setup (see Installation examp
 - `<leader>vi` - Toggle showing inactive groups
 
 **Group Management:**
-- `<leader>gc` - Create new unnamed group (instant creation)
-- `<leader>gr` - Rename current group (with input prompt)
+- `<leader>gc` - Create new unnamed group
+- `<leader>gr` - Rename current group
 - `<leader>gn` - Switch to next group
 - `<leader>gp` - Switch to previous group
 - `<leader>g1` to `<leader>g9` - Switch directly to group 1-9
 - `<leader>gU` - Move current group up in the list
 - `<leader>gD` - Move current group down in the list
 
-**Buffer Quick Access:**
+**History Quick Access:**
+- `<leader>h1` to `<leader>h9` - Quick switch to recent files 1-9 in current group history
+
+### Recommended BufferLine Integration
+
+This plugin is designed to work with [bufferline.nvim](https://github.com/akinsho/bufferline.nvim). Here are recommended bufferline keymaps that complement this plugin:
+
+**Buffer Quick Access (provided by bufferline.nvim):**
 - `<leader>1` to `<leader>9` - Quick switch to buffers 1-9 in current group
 - `<leader>0` - Switch to 10th buffer in current group
 - `<leader>p` - BufferLine picking mode (shows only current group buffers)
 
-**History Quick Access:**
-- `<leader>h1` to `<leader>h9` - Quick switch to recent files 1-9 in current group history
+Example bufferline configuration:
+```lua
+-- In your bufferline.nvim setup
+require('bufferline').setup({
+  options = {
+    numbers = "ordinal",  -- Shows 1, 2, 3... for <leader>1-9 access
+  }
+})
+
+-- Keymaps for bufferline (add to your keymap configuration)
+for i = 1, 9 do
+  vim.keymap.set('n', '<leader>' .. i, '<cmd>BufferLineGoToBuffer ' .. i .. '<cr>',
+    { desc = "Go to buffer " .. i })
+end
+vim.keymap.set('n', '<leader>p', '<cmd>BufferLinePick<cr>', { desc = "Pick buffer" })
+```
 
 ## Commands
 

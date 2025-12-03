@@ -321,12 +321,8 @@ Debug Commands:                                *vertical-bufferline-debug-comman
 ==============================================================================
 7. KEYMAPS                                       *vertical-bufferline-keymaps*
 
-NOTE: Most keymaps below require user configuration. Only sidebar internal
-keymaps are built-in. See |vertical-bufferline-installation| for setup
-examples with keymaps.
-
 Built-in Keymaps (Sidebar Internal):        *vertical-bufferline-builtin-keys*
-These work automatically when the sidebar is open:
+These keymaps are hardcoded and work automatically when the sidebar is open:
 j/k                                   Navigate up/down in sidebar
 <CR>                                  Switch to selected buffer
 d                                     Close selected buffer
@@ -334,7 +330,10 @@ q                                     Close sidebar
 h                                     Toggle history display mode
 p                                     Toggle path display mode
 
-Recommended Keymaps (User Configuration Required):
+Plugin Functions (User Configuration Required):
+
+NOTE: The following keymaps require user configuration. See examples below
+and |vertical-bufferline-installation| for setup.
 
 Sidebar Control:
 <leader>vb                            Toggle vertical bufferline sidebar
@@ -350,18 +349,23 @@ Group Management:
 <leader>gU                            Move current group up in the list
 <leader>gD                            Move current group down in the list
 
-Buffer Quick Access:
-<leader>1 to <leader>9                Quick switch to buffers 1-9 in current group
-<leader>0                             Switch to 10th buffer in current group
-<leader>p                             BufferLine picking mode
-
 History Quick Access:                          *vertical-bufferline-history-keymaps*
 <leader>h1 to <leader>h9              Quick switch to recent files 1-9 in history
                                       (<leader>h1 = most recent, <leader>h2 = second most recent, etc.)
 
-Example keymap configuration:
+Recommended BufferLine Integration:     *vertical-bufferline-bufferline-keymaps*
+
+This plugin is designed to work with bufferline.nvim. The following keymaps
+are provided by bufferline.nvim (not this plugin) and complement the workflow:
+
+Buffer Quick Access (provided by bufferline.nvim):
+<leader>1 to <leader>9                Quick switch to buffers 1-9 in current group
+<leader>0                             Switch to 10th buffer in current group
+<leader>p                             BufferLine picking mode
+
+Example configuration with both plugins:
 >lua
-    -- Using lazy.nvim
+    -- Vertical Bufferline keymaps (using lazy.nvim)
     keys = {
       { "<leader>vb", "<cmd>lua require('vertical-bufferline').toggle()<cr>",
         desc = "Toggle vertical bufferline" },
@@ -369,8 +373,16 @@ Example keymap configuration:
         desc = "Create new group" },
       { "<leader>gn", "<cmd>lua require('vertical-bufferline').switch_to_next_group()<cr>",
         desc = "Next group" },
-      -- Add more keymaps as needed
+      -- Add more vertical-bufferline keymaps as needed
     }
+
+    -- BufferLine keymaps (add to your keymap configuration)
+    for i = 1, 9 do
+      vim.keymap.set('n', '<leader>' .. i, '<cmd>BufferLineGoToBuffer ' .. i .. '<cr>',
+        { desc = "Go to buffer " .. i })
+    end
+    vim.keymap.set('n', '<leader>p', '<cmd>BufferLinePick<cr>',
+      { desc = "Pick buffer" })
 <
 
 ==============================================================================
