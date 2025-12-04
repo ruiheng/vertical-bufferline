@@ -1,6 +1,17 @@
 # Vertical Bufferline
 
-A Neovim plugin that provides a vertical sidebar displaying buffer groups with enhanced organization and navigation features.
+**Shows the buffers from your bufferline in a vertical sidebar, organized by groups.**
+
+Are you tired of your horizontal bufferline truncating filenames when you have many files open? Especially on a wide monitor, all that empty space could be put to better use.
+
+This plugin reimagines buffer management by transforming that wasted space into a powerful vertical sidebar. It provides a clear, comprehensive list of all your open buffers, so you can see everything at a glance.
+
+But a simple list isn't enough for a complex project. As the number of buffers grows, it becomes difficult to quickly select a specific one or even see them all at once. To solve this, Vertical Bufferline introduces two key features for elegant organization at scale:
+
+*   **Buffer Groups:** Organize your buffers into logical contexts (e.g., "Frontend", "Backend", "Tests"). The standard bufferline seamlessly integrates, showing only the files for your *current* group, keeping your workspace clean and focused.
+*   **Group History:** Quickly jump to the most recently used files within the active group, providing instant access to your most relevant files.
+
+It's an intuitive way to manage complex projects and turn clutter into clarity.
 
 ## Features
 
