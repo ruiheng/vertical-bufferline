@@ -775,7 +775,7 @@ require('vertical-bufferline').setup()
 ### Requirements
 
 - Neovim 0.8.0 or higher
-- Optional: [bufferline.nvim](https://github.com/akinsho/bufferline.nvim) for enhanced integration
+- [bufferline.nvim](https://github.com/akinsho/bufferline.nvim)
 
 ### Post-Installation Setup
 
