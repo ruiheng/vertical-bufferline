@@ -463,7 +463,7 @@ For lazy.nvim users, you can configure the plugin with custom options:
 
 ```lua
 {
-  "your-username/vertical-bufferline",
+  "ruiheng/vertical-bufferline",
   opts = {
     -- UI settings
     width = 25,                     -- Minimum sidebar width (for adaptive sizing)
@@ -523,7 +523,7 @@ For lazy.nvim users, you can configure the plugin with custom options:
 #### Minimal Setup
 ```lua
 {
-  "your-username/vertical-bufferline",
+  "ruiheng/vertical-bufferline",
   config = function()
     require('vertical-bufferline').setup()
   end
@@ -533,7 +533,7 @@ For lazy.nvim users, you can configure the plugin with custom options:
 #### Power User Setup
 ```lua
 {
-  "your-username/vertical-bufferline",
+  "ruiheng/vertical-bufferline",
   opts = {
     width = 30,
     max_width = 70,
@@ -567,7 +567,7 @@ For lazy.nvim users, you can configure the plugin with custom options:
 #### IDE-Style Setup
 ```lua
 {
-  "your-username/vertical-bufferline",
+  "ruiheng/vertical-bufferline",
   opts = {
     width = 25,
     max_width = 50,
@@ -594,7 +594,7 @@ For lazy.nvim users, you can configure the plugin with custom options:
 #### Fixed Width Setup (Disable Adaptive Width)
 ```lua
 {
-  "your-username/vertical-bufferline",
+  "ruiheng/vertical-bufferline",
   opts = {
     width = 40,
     adaptive_width = false,  -- Use traditional fixed width
@@ -700,7 +700,7 @@ Add to your lazy.nvim configuration:
 
 ```lua
 {
-  "your-username/vertical-bufferline",
+  "ruiheng/vertical-bufferline",
   opts = {
     width = 40,
     expand_all_groups = true,
@@ -721,7 +721,7 @@ Add to your lazy.nvim configuration:
 
 ```lua
 use {
-  'your-username/vertical-bufferline',
+  'ruiheng/vertical-bufferline',
   config = function()
     require('vertical-bufferline').setup({
       width = 40,
@@ -736,7 +736,7 @@ use {
 ### Using vim-plug
 
 ```vim
-Plug 'your-username/vertical-bufferline'
+Plug 'ruiheng/vertical-bufferline'
 
 " In your init.vim or init.lua
 lua << EOF
@@ -752,7 +752,7 @@ EOF
 ### Using dein.vim
 
 ```vim
-call dein#add('your-username/vertical-bufferline')
+call dein#add('ruiheng/vertical-bufferline')
 
 " Configuration in init.vim
 lua << EOF
@@ -764,7 +764,7 @@ EOF
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/your-username/vertical-bufferline.git ~/.local/share/nvim/site/pack/plugins/start/vertical-bufferline
+git clone https://github.com/ruiheng/vertical-bufferline.git ~/.local/share/nvim/site/pack/plugins/start/vertical-bufferline
 ```
 
 2. Add to your init.lua:
