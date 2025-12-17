@@ -2665,7 +2665,8 @@ local function initialize_plugin()
     api.nvim_command("autocmd WinClosed * lua require('vertical-bufferline').check_quit_condition()")
 
     -- Add cursor alignment triggers (only for VBL-managed file buffers)
-    api.nvim_command("autocmd CursorMoved,CursorMovedI * lua require('vertical-bufferline').refresh_cursor_alignment()")
+    -- WinScrolled is needed to catch viewport changes from zz, zt, zb, etc.
+    api.nvim_command("autocmd CursorMoved,CursorMovedI,WinScrolled * lua require('vertical-bufferline').refresh_cursor_alignment()")
 
     api.nvim_command("augroup END")
 
