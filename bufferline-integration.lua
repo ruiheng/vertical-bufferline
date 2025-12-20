@@ -672,6 +672,48 @@ function M.smart_close_buffer(target_buf)
     -- Now safe to delete target buffer (we definitely have another listed buffer)
     if vim.api.nvim_buf_is_valid(target_buf) then
         logger.info("smart_close", "deleting target buffer", { target_buf = target_buf })
+
+        -- Find a suitable alternate buffer from group history or other group buffers
+        -- This ensures Ctrl-^ switches to a valid buffer instead of unnamed/deleted buffer
+        local alternate_buf = nil
+        local current_buf = vim.api.nvim_get_current_buf()
+
+        if current_group and current_group.history then
+            -- Look for the most recent buffer in history that isn't the target or current
+            for i = #current_group.history, 1, -1 do
+                local hist_buf = current_group.history[i]
+                if hist_buf ~= target_buf and hist_buf ~= current_buf and
+                   vim.api.nvim_buf_is_valid(hist_buf) and
+                   vim.tbl_contains(current_group.buffers, hist_buf) then
+                    alternate_buf = hist_buf
+                    break
+                end
+            end
+        end
+
+        -- If we didn't find an alternate from history, use any other buffer in group
+        if not alternate_buf and current_group then
+            for _, buf_id in ipairs(current_group.buffers) do
+                if buf_id ~= target_buf and buf_id ~= current_buf and
+                   vim.api.nvim_buf_is_valid(buf_id) then
+                    alternate_buf = buf_id
+                    break
+                end
+            end
+        end
+
+        -- Set alternate buffer by briefly switching to it then back
+        -- This is the standard Vim way to set the alternate buffer
+        if alternate_buf and vim.api.nvim_buf_is_valid(alternate_buf) then
+            vim.cmd(string.format("silent! buffer %d", alternate_buf))
+            vim.cmd(string.format("silent! buffer %d", current_buf))
+            logger.info("smart_close", "set alternate buffer", {
+                alternate_buf = alternate_buf,
+                alternate_name = vim.api.nvim_buf_get_name(alternate_buf)
+            })
+        end
+
+        -- Now delete the target buffer
         pcall(vim.api.nvim_buf_delete, target_buf, { force = true })
     end
 
