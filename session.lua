@@ -76,12 +76,33 @@ local function finalize_session_restore(session_data, opened_count, total_groups
         end
         
         if target_buf then
+            local old_buf = vim.api.nvim_get_current_buf()
             logger.info("session", "switching to target buffer", {
-                from_buf = vim.api.nvim_get_current_buf(),
+                from_buf = old_buf,
                 to_buf = target_buf,
                 to_buf_name = vim.api.nvim_buf_get_name(target_buf)
             })
             vim.api.nvim_set_current_buf(target_buf)
+
+            -- Clean up initial empty buffer if it exists (created by nvim -S Session.vim)
+            if vim.api.nvim_buf_is_valid(old_buf) and old_buf ~= target_buf then
+                local old_buf_name = vim.api.nvim_buf_get_name(old_buf)
+                local old_buf_modified = vim.api.nvim_buf_get_option(old_buf, 'modified')
+                -- Only delete if it's unnamed, unmodified, and not in any group
+                if old_buf_name == "" and not old_buf_modified then
+                    local is_in_group = false
+                    for _, group in ipairs(groups.get_all_groups()) do
+                        if vim.tbl_contains(group.buffers, old_buf) then
+                            is_in_group = true
+                            break
+                        end
+                    end
+                    if not is_in_group then
+                        logger.info("session", "cleaning up initial empty buffer", { buf_id = old_buf })
+                        pcall(vim.api.nvim_buf_delete, old_buf, { force = false })
+                    end
+                end
+            end
         else
             logger.warn("session", "no valid target buffer found", {
                 group_buffers = active_group.buffers,
