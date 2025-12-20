@@ -21,7 +21,7 @@ It's an intuitive way to manage complex projects and turn clutter into clarity.
 - **Dynamic buffer grouping** with automatic management
 - **Seamless bufferline integration** - bufferline only shows current group's buffers
 - **Perfect picking mode compatibility** with synchronized highlighting
-- **Two display modes**: Expand all groups (default) or show only active group
+- **Two display modes**: Show only active group (default) or expand all groups
 - **Smart filename disambiguation** - automatically resolves duplicate filenames with minimal path context
 - **Cursor alignment** - VBL content automatically aligns with your cursor position in the main window
 
@@ -46,24 +46,23 @@ These keymaps are **hardcoded** and work automatically when the sidebar is open:
 
 ### Plugin Functions (Require User Configuration)
 
-The following keymaps are **not automatically configured** - you need to set them up in your plugin manager. See Installation section for examples.
+The following functions are available for you to map to your preferred keybindings. See Installation section for keymap examples.
 
 **Sidebar Control:**
-- `<leader>vb` - Toggle vertical bufferline sidebar
-- `<leader>ve` - Toggle expand all groups mode
-- `<leader>vi` - Toggle showing inactive groups
+- `require('vertical-bufferline').toggle()` - Toggle vertical bufferline sidebar
+- `require('vertical-bufferline').toggle_show_inactive_group_buffers()` - Toggle showing inactive group buffers
+- `require('vertical-bufferline').close_sidebar()` - Close the sidebar
 
 **Group Management:**
-- `<leader>gc` - Create new unnamed group
-- `<leader>gr` - Rename current group
-- `<leader>gn` - Switch to next group
-- `<leader>gp` - Switch to previous group
-- `<leader>g1` to `<leader>g9` - Switch directly to group 1-9
-- `<leader>gU` - Move current group up in the list
-- `<leader>gD` - Move current group down in the list
+- `require('vertical-bufferline').create_group()` - Create new unnamed group
+- `require('vertical-bufferline').switch_to_next_group()` - Switch to next group
+- `require('vertical-bufferline').switch_to_prev_group()` - Switch to previous group
+- `require('vertical-bufferline').move_group_up()` - Move current group up in the list
+- `require('vertical-bufferline').move_group_down()` - Move current group down in the list
+- `require('vertical-bufferline').groups.switch_to_group_by_display_number(n)` - Switch directly to group n (1-9)
 
 **History Quick Access:**
-- `<leader>h1` to `<leader>h9` - Quick switch to recent files 1-9 in current group history
+- `require('vertical-bufferline').switch_to_history_file(n)` - Switch to nth recent file in current group history (1-9)
 
 ### Recommended BufferLine Integration
 
@@ -103,8 +102,7 @@ vim.keymap.set('n', '<leader>p', '<cmd>BufferLinePick<cr>', { desc = "Pick buffe
 ### Navigation
 - `:VBufferLineNextGroup` - Switch to next group
 - `:VBufferLinePrevGroup` - Switch to previous group
-- `:VBufferLineToggleExpandAll` - Toggle expand all groups mode
-- `:VBufferLineToggleInactiveGroups` - Toggle showing buffer lists for inactive groups
+- `:VBufferLineToggleInactiveGroupBuffers` - Toggle showing buffer lists for inactive groups (same as `:VBufferLineToggleExpandAll`)
 
 ### Group Reordering
 - `:VBufferLineMoveGroupUp` - Move current group up in the list
@@ -120,7 +118,18 @@ vim.keymap.set('n', '<leader>p', '<cmd>BufferLinePick<cr>', { desc = "Pick buffe
 
 ## Display Modes
 
-### Expand All Groups (Default)
+### Active Group Only Mode (Default)
+Shows only the current active group's buffers:
+```
+[1] ● Frontend (3 buffers)
+├─ ► 1 🌙 App.tsx
+├─ 2 📄 Button.jsx
+└─ 3 📝 README.md
+
+[2] ○ Backend (2 buffers)
+```
+
+### Expand All Groups Mode
 Shows all groups expanded with their buffers visible:
 ```
 [1] ● Frontend (3 buffers)
@@ -133,18 +142,7 @@ Shows all groups expanded with their buffers visible:
 └─ 2 📋 config.json
 ```
 
-### Active Group Only Mode
-Shows only the current active group's buffers (classic mode):
-```
-[1] ● Frontend (3 buffers)
-├─ ► 1 🌙 App.tsx
-├─ 2 📄 Button.jsx
-└─ 3 📝 README.md
-
-[2] ○ Backend (2 buffers)
-```
-
-Toggle between modes with `<leader>ve` or `:VBufferLineToggleExpandAll`.
+Toggle between modes with `:VBufferLineToggleInactiveGroupBuffers` or by calling `require('vertical-bufferline').toggle_show_inactive_group_buffers()`.
 
 ## Interface Elements
 
@@ -469,8 +467,7 @@ For lazy.nvim users, you can configure the plugin with custom options:
     width = 25,                     -- Minimum sidebar width (for adaptive sizing)
     max_width = 60,                 -- Maximum sidebar width (for adaptive sizing)
     adaptive_width = true,          -- Enable adaptive width based on content
-    expand_all_groups = true,       -- Default to expand all groups mode
-    show_inactive_groups = false,   -- Show buffer lists for inactive groups (default: only active group)
+    show_inactive_group_buffers = false,  -- Show buffer lists for inactive groups (default: only active group)
     show_icons = false,             -- Show file type emoji icons
     position = "left",              -- Sidebar position: "left" or "right"
     show_tree_lines = false,        -- Show tree-style connection lines
@@ -510,7 +507,7 @@ For lazy.nvim users, you can configure the plugin with custom options:
   },
   keys = {
     { "<leader>vb", "<cmd>lua require('vertical-bufferline').toggle()<cr>", desc = "Toggle vertical bufferline" },
-    { "<leader>ve", "<cmd>lua require('vertical-bufferline').toggle_expand_all()<cr>", desc = "Toggle expand all groups" },
+    { "<leader>ve", "<cmd>lua require('vertical-bufferline').toggle_show_inactive_group_buffers()<cr>", desc = "Toggle showing inactive group buffers" },
     { "<leader>gc", "<cmd>lua require('vertical-bufferline').create_group()<cr>", desc = "Create new group" },
     { "<leader>gn", "<cmd>lua require('vertical-bufferline').switch_to_next_group()<cr>", desc = "Next group" },
     { "<leader>gp", "<cmd>lua require('vertical-bufferline').switch_to_prev_group()<cr>", desc = "Previous group" },
@@ -555,11 +552,11 @@ For lazy.nvim users, you can configure the plugin with custom options:
   },
   keys = {
     { "<leader>vb", "<cmd>lua require('vertical-bufferline').toggle()<cr>" },
-    { "<leader>ve", "<cmd>lua require('vertical-bufferline').toggle_expand_all()<cr>" },
-    { "<leader>vi", "<cmd>VBufferLineToggleInactiveGroups<cr>" },
+    { "<leader>ve", "<cmd>lua require('vertical-bufferline').toggle_show_inactive_group_buffers()<cr>" },
+    { "<leader>vi", "<cmd>VBufferLineToggleInactiveGroupBuffers<cr>" },
     { "<leader>gc", "<cmd>lua require('vertical-bufferline').create_group()<cr>" },
     { "<leader>gd", "<cmd>VBufferLineDeleteCurrentGroup<cr>" },
-    { "<leader>gt", "<cmd>VBufferLineToggleExpandAll<cr>" },
+    { "<leader>gt", "<cmd>VBufferLineToggleInactiveGroupBuffers<cr>" },
   }
 }
 ```
@@ -573,7 +570,7 @@ For lazy.nvim users, you can configure the plugin with custom options:
     max_width = 50,
     adaptive_width = true,
     position = "left",
-    expand_all_groups = false,  -- Start with collapsed groups
+    show_inactive_group_buffers = false,  -- Show only active group (default)
     show_icons = true,
     show_tree_lines = true,
     show_path = "auto",
@@ -614,7 +611,7 @@ If you prefer manual setup, the plugin initializes automatically when the sideba
     width = 25,                     -- Minimum sidebar width (for adaptive sizing)
     max_width = 60,                 -- Maximum sidebar width (for adaptive sizing)
     adaptive_width = true,          -- Enable adaptive width based on content
-    expand_all_groups = true,       -- Default to expand all groups mode
+    show_inactive_group_buffers = false,  -- Show buffer lists for inactive groups (default: only active group)
     show_icons = false,             -- Show file type emoji icons
     position = "left",              -- Sidebar position: "left" or "right"
     
@@ -703,13 +700,13 @@ Add to your lazy.nvim configuration:
   "ruiheng/vertical-bufferline",
   opts = {
     width = 40,
-    expand_all_groups = true,
+    show_inactive_group_buffers = false,  -- Show only active group (default)
     show_icons = false,
     position = "left",
   },
   keys = {
     { "<leader>vb", "<cmd>lua require('vertical-bufferline').toggle()<cr>", desc = "Toggle vertical bufferline" },
-    { "<leader>ve", "<cmd>lua require('vertical-bufferline').toggle_expand_all()<cr>", desc = "Toggle expand all groups" },
+    { "<leader>ve", "<cmd>lua require('vertical-bufferline').toggle_show_inactive_group_buffers()<cr>", desc = "Toggle showing inactive group buffers" },
     { "<leader>gc", "<cmd>lua require('vertical-bufferline').create_group()<cr>", desc = "Create new group" },
     { "<leader>gn", "<cmd>lua require('vertical-bufferline').switch_to_next_group()<cr>", desc = "Next group" },
     { "<leader>gp", "<cmd>lua require('vertical-bufferline').switch_to_prev_group()<cr>", desc = "Previous group" },
@@ -725,7 +722,7 @@ use {
   config = function()
     require('vertical-bufferline').setup({
       width = 40,
-      expand_all_groups = true,
+      show_inactive_group_buffers = false,  -- Show only active group (default)
       show_icons = false,
       position = "left",
     })
@@ -742,7 +739,7 @@ Plug 'ruiheng/vertical-bufferline'
 lua << EOF
 require('vertical-bufferline').setup({
   width = 40,
-  expand_all_groups = true,
+  show_inactive_group_buffers = false,  -- Show only active group (default)
   show_icons = false,
   position = "left",
 })
@@ -807,8 +804,8 @@ vim.api.nvim_create_autocmd("VimEnter", {
     end, { noremap = true, silent = true, desc = "Rename current buffer group" })
     
     vim.keymap.set('n', '<leader>ve', function()
-      vbl.toggle_expand_all()
-    end, { noremap = true, silent = true, desc = "Toggle expand all groups mode" })
+      vbl.toggle_show_inactive_group_buffers()
+    end, { noremap = true, silent = true, desc = "Toggle showing inactive group buffers" })
     
     -- Navigation keymaps
     vim.keymap.set('n', '<leader>gn', function()
