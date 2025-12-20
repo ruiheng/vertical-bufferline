@@ -84,25 +84,56 @@ local function finalize_session_restore(session_data, opened_count, total_groups
             })
             vim.api.nvim_set_current_buf(target_buf)
 
-            -- Clean up initial empty buffer if it exists (created by nvim -S Session.vim)
-            if vim.api.nvim_buf_is_valid(old_buf) and old_buf ~= target_buf then
-                local old_buf_name = vim.api.nvim_buf_get_name(old_buf)
-                local old_buf_modified = vim.api.nvim_buf_get_option(old_buf, 'modified')
-                -- Only delete if it's unnamed, unmodified, and not in any group
-                if old_buf_name == "" and not old_buf_modified then
-                    local is_in_group = false
-                    for _, group in ipairs(groups.get_all_groups()) do
-                        if vim.tbl_contains(group.buffers, old_buf) then
-                            is_in_group = true
-                            break
+            -- Clean up initial empty buffer and its windows (created by nvim -S Session.vim)
+            vim.schedule(function()
+                if vim.api.nvim_buf_is_valid(old_buf) and old_buf ~= target_buf then
+                    local old_buf_name = vim.api.nvim_buf_get_name(old_buf)
+                    local old_buf_modified = vim.api.nvim_buf_get_option(old_buf, 'modified')
+                    -- Only delete if it's unnamed, unmodified, and not in any group
+                    if old_buf_name == "" and not old_buf_modified then
+                        local is_in_group = false
+                        for _, group in ipairs(groups.get_all_groups()) do
+                            if vim.tbl_contains(group.buffers, old_buf) then
+                                is_in_group = true
+                                break
+                            end
+                        end
+                        if not is_in_group then
+                            logger.info("session", "cleaning up initial empty buffer and windows", { buf_id = old_buf })
+
+                            -- First, close all windows showing this buffer (except sidebar)
+                            local vbl = require('vertical-bufferline')
+                            local sidebar_win = vbl.state and vbl.state.is_sidebar_open() and vbl.state.get_win_id() or nil
+                            local current_win = vim.api.nvim_get_current_win()
+
+                            for _, win in ipairs(vim.api.nvim_list_wins()) do
+                                if vim.api.nvim_win_is_valid(win) and win ~= sidebar_win then
+                                    local win_buf = vim.api.nvim_win_get_buf(win)
+                                    if win_buf == old_buf then
+                                        -- This window is showing the empty buffer
+                                        if win == current_win then
+                                            -- Don't close current window, just switch its buffer
+                                            if vim.api.nvim_buf_is_valid(target_buf) then
+                                                pcall(vim.api.nvim_win_set_buf, win, target_buf)
+                                            end
+                                        else
+                                            -- Close this extra window
+                                            logger.info("session", "closing window with empty buffer", {
+                                                win_id = win,
+                                                buf_id = old_buf
+                                            })
+                                            pcall(vim.api.nvim_win_close, win, false)
+                                        end
+                                    end
+                                end
+                            end
+
+                            -- Then delete the buffer
+                            pcall(vim.api.nvim_buf_delete, old_buf, { force = false })
                         end
                     end
-                    if not is_in_group then
-                        logger.info("session", "cleaning up initial empty buffer", { buf_id = old_buf })
-                        pcall(vim.api.nvim_buf_delete, old_buf, { force = false })
-                    end
                 end
-            end
+            end)
         else
             logger.warn("session", "no valid target buffer found", {
                 group_buffers = active_group.buffers,
@@ -120,6 +151,96 @@ local function finalize_session_restore(session_data, opened_count, total_groups
         if vbl.state and vbl.state.is_sidebar_open then
             vbl.refresh()
         end
+
+        -- Clean up extra windows that vim session may have created
+        -- Native vim session saves all windows including VBL sidebar,
+        -- so we might end up with duplicate windows after restoration
+        vim.defer_fn(function()
+            local state_module = require('vertical-bufferline.state')
+            local all_wins = vim.api.nvim_list_wins()
+            local sidebar_win = state_module.is_sidebar_open() and state_module.get_win_id() or nil
+            local main_wins = {}
+
+            -- Find all non-sidebar windows with their buffer info
+            for _, win in ipairs(all_wins) do
+                if vim.api.nvim_win_is_valid(win) and win ~= sidebar_win then
+                    local win_config = vim.api.nvim_win_get_config(win)
+                    -- Only consider normal windows (not floating)
+                    if win_config.relative == "" then
+                        local buf = vim.api.nvim_win_get_buf(win)
+                        local buf_name = vim.api.nvim_buf_get_name(buf)
+                        table.insert(main_wins, {
+                            win_id = win,
+                            buf_id = buf,
+                            buf_name = buf_name,
+                            is_empty = (buf_name == "")
+                        })
+                    end
+                end
+            end
+
+            logger.info("session", "cleanup extra windows", {
+                total_windows = #all_wins,
+                sidebar_win = sidebar_win,
+                main_windows_count = #main_wins
+            })
+
+            -- If we have more than 1 main window, keep the best one
+            if #main_wins > 1 then
+                logger.warn("session", "found extra windows from vim session", {
+                    extra_count = #main_wins - 1,
+                    windows = main_wins
+                })
+
+                -- Find the best window to keep (prefer non-empty buffer)
+                local keep_win = nil
+                local keep_idx = nil
+
+                -- First priority: window with active group's current buffer
+                if active_group and active_group.current_buffer then
+                    for i, win_info in ipairs(main_wins) do
+                        if win_info.buf_id == active_group.current_buffer then
+                            keep_win = win_info.win_id
+                            keep_idx = i
+                            break
+                        end
+                    end
+                end
+
+                -- Second priority: any window with non-empty buffer
+                if not keep_win then
+                    for i, win_info in ipairs(main_wins) do
+                        if not win_info.is_empty then
+                            keep_win = win_info.win_id
+                            keep_idx = i
+                            break
+                        end
+                    end
+                end
+
+                -- Fallback: keep first window
+                if not keep_win then
+                    keep_win = main_wins[1].win_id
+                    keep_idx = 1
+                end
+
+                logger.info("session", "keeping window", {
+                    win_id = keep_win,
+                    buf_name = main_wins[keep_idx].buf_name
+                })
+
+                -- Close all other windows
+                for i, win_info in ipairs(main_wins) do
+                    if i ~= keep_idx then
+                        logger.info("session", "closing extra window", {
+                            win_id = win_info.win_id,
+                            buf_name = win_info.buf_name
+                        })
+                        pcall(vim.api.nvim_win_close, win_info.win_id, false)
+                    end
+                end
+            end
+        end, 100) -- Delay a bit more to ensure VBL sidebar is fully opened
     end)
 end
 
