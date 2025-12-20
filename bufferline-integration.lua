@@ -569,6 +569,11 @@ function M.smart_close_buffer(target_buf)
         end
     end
 
+    -- CRITICAL: Pause sync timer to prevent race conditions
+    -- The sync timer might unlist buffers while we're in the middle of closing
+    local saved_sync_target = sync_target_group_id
+    M.set_sync_target(nil)
+
     -- Get all listed buffers
     local all_buffers = vim.api.nvim_list_bufs()
     local listed_buffers = {}
@@ -578,34 +583,102 @@ function M.smart_close_buffer(target_buf)
         end
     end
 
-    -- If this is the last listed buffer, directly use empty group display
-    if #listed_buffers <= 1 then
-        -- First delete target buffer
-        if vim.api.nvim_buf_is_valid(target_buf) then
-            pcall(vim.api.nvim_buf_delete, target_buf, { force = true })
-        end
+    -- Log buffer state for debugging
+    logger.info("smart_close", "closing buffer", {
+        target_buf = target_buf,
+        target_buf_name = vim.api.nvim_buf_get_name(target_buf),
+        total_listed = #listed_buffers,
+        total_all_buffers = #all_buffers
+    })
 
-        -- Directly handle empty group display (this will create [Empty Group] buffer and switch to it)
-        M.handle_empty_group_display()
-    else
-        -- If there are other buffers, first switch to the next one
-        local next_buf = nil
-        for _, buf_id in ipairs(listed_buffers) do
-            if buf_id ~= target_buf then
-                next_buf = buf_id
-                break
+    -- CRITICAL: Check if there are other buffers in the CURRENT GROUP
+    -- Don't just check global listed_buffers count, as some group buffers
+    -- might be temporarily unlisted by set_bufferline_buffers()
+    local groups = require('vertical-bufferline.groups')
+    local current_group = groups.get_active_group()
+    local group_has_other_buffers = false
+    local next_buf_in_group = nil
+
+    if current_group then
+        -- Check if group has other valid buffers besides target_buf
+        for _, buf_id in ipairs(current_group.buffers) do
+            if buf_id ~= target_buf and vim.api.nvim_buf_is_valid(buf_id) then
+                group_has_other_buffers = true
+                -- Find first valid buffer to switch to
+                if not next_buf_in_group then
+                    next_buf_in_group = buf_id
+                end
             end
         end
 
-        if next_buf then
-            vim.api.nvim_set_current_buf(next_buf)
-        end
+        logger.info("smart_close", "group buffer check", {
+            group_id = current_group.id,
+            group_name = current_group.name,
+            group_buffer_count = #current_group.buffers,
+            group_has_other_buffers = group_has_other_buffers,
+            next_buf_in_group = next_buf_in_group
+        })
+    end
 
-        -- Then delete target buffer
-        if vim.api.nvim_buf_is_valid(target_buf) then
-            pcall(vim.api.nvim_buf_delete, target_buf, { force = true })
+    -- CRITICAL FIX: Always create a listed buffer BEFORE deleting target
+    -- This absolutely prevents nvim from exiting due to no listed buffers
+    local fallback_buf = nil
+
+    if group_has_other_buffers and next_buf_in_group then
+        -- Group still has other buffers - switch to one of them
+        fallback_buf = next_buf_in_group
+        -- Ensure it's listed (it might have been unlisted by sync)
+        pcall(vim.api.nvim_buf_set_option, fallback_buf, 'buflisted', true)
+        logger.info("smart_close", "using group buffer as fallback", {
+            fallback_buf = fallback_buf,
+            fallback_name = vim.api.nvim_buf_get_name(fallback_buf)
+        })
+    elseif #listed_buffers > 1 then
+        -- Find another listed buffer
+        for _, buf_id in ipairs(listed_buffers) do
+            if buf_id ~= target_buf then
+                fallback_buf = buf_id
+                logger.info("smart_close", "using listed buffer as fallback", {
+                    fallback_buf = fallback_buf,
+                    fallback_name = vim.api.nvim_buf_get_name(fallback_buf)
+                })
+                break
+            end
         end
     end
+
+    -- If we found a fallback buffer, use it
+    if fallback_buf and vim.api.nvim_buf_is_valid(fallback_buf) then
+        pcall(vim.api.nvim_set_current_buf, fallback_buf)
+        logger.info("smart_close", "switched to fallback", {
+            current_buf = vim.api.nvim_get_current_buf(),
+            target_buf = target_buf,
+            fallback_buf = fallback_buf
+        })
+    else
+        -- No fallback found - create a NEW LISTED buffer to prevent exit
+        -- DON'T use handle_empty_group_display() as it creates unlisted buffer
+        logger.warn("smart_close", "no fallback found, creating new listed buffer", {})
+        vim.cmd("enew")
+        local new_buf = vim.api.nvim_get_current_buf()
+        -- Explicitly ensure it's listed
+        vim.api.nvim_buf_set_option(new_buf, 'buflisted', true)
+        logger.info("smart_close", "created emergency buffer", {
+            new_buf = new_buf,
+            is_listed = vim.api.nvim_buf_get_option(new_buf, 'buflisted')
+        })
+    end
+
+    -- Now safe to delete target buffer (we definitely have another listed buffer)
+    if vim.api.nvim_buf_is_valid(target_buf) then
+        logger.info("smart_close", "deleting target buffer", { target_buf = target_buf })
+        pcall(vim.api.nvim_buf_delete, target_buf, { force = true })
+    end
+
+    -- Restore sync timer (use schedule to ensure buffer operations complete first)
+    vim.schedule(function()
+        M.set_sync_target(saved_sync_target)
+    end)
 
     return true
 end

@@ -2636,6 +2636,9 @@ end
 
 -- Plugin initialization function (called on load)
 local function initialize_plugin()
+    -- Set global flag so bufferline knows VBL is enabled
+    vim.g.enable_vertical_bufferline = 1
+
     -- Setup commands
     commands.setup()
 
