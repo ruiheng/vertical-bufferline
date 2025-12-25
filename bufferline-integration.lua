@@ -717,10 +717,9 @@ function M.smart_close_buffer(target_buf)
         pcall(vim.api.nvim_buf_delete, target_buf, { force = true })
     end
 
-    -- Restore sync timer (use schedule to ensure buffer operations complete first)
-    vim.schedule(function()
-        M.set_sync_target(saved_sync_target)
-    end)
+    -- Restore sync timer immediately to prevent sync gaps
+    -- Buffer operations above are all synchronous, so safe to restore now
+    M.set_sync_target(saved_sync_target)
 
     return true
 end
