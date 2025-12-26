@@ -154,6 +154,28 @@ Toggle between modes with `:VBufferLineToggleInactiveGroupBuffers` or by calling
 - Each group header uses semantic highlight groups that adapt to your theme
 
 ### Buffer Lines
+
+**Dual Numbering System:**
+
+VBL displays buffer ordinal numbers to help you navigate efficiently. Each buffer shows its position with one or two numbers:
+
+- **Group Ordinal** (always shown): The buffer's ordinal position within the current group
+- **Visible Ordinal** (shown only when different): The buffer's ordinal position in bufferline's visible elements
+
+When bufferline truncates the list (many open buffers), some buffers won't appear in the horizontal bufferline. In this case, VBL shows both ordinals to clarify the buffer's location:
+
+```
+Format: [visible|group] or just [group] when they match
+
+Examples:
+  1 App.tsx            # 1st in both bufferline visible elements and group
+2|5 Utils.js           # 2nd in bufferline visible elements, 5th in group
+-|9 Config.json        # Not in bufferline visible elements, 9th in group
+```
+
+The visible ordinal corresponds to bufferline's ordinal numbers for `<leader>1`, `<leader>2`, etc. keymaps, making it easy to jump to visible buffers using these shortcuts.
+
+**Buffer Display Elements:**
 - `► 1 🌙 filename.lua` - Current buffer with arrow marker
 - `2 ● 📄 modified.js` - Modified buffer with dot indicator
 - `└─ 3 📋 src/config.json` - Tree structure with smart disambiguation for duplicate names
