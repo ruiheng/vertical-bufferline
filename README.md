@@ -66,23 +66,24 @@ The following functions are available for you to map to your preferred keybindin
 
 ### Recommended BufferLine Integration
 
-This plugin is designed to work with [bufferline.nvim](https://github.com/akinsho/bufferline.nvim). Here are recommended bufferline keymaps that complement this plugin:
+This plugin requires [bufferline.nvim](https://github.com/akinsho/bufferline.nvim). Configure bufferline to use VBL's smart buffer closing:
 
-**Buffer Quick Access (provided by bufferline.nvim):**
-- `<leader>1` to `<leader>9` - Quick switch to buffers 1-9 in current group
-- `<leader>0` - Switch to 10th buffer in current group
-- `<leader>p` - BufferLine picking mode (shows only current group buffers)
-
-Example bufferline configuration:
 ```lua
--- In your bufferline.nvim setup
 require('bufferline').setup({
   options = {
-    numbers = "ordinal",  -- Shows 1, 2, 3... for <leader>1-9 access
+    numbers = "ordinal",
+
+    -- Use VBL's smart buffer closing (avoids unwanted buffer switching)
+    close_command = function(bufnum)
+      require('vertical-bufferline.bufferline-integration').smart_close_buffer(bufnum)
+    end,
+    right_mouse_command = function(bufnum)
+      require('vertical-bufferline.bufferline-integration').smart_close_buffer(bufnum)
+    end,
   }
 })
 
--- Keymaps for bufferline (add to your keymap configuration)
+-- Quick access keymaps
 for i = 1, 9 do
   vim.keymap.set('n', '<leader>' .. i, '<cmd>BufferLineGoToBuffer ' .. i .. '<cr>',
     { desc = "Go to buffer " .. i })
