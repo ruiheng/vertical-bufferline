@@ -59,10 +59,10 @@ The following functions are available for you to map to your preferred keybindin
 - `require('vertical-bufferline').switch_to_prev_group()` - Switch to previous group
 - `require('vertical-bufferline').move_group_up()` - Move current group up in the list
 - `require('vertical-bufferline').move_group_down()` - Move current group down in the list
-- `require('vertical-bufferline').groups.switch_to_group_by_display_number(n)` - Switch directly to group n (1-9)
+- `require('vertical-bufferline').groups.switch_to_group_by_display_number(n)` - Switch directly to group n by display number
 
 **History Quick Access:**
-- `require('vertical-bufferline').switch_to_history_file(n)` - Switch to nth recent file in current group history (1-9)
+- `require('vertical-bufferline').switch_to_history_file(n)` - Switch to nth recent file in current group history
 
 ### Recommended BufferLine Integration
 
@@ -191,7 +191,7 @@ When using `<leader>p` (BufferLine picking), the sidebar shows hint characters:
 ## Workflow Examples
 
 ### Project Organization
-```bash
+```
 # Create groups for different project areas
 <leader>gc  # Create "Frontend" group (rename with <leader>gr)
 <leader>gc  # Create "Backend" group
@@ -208,7 +208,7 @@ When using `<leader>p` (BufferLine picking), the sidebar shows hint characters:
 ```
 
 ### File Type Organization
-```bash
+```
 # Automatically organize by opening files
 # Open React components → auto-added to current group
 # Switch to new group → <leader>gc
@@ -216,7 +216,7 @@ When using `<leader>p` (BufferLine picking), the sidebar shows hint characters:
 ```
 
 ### Quick Navigation
-```bash
+```
 # Within a group
 <leader>1   # First buffer
 <leader>2   # Second buffer
@@ -228,7 +228,7 @@ When using `<leader>p` (BufferLine picking), the sidebar shows hint characters:
 ```
 
 ### Session Persistence
-```bash
+```
 # Sessions are automatically managed via Neovim's :mksession
 # The plugin auto-serializes state every 3 seconds to vim.g.VerticalBufferlineSession
 # When you use :mksession, your group configuration is automatically saved
@@ -244,7 +244,7 @@ When using `<leader>p` (BufferLine picking), the sidebar shows hint characters:
 ### Advanced Workflow Examples
 
 #### Multi-Project Development
-```bash
+```
 # Working on frontend and backend simultaneously
 <leader>gc                       # Create "Frontend" group
 # Open React/Vue files → auto-added to Frontend group
@@ -260,7 +260,7 @@ When using `<leader>p` (BufferLine picking), the sidebar shows hint characters:
 ```
 
 #### Feature Branch Development
-```bash
+```
 # Create feature-specific groups
 <leader>gc                       # Create "Feature-Auth" group
 <leader>gc                       # Create "Tests" group
@@ -272,7 +272,7 @@ When using `<leader>p` (BufferLine picking), the sidebar shows hint characters:
 ```
 
 #### Code Review Workflow
-```bash
+```
 # Create review-specific groups
 <leader>gc                       # Create "Review-Files" group
 # Add files under review to this group
@@ -284,7 +284,7 @@ When using `<leader>p` (BufferLine picking), the sidebar shows hint characters:
 ```
 
 #### Large Codebase Navigation
-```bash
+```
 # Organize by module/component
 <leader>gc                       # "Core"
 <leader>gc                       # "Utils"  
@@ -323,9 +323,10 @@ Each group maintains its own history of recently accessed files. The current act
 - **Configurable display count**: Maximum number of history items shown (default: 5)
 
 ### History Quick Access
-- `<leader>h1` to `<leader>h9` - Quick switch to recent files 1-9 from current group's history
+- `<leader>h1` to `<leader>h9` - Quick switch to recent files from current group's history (typically mapped for positions 1-9)
 - `<leader>h1` accesses the most recent file (2nd in history list, after current file)
 - `<leader>h2` accesses the second most recent file (3rd in history list), etc.
+- The function accepts any position within history size; keymaps are conventionally set up for 1-9 for convenience
 - History entries are ordered by recency (most recent first)
 - History automatically updates when switching between files in the active group
 
