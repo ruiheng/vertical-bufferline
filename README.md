@@ -1,17 +1,50 @@
 # Vertical Bufferline
 
-**Shows the buffers from your bufferline in a vertical sidebar, organized by groups.**
+**Vertical sidebar for bufferline.nvim, with groups and history for large projects.**
 
-Are you tired of your horizontal bufferline truncating filenames when you have many files open? Especially on a wide monitor, all that empty space could be put to better use.
+Use the unused space on the left/right to show every buffer at a glance, organized by group. Bufferline.nvim then only shows the buffers for your *current* group, keeping the horizontal bar clean and focused.
 
-This plugin reimagines buffer management by transforming that wasted space into a powerful vertical sidebar. It provides a clear, comprehensive list of all your open buffers, so you can see everything at a glance.
+## Quick Start
 
-But a simple list isn't enough for a complex project. As the number of buffers grows, it becomes difficult to quickly select a specific one or even see them all at once. To solve this, Vertical Bufferline introduces two key features for elegant organization at scale:
+1) Install and set up bufferline.nvim (required).
+2) Install this plugin and call setup.
+3) Add your own keymaps (only the sidebar has built-in keymaps).
 
-*   **Buffer Groups:** Organize your buffers into logical contexts (e.g., "Frontend", "Backend", "Tests"). The standard bufferline seamlessly integrates, showing only the files for your *current* group, keeping your workspace clean and focused.
-*   **Group History:** Quickly jump to the most recently used files within the active group, providing instant access to your most relevant files.
+```lua
+-- lazy.nvim
+{
+  "ruiheng/vertical-bufferline",
+  dependencies = { "akinsho/bufferline.nvim" },
+  opts = {},
+  keys = {
+    -- Example keymaps (define your own)
+    { "<leader>vb", function() require("vertical-bufferline").toggle() end, desc = "Toggle VBL" },
+    { "<leader>gc", function() require("vertical-bufferline").create_group() end, desc = "Create group" },
+    { "<leader>gn", function() require("vertical-bufferline").switch_to_next_group() end, desc = "Next group" },
+  },
+}
+```
 
-It's an intuitive way to manage complex projects and turn clutter into clarity.
+Recommended bufferline integration (for smart buffer closing):
+```lua
+require('bufferline').setup({
+  options = {
+    numbers = "ordinal",
+    close_command = function(bufnum)
+      require('vertical-bufferline.bufferline-integration').smart_close_buffer(bufnum)
+    end,
+    right_mouse_command = function(bufnum)
+      require('vertical-bufferline.bufferline-integration').smart_close_buffer(bufnum)
+    end,
+  }
+})
+```
+
+## Core Concepts
+
+- **Groups**: Buffers are organized into groups. The sidebar shows groups and their buffers.
+- **Active group**: Only the active group's buffers appear in bufferline.nvim.
+- **History**: Each group keeps a recent-files list for fast jumping.
 
 ## Features
 
@@ -36,7 +69,7 @@ It's an intuitive way to manage complex projects and turn clutter into clarity.
 
 ### Built-in Keymaps (Sidebar Internal Only)
 
-These keymaps are **hardcoded** and work automatically when the sidebar is open:
+These keymaps are **hardcoded** and work only inside the sidebar buffer:
 - `j/k` - Navigate up/down in sidebar
 - `<CR>` - Switch to selected buffer
 - `d` - Close selected buffer (with modification check)
@@ -44,7 +77,7 @@ These keymaps are **hardcoded** and work automatically when the sidebar is open:
 - `h` - Toggle history display mode (yes/no/auto)
 - `p` - Toggle path display mode (yes/no/auto)
 
-### Plugin Functions (Require User Configuration)
+### Plugin Functions (You Must Map These)
 
 The following functions are available for you to map to your preferred keybindings. See Installation section for keymap examples.
 
@@ -64,32 +97,7 @@ The following functions are available for you to map to your preferred keybindin
 **History Quick Access:**
 - `require('vertical-bufferline').switch_to_history_file(n)` - Switch to nth recent file in current group history
 
-### Recommended BufferLine Integration
-
-This plugin requires [bufferline.nvim](https://github.com/akinsho/bufferline.nvim). Configure bufferline to use VBL's smart buffer closing:
-
-```lua
-require('bufferline').setup({
-  options = {
-    numbers = "ordinal",
-
-    -- Use VBL's smart buffer closing (avoids unwanted buffer switching)
-    close_command = function(bufnum)
-      require('vertical-bufferline.bufferline-integration').smart_close_buffer(bufnum)
-    end,
-    right_mouse_command = function(bufnum)
-      require('vertical-bufferline.bufferline-integration').smart_close_buffer(bufnum)
-    end,
-  }
-})
-
--- Quick access keymaps
-for i = 1, 9 do
-  vim.keymap.set('n', '<leader>' .. i, '<cmd>BufferLineGoToBuffer ' .. i .. '<cr>',
-    { desc = "Go to buffer " .. i })
-end
-vim.keymap.set('n', '<leader>p', '<cmd>BufferLinePick<cr>', { desc = "Pick buffer" })
-```
+Note: `BufferLineGoToBuffer` and `BufferLinePick` are provided by bufferline.nvim, not this plugin.
 
 ## Commands
 
@@ -150,7 +158,7 @@ Toggle between modes with `:VBufferLineToggleInactiveGroupBuffers` or by calling
 ### Group Headers
 - `[1] ● GroupName (5 buffers)` - Active group with name (PmenuSel background, bold text)
 - `[2] ○ (3 buffers)` - Inactive unnamed group (Pmenu background)
-- Numbers correspond to `<leader>g1`, `<leader>g2`, etc.
+- Numbers correspond to the group's display number (use your own keymaps to jump).
 - Each group header uses semantic highlight groups that adapt to your theme
 
 ### Buffer Lines
@@ -173,7 +181,7 @@ Examples:
 -|9 Config.json        # Not in bufferline visible elements, 9th in group
 ```
 
-The visible ordinal corresponds to bufferline's ordinal numbers for `<leader>1`, `<leader>2`, etc. keymaps, making it easy to jump to visible buffers using these shortcuts.
+The visible ordinal corresponds to bufferline's ordinal numbers (for example, if you map them to `<leader>1`, `<leader>2`, etc.), making it easy to jump to visible buffers using those shortcuts.
 
 **Buffer Display Elements:**
 - `► 1 🌙 filename.lua` - Current buffer with arrow marker
@@ -181,7 +189,7 @@ The visible ordinal corresponds to bufferline's ordinal numbers for `<leader>1`,
 - `└─ 3 📋 src/config.json` - Tree structure with smart disambiguation for duplicate names
 
 ### Picking Mode Integration
-When using `<leader>p` (BufferLine picking), the sidebar shows hint characters:
+When using `:BufferLinePick` (whatever key you map), the sidebar shows hint characters:
 ```
 ├─ a ► 1 🌙 App.tsx
 ├─ s 2 📄 Button.jsx
@@ -190,114 +198,16 @@ When using `<leader>p` (BufferLine picking), the sidebar shows hint characters:
 
 ## Workflow Examples
 
-### Project Organization
+### Basic Project Organization
+Use commands directly, or map them to your own keys.
 ```
-# Create groups for different project areas
-<leader>gc  # Create "Frontend" group (rename with <leader>gr)
-<leader>gc  # Create "Backend" group
-<leader>gc  # Create "Tests" group
+# Create groups for different areas
+:VBufferLineCreateGroup Frontend
+:VBufferLineCreateGroup Backend
 
-# Organize group order
-<leader>gU  # Move current group up
-<leader>gD  # Move current group down
-
-# Switch between project areas
-<leader>g1  # Frontend
-<leader>g2  # Backend
-<leader>g3  # Tests
-```
-
-### File Type Organization
-```
-# Automatically organize by opening files
-# Open React components → auto-added to current group
-# Switch to new group → <leader>gc
-# Open Python files → auto-added to new group
-```
-
-### Quick Navigation
-```
-# Within a group
-<leader>1   # First buffer
-<leader>2   # Second buffer
-<leader>p   # Picking mode for current group
-
-# Between groups
-<leader>gn  # Next group
-<leader>gp  # Previous group
-```
-
-### Session Persistence
-```
-# Sessions are automatically managed via Neovim's :mksession
-# The plugin auto-serializes state every 3 seconds to vim.g.VerticalBufferlineSession
-# When you use :mksession, your group configuration is automatically saved
-# When you restore a session, your groups are automatically restored
-
-# Example: Save and restore a Neovim session
-:mksession ~/my-project.vim      # Saves everything including VBL groups
-:source ~/my-project.vim         # Restores everything including VBL groups
-
-# Sessions include: group structure, buffer assignments, active group, display mode, history
-```
-
-### Advanced Workflow Examples
-
-#### Multi-Project Development
-```
-# Working on frontend and backend simultaneously
-<leader>gc                       # Create "Frontend" group
-# Open React/Vue files → auto-added to Frontend group
-<leader>gc                       # Create "Backend" group  
-# Open API/server files → auto-added to Backend group
-<leader>gc                       # Create "Database" group
-# Open schema/migration files → auto-added to Database group
-
-# Quick switching between contexts
-<leader>g1                       # Frontend work
-<leader>g2                       # Backend work
-<leader>g3                       # Database work
-```
-
-#### Feature Branch Development
-```
-# Create feature-specific groups
-<leader>gc                       # Create "Feature-Auth" group
-<leader>gc                       # Create "Tests" group
-<leader>gc                       # Create "Documentation" group
-
-# Use history for quick access to recently modified files
-<leader>h1                       # Most recent file in current group (2nd in history list)
-<leader>h2                       # Second most recent file (3rd in history list)
-```
-
-#### Code Review Workflow
-```
-# Create review-specific groups
-<leader>gc                       # Create "Review-Files" group
-# Add files under review to this group
-:VBufferLineAddToGroup Review-Files
-
-# Toggle between original and reviewed code
-<leader>g1                       # Original codebase group
-<leader>g2                       # Review-Files group
-```
-
-#### Large Codebase Navigation
-```
-# Organize by module/component
-<leader>gc                       # "Core"
-<leader>gc                       # "Utils"  
-<leader>gc                       # "UI-Components"
-<leader>gc                       # "API-Layer"
-
-# Use path display for disambiguation
-p                                # Toggle path display in sidebar
-# Shows minimal paths: src/Button.tsx vs components/Button.tsx
-
-# Use history for recent work context
-h                                # Toggle history display
-<leader>h1-h9                    # Quick access to recent files
+# Switch between groups
+:VBufferLineNextGroup
+:VBufferLinePrevGroup
 ```
 
 ## Automatic Features
@@ -310,7 +220,7 @@ h                                # Toggle history display
 6. **Session persistence** - Automatically save and restore group configurations across sessions
 7. **Smart filename disambiguation** - When multiple files have the same name, automatically shows minimal unique paths
 
-## History Feature
+## History
 
 Each group maintains its own history of recently accessed files. The current active group's history is displayed as a special group at the top of the sidebar.
 
@@ -323,10 +233,18 @@ Each group maintains its own history of recently accessed files. The current act
 - **Configurable display count**: Maximum number of history items shown (default: 5)
 
 ### History Quick Access
-- `<leader>h1` to `<leader>h9` - Quick switch to recent files from current group's history (typically mapped for positions 1-9)
-- `<leader>h1` accesses the most recent file (2nd in history list, after current file)
-- `<leader>h2` accesses the second most recent file (3rd in history list), etc.
-- The function accepts any position within history size; keymaps are conventionally set up for 1-9 for convenience
+Map `require('vertical-bufferline').switch_to_history_file(n)` to your preferred keys. Example mapping to positions 1-9:
+```lua
+for i = 1, 9 do
+  vim.keymap.set('n', '<leader>h' .. i, function()
+    require('vertical-bufferline').switch_to_history_file(i)
+  end, { desc = "VBL history " .. i })
+end
+```
+Behavior (with the example mapping above):
+- `<leader>h1` jumps to the most recent history entry (the first numbered item)
+- `<leader>h2` jumps to the next most recent entry, etc.
+- `n` can be any position within your configured history size
 - History entries are ordered by recency (most recent first)
 - History automatically updates when switching between files in the active group
 
@@ -354,16 +272,13 @@ Each group maintains its own history of recently accessed files. The current act
 
 ## Session Management
 
-The plugin **automatically manages sessions** - no manual commands needed!
-
 ### How It Works
 
-**Auto-Serialization (Enabled by Default):**
-- Every 3 seconds, the plugin automatically saves your group configuration to `vim.g.VerticalBufferlineSession`
-- When you use Neovim's `:mksession`, this global variable is automatically saved
-- When you restore a session with `:source`, your groups are automatically restored
+- Every 3 seconds, the plugin saves your group configuration to `vim.g.VerticalBufferlineSession`
+- When you use `:mksession`, this global variable is saved
+- When you `:source` the session, your groups are restored
 
-**What Gets Saved:**
+**Saved Data:**
 - All group structures and names
 - Buffer assignments to each group
 - Active group
@@ -384,28 +299,11 @@ Simply use Neovim's native session commands:
 
 That's it! No need to manually save or load VBL-specific sessions.
 
-### Configuration
-
-Session behavior can be customized:
-
-```lua
-require('vertical-bufferline').setup({
-  session = {
-    auto_serialize = true,              -- Auto-save state every 3 seconds (default: true)
-    serialize_interval = 3000,          -- How often to save (milliseconds)
-    optimize_serialize = true,          -- Only save when state changes (default: true)
-    mini_sessions_integration = true,   -- Works with mini.sessions (default: true)
-    auto_restore_prompt = true,         -- Show prompt when restoring (default: true)
-    confirm_restore = true,             -- Ask confirmation (default: true)
-  }
-})
-```
-
 ### Integration
 
-- **mini.sessions**: Automatically integrates if you use mini.sessions plugin
-- **Native :mksession**: Works seamlessly with Neovim's built-in session management
-- **No conflicts**: The plugin state is saved as a global variable that doesn't interfere with other plugins
+- **mini.sessions**: integrates automatically when enabled
+- **Native :mksession**: works with Neovim session management
+- **No conflicts**: state is stored in a global variable
 
 ## Adaptive Width
 
@@ -479,9 +377,7 @@ The algorithm automatically determines the minimal path suffix needed to uniquel
 
 ## Configuration
 
-### Lazy.nvim Setup
-
-For lazy.nvim users, you can configure the plugin with custom options:
+### Lazy.nvim Setup (Full Options)
 
 ```lua
 {
@@ -518,7 +414,7 @@ For lazy.nvim users, you can configure the plugin with custom options:
     auto_save = false,              -- Auto-save session on Neovim exit
     auto_load = false,              -- Auto-load session on startup
     session_name_strategy = "cwd_hash", -- "cwd_hash", "cwd_path", "manual"
-    
+
     session = {
         mini_sessions_integration = true,    -- Integrate with mini.sessions
         auto_serialize = true,               -- Auto-serialize to global variable
@@ -530,6 +426,7 @@ For lazy.nvim users, you can configure the plugin with custom options:
     }
   },
   keys = {
+    -- Example keymaps (define your own)
     { "<leader>vb", "<cmd>lua require('vertical-bufferline').toggle()<cr>", desc = "Toggle vertical bufferline" },
     { "<leader>ve", "<cmd>lua require('vertical-bufferline').toggle_show_inactive_group_buffers()<cr>", desc = "Toggle showing inactive group buffers" },
     { "<leader>gc", "<cmd>lua require('vertical-bufferline').create_group()<cr>", desc = "Create new group" },
@@ -539,127 +436,7 @@ For lazy.nvim users, you can configure the plugin with custom options:
 }
 ```
 
-### Advanced Configuration Examples
-
-#### Minimal Setup
-```lua
-{
-  "ruiheng/vertical-bufferline",
-  config = function()
-    require('vertical-bufferline').setup()
-  end
-}
-```
-
-#### Power User Setup
-```lua
-{
-  "ruiheng/vertical-bufferline",
-  opts = {
-    width = 30,
-    max_width = 70,
-    adaptive_width = true,
-    position = "right",
-    show_icons = true,
-    show_tree_lines = true,
-    show_path = "yes",
-    show_history = "yes",
-    history_size = 15,
-    history_display_count = 8,
-    auto_save = true,
-    auto_load = true,
-    session = {
-      mini_sessions_integration = true,
-      auto_serialize = true,
-      auto_restore_prompt = false,
-    }
-  },
-  keys = {
-    { "<leader>vb", "<cmd>lua require('vertical-bufferline').toggle()<cr>" },
-    { "<leader>ve", "<cmd>lua require('vertical-bufferline').toggle_show_inactive_group_buffers()<cr>" },
-    { "<leader>vi", "<cmd>VBufferLineToggleInactiveGroupBuffers<cr>" },
-    { "<leader>gc", "<cmd>lua require('vertical-bufferline').create_group()<cr>" },
-    { "<leader>gd", "<cmd>VBufferLineDeleteCurrentGroup<cr>" },
-    { "<leader>gt", "<cmd>VBufferLineToggleInactiveGroupBuffers<cr>" },
-  }
-}
-```
-
-#### IDE-Style Setup
-```lua
-{
-  "ruiheng/vertical-bufferline",
-  opts = {
-    width = 25,
-    max_width = 50,
-    adaptive_width = true,
-    position = "left",
-    show_inactive_group_buffers = false,  -- Show only active group (default)
-    show_icons = true,
-    show_tree_lines = true,
-    show_path = "auto",
-    show_history = "auto",
-    history_display_count = 10,
-    path_style = "smart",
-    auto_create_groups = true,
-    auto_add_new_buffers = true,
-    session = {
-      auto_serialize = true,
-      serialize_interval = 1000,  -- More frequent saves
-      mini_sessions_integration = true,
-    }
-  }
-}
-```
-
-#### Fixed Width Setup (Disable Adaptive Width)
-```lua
-{
-  "ruiheng/vertical-bufferline",
-  opts = {
-    width = 40,
-    adaptive_width = false,  -- Use traditional fixed width
-    position = "left",
-    show_icons = true,
-  }
-}
-```
-
-### Manual Configuration
-
-If you prefer manual setup, the plugin initializes automatically when the sidebar is first opened. Default settings:
-
-```lua
-{
-    -- UI settings
-    width = 25,                     -- Minimum sidebar width (for adaptive sizing)
-    max_width = 60,                 -- Maximum sidebar width (for adaptive sizing)
-    adaptive_width = true,          -- Enable adaptive width based on content
-    show_inactive_group_buffers = false,  -- Show buffer lists for inactive groups (default: only active group)
-    show_icons = false,             -- Show file type emoji icons
-    position = "left",              -- Sidebar position: "left" or "right"
-    
-    -- Group management
-    auto_create_groups = true,      -- Enable automatic group creation
-    auto_add_new_buffers = true,    -- Auto-add new buffers to active group
-    
-    -- Path display settings
-    show_path = "auto",             -- "yes", "no", "auto" 
-    path_style = "relative",        -- "relative", "absolute", "smart"
-    path_max_length = 50,           -- Maximum path display length
-    
-    -- History settings
-    show_history = "auto",          -- "yes", "no", "auto" - show recent files history per group
-    history_size = 10,              -- Maximum number of recent files to track per group
-    history_auto_threshold = 3,     -- Minimum files needed for auto mode to show history
-    history_display_count = 5,      -- Maximum number of history items to display
-    
-    -- Session persistence settings
-    auto_save = false,              -- Auto-save session on Neovim exit
-    auto_load = false,              -- Auto-load session on startup
-    session_name_strategy = "cwd_hash", -- "cwd_hash", "cwd_path", "manual"
-}
-```
+For a minimal setup, `require("vertical-bufferline").setup()` is enough.
 
 ## Integration
 
@@ -691,6 +468,7 @@ vim.api.nvim_create_autocmd("FileType", {
         -- Add custom keymaps or settings here
     end,
 })
+```
 
 ## Technical Details
 
@@ -698,20 +476,6 @@ vim.api.nvim_create_autocmd("FileType", {
 - **High performance** - Minimal overhead, only processes when needed
 - **Memory efficient** - Smart cleanup of invalid buffers and groups
 - **Extensible design** - Clean API for future enhancements
-
-## Recent Improvements
-
-### Path Highlighting Consistency (v1.1.0)
-**Issue**: Path lines in inactive groups had inconsistent highlighting, with some paths missing visual effects entirely.
-
-**Root Cause**: Component data mismatch where inactive groups' components weren't included in the main highlighting loop, causing component lookup failures.
-
-**Solution**: 
-- Introduced `all_components` hash table to collect components from all groups
-- Improved component lookup efficiency from O(n) linear search to O(1) hash access
-- Ensured data consistency between rendering and highlighting phases
-
-**Result**: All path lines now display consistent highlighting based on buffer state and group activity, with significant performance improvements.
 
 ## Installation
 
@@ -729,6 +493,7 @@ Add to your lazy.nvim configuration:
     position = "left",
   },
   keys = {
+    -- Example keymaps (define your own)
     { "<leader>vb", "<cmd>lua require('vertical-bufferline').toggle()<cr>", desc = "Toggle vertical bufferline" },
     { "<leader>ve", "<cmd>lua require('vertical-bufferline').toggle_show_inactive_group_buffers()<cr>", desc = "Toggle showing inactive group buffers" },
     { "<leader>gc", "<cmd>lua require('vertical-bufferline').create_group()<cr>", desc = "Create new group" },
@@ -797,66 +562,5 @@ require('vertical-bufferline').setup()
 
 - Neovim 0.8.0 or higher
 - [bufferline.nvim](https://github.com/akinsho/bufferline.nvim)
-
-### Post-Installation Setup
-
-Ensure the keymap setup is called after plugin loading:
-
-```lua
--- In your init.lua, after plugin loading
-vim.api.nvim_create_autocmd("VimEnter", {
-  pattern = "*",
-  callback = function()
-    local vbl = require('vertical-bufferline')
-    
-    -- Setup keymaps
-    vim.keymap.set('n', '<leader>vb', function()
-      vbl.toggle()
-    end, { noremap = true, silent = true, desc = "Toggle vertical bufferline" })
-    
-    -- Group management keymaps
-    vim.keymap.set('n', '<leader>gc', function()
-      vbl.create_group()
-    end, { noremap = true, silent = true, desc = "Create new buffer group" })
-    
-    vim.keymap.set('n', '<leader>gr', function()
-      vim.ui.input({ prompt = "Rename current group to: " }, function(name)
-        if name and name ~= "" then
-          vim.cmd("VBufferLineRenameGroup " .. name)
-        end
-      end)
-    end, { noremap = true, silent = true, desc = "Rename current buffer group" })
-    
-    vim.keymap.set('n', '<leader>ve', function()
-      vbl.toggle_show_inactive_group_buffers()
-    end, { noremap = true, silent = true, desc = "Toggle showing inactive group buffers" })
-    
-    -- Navigation keymaps
-    vim.keymap.set('n', '<leader>gn', function()
-      vbl.switch_to_next_group()
-    end, { noremap = true, silent = true, desc = "Switch to next buffer group" })
-    
-    vim.keymap.set('n', '<leader>gp', function()
-      vbl.switch_to_prev_group()
-    end, { noremap = true, silent = true, desc = "Switch to previous buffer group" })
-    
-    -- Group reordering keymaps
-    vim.keymap.set('n', '<leader>gU', function()
-      vbl.move_group_up()
-    end, { noremap = true, silent = true, desc = "Move current group up" })
-    
-    vim.keymap.set('n', '<leader>gD', function()
-      vbl.move_group_down()
-    end, { noremap = true, silent = true, desc = "Move current group down" })
-    
-    -- Quick group switching (by display number, not array index)
-    for i = 1, 9 do
-      vim.keymap.set('n', '<leader>g' .. i, function()
-        vbl.groups.switch_to_group_by_display_number(i)
-      end, { noremap = true, silent = true, desc = "Switch to group " .. i })
-    end
-  end,
-})
-```
 
 This plugin transforms buffer management from a flat list into an organized, navigable workspace that scales with your project complexity.
