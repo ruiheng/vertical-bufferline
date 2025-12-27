@@ -437,8 +437,7 @@ local function apply_edit_buffer(buf_id)
 end
 
 local function setup_edit_buffer(buf_id)
-    local temp_name = vim.fn.tempname()
-    pcall(api.nvim_buf_set_name, buf_id, temp_name)
+    pcall(api.nvim_buf_set_name, buf_id, "vertical-bufferline://edit")
     vim.bo[buf_id].buftype = "acwrite"
     vim.bo[buf_id].bufhidden = "wipe"
     vim.bo[buf_id].swapfile = false
