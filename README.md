@@ -67,16 +67,6 @@ require('bufferline').setup({
 
 ## Keymaps
 
-### Built-in Keymaps (Sidebar Internal Only)
-
-These keymaps are **hardcoded** and work only inside the sidebar buffer:
-- `j/k` - Navigate up/down in sidebar
-- `<CR>` - Switch to selected buffer
-- `d` - Close selected buffer (with modification check)
-- `q` - Close sidebar
-- `h` - Toggle history display mode (yes/no/auto)
-- `p` - Toggle path display mode (yes/no/auto)
-
 ### Plugin Functions (You Must Map These)
 
 The following functions are available for you to map to your preferred keybindings. See Installation section for keymap examples.
