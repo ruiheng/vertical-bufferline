@@ -25,6 +25,7 @@ M.UI = {
     TREE_LAST_CURRENT = "└► ",    -- Current buffer tree last
     TREE_EMPTY = "(empty)",
     CURRENT_BUFFER_MARKER = "► ",  -- Keep for backward compatibility
+    PIN_MARKER = "📌 ",
     
     -- Active group tree characters (more prominent)
     ACTIVE_TREE_BRANCH = "┣━ ",      -- Thicker branch for active group
@@ -67,6 +68,7 @@ M.HIGHLIGHTS = {
     CURRENT = "VBufferLineCurrent",
     VISIBLE = "VBufferLineVisible",
     MODIFIED = "VBufferLineModified",
+    PIN = "VBufferLinePin",
     INACTIVE = "VBufferLineInactive",
     ERROR = "VBufferLineError",
     WARNING = "VBufferLineWarning",

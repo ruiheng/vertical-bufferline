@@ -358,6 +358,64 @@ function M.get_all_groups()
     return vim.deepcopy(groups_data.groups)
 end
 
+--- Replace all groups with new layout from edit mode
+--- @param group_specs table[] List of { name = string, buffers = number[] }
+function M.replace_groups_from_edit(group_specs)
+    local old_by_name = {}
+    for _, group in ipairs(groups_data.groups) do
+        old_by_name[group.name] = old_by_name[group.name] or {}
+        table.insert(old_by_name[group.name], group)
+    end
+
+    local new_groups = {}
+    for _, spec in ipairs(group_specs) do
+        local group = nil
+        local candidates = old_by_name[spec.name]
+        if candidates and #candidates > 0 then
+            group = table.remove(candidates, 1)
+        end
+
+        if not group then
+            group = {
+                id = generate_group_id(),
+                name = spec.name or "",
+                buffers = {},
+                created_at = os.time(),
+                color = config_module.COLORS.GREEN,
+                display_number = groups_data.next_display_number,
+                buffer_states = {},
+                position_info = {},
+                history = {},
+            }
+            groups_data.next_display_number = groups_data.next_display_number + 1
+        else
+            group.name = spec.name or ""
+        end
+
+        update_group_buffers_internal(group, spec.buffers or {})
+        table.insert(new_groups, group)
+    end
+
+    groups_data.groups = new_groups
+    if #groups_data.groups == 0 then
+        init_default_group()
+    end
+
+    local has_default = false
+    for _, group in ipairs(groups_data.groups) do
+        if group.id == groups_data.default_group_id then
+            has_default = true
+            break
+        end
+    end
+    if not has_default and #groups_data.groups > 0 then
+        groups_data.default_group_id = groups_data.groups[1].id
+    end
+
+    groups_data.active_group_id = nil
+    groups_data.previous_group_id = nil
+end
+
 --- Get current active group
 --- @return table|nil Active group or nil if none
 function M.get_active_group()

@@ -389,12 +389,22 @@ local function group_complete(arglead, cmdline, cursorpos)
     return completions
 end
 
+local function edit_mode_command()
+    require('vertical-bufferline.edit_mode').open()
+end
+
 --- Set up all user commands
 function M.setup()
     -- Create group
     vim.api.nvim_create_user_command("VBufferLineCreateGroup", create_group_command, {
         nargs = "?",
         desc = "Create a new buffer group"
+    })
+
+    -- Edit group layout in a temporary buffer
+    vim.api.nvim_create_user_command("VBufferLineEdit", edit_mode_command, {
+        nargs = 0,
+        desc = "Edit buffer groups in a temporary buffer"
     })
 
     -- Delete group

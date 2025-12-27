@@ -151,6 +151,18 @@ function M.create_modified_indicator(is_modified)
     end
 end
 
+-- Create pin indicator component
+---@param icon string
+---@return LinePart[]
+function M.create_pin_indicator(icon)
+    if icon and icon ~= "" then
+        return {
+            renderer.create_part(icon, config_module.HIGHLIGHTS.PIN)
+        }
+    end
+    return {}
+end
+
 -- Create icon component
 ---@param icon string
 ---@return LinePart[]

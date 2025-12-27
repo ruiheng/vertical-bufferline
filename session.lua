@@ -289,6 +289,23 @@ local function expand_buffer_path(buffer_path)
     end
 end
 
+local function get_pinned_buffers()
+    local pinned = vim.g.BufferlinePinnedBuffers
+    if not pinned or pinned == "" then
+        return {}
+    end
+
+    local result = {}
+    for _, path in ipairs(vim.split(pinned, ",", { plain = true, trimempty = true })) do
+        local normalized = normalize_buffer_path(path)
+        if normalized ~= "" then
+            table.insert(result, normalized)
+        end
+    end
+
+    return result
+end
+
 --- Save current groups configuration to session file
 --- @param filename string Optional filename to save to
 --- @return boolean success
@@ -306,7 +323,8 @@ function M.save_session(filename)
         timestamp = os.time(),
         working_directory = vim.fn.getcwd(),
         active_group_id = active_group_id,
-        groups = {}
+        groups = {},
+        pinned_buffers = {}
     }
 
     -- Convert groups data for persistence
@@ -377,6 +395,8 @@ function M.save_session(filename)
 
         table.insert(session_data.groups, group_data)
     end
+
+    session_data.pinned_buffers = get_pinned_buffers()
 
     -- Write session file
     local success, err = pcall(function()
@@ -846,6 +866,30 @@ local function rebuild_groups(session_data, buffer_mappings)
             end
         end
     end
+
+    if session_data.pinned_buffers and type(session_data.pinned_buffers) == "table" then
+        local ok_groups, bufferline_groups = pcall(require, "bufferline.groups")
+        if ok_groups then
+            local pin_set = {}
+            for _, pinned_path in ipairs(session_data.pinned_buffers) do
+                local expanded = expand_buffer_path(pinned_path)
+                local buf_id = buffer_mappings[expanded]
+                if buf_id and vim.api.nvim_buf_is_valid(buf_id) then
+                    pin_set[buf_id] = true
+                    bufferline_groups.add_element("pinned", { id = buf_id })
+                end
+            end
+            for _, buf_id in ipairs(vim.api.nvim_list_bufs()) do
+                if vim.api.nvim_buf_is_valid(buf_id) and not pin_set[buf_id] then
+                    bufferline_groups.remove_element("pinned", { id = buf_id })
+                end
+            end
+            local ok_ui, bufferline_ui = pcall(require, "bufferline.ui")
+            if ok_ui and bufferline_ui.refresh then
+                bufferline_ui.refresh()
+            end
+        end
+    end
 end
 
 --- Load groups configuration from session file
@@ -1086,7 +1130,8 @@ local function collect_current_state()
         version = "1.0",
         timestamp = os.time(),
         active_group_id = active_group_id,
-        groups = {}
+        groups = {},
+        pinned_buffers = {}
     }
     
     -- Convert groups data for persistence
@@ -1156,6 +1201,8 @@ local function collect_current_state()
         
         table.insert(session_data.groups, group_data)
     end
+
+    session_data.pinned_buffers = get_pinned_buffers()
     
     return session_data
 end

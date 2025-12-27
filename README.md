@@ -57,6 +57,8 @@ require('bufferline').setup({
 - **Two display modes**: Show only active group (default) or expand all groups
 - **Smart filename disambiguation** - automatically resolves duplicate filenames with minimal path context
 - **Cursor alignment** - VBL content automatically aligns with your cursor position in the main window
+- **Pinned buffer indicator** - shows bufferline pinned state in the sidebar
+- **Edit mode (modal)** - batch edit groups in a temporary buffer and apply
 
 ### Group Management
 - **Automatic buffer addition** - new buffers auto-join the active group
@@ -90,6 +92,9 @@ The following functions are available for you to map to your preferred keybindin
 Note: `BufferLineGoToBuffer` and `BufferLinePick` are provided by bufferline.nvim, not this plugin.
 
 ## Commands
+
+### Edit Mode
+- `:VBufferLineEdit` - Open a modal edit buffer to batch-edit groups (apply with `:w`, discard by closing the window)
 
 ### Group Operations
 - `:VBufferLineCreateGroup [name]` - Create new group with optional name
@@ -176,6 +181,7 @@ The visible ordinal corresponds to bufferline's ordinal numbers (for example, if
 **Buffer Display Elements:**
 - `► 1 🌙 filename.lua` - Current buffer with arrow marker
 - `2 ● 📄 modified.js` - Modified buffer with dot indicator
+- `📌 3 utils.lua` - Pinned buffer (matches bufferline pinned state)
 - `└─ 3 📋 src/config.json` - Tree structure with smart disambiguation for duplicate names
 
 ### Picking Mode Integration

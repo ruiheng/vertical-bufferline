@@ -60,6 +60,7 @@ local function setup_highlights()
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.VISIBLE, { link = "PmenuSel" })
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.INACTIVE, { link = "Comment" })
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.MODIFIED, { link = "WarningMsg", italic = true })
+    api.nvim_set_hl(0, config_module.HIGHLIGHTS.PIN, { link = "Special" })
     
     -- Path highlights - should be subtle and low-key
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.PATH, { link = "Comment", italic = true })
@@ -210,6 +211,25 @@ local function is_buffer_actually_modified(buf_id)
     end
     
     return buf_modified
+end
+
+local function is_buffer_pinned(buf_id)
+    local ok_groups, bufferline_groups = pcall(require, "bufferline.groups")
+    if not ok_groups or not bufferline_groups or not bufferline_groups._is_pinned then
+        return false
+    end
+    return bufferline_groups._is_pinned({ id = buf_id }) and true or false
+end
+
+local function get_pin_icon()
+    local ok_groups, bufferline_groups = pcall(require, "bufferline.groups")
+    if ok_groups and bufferline_groups and bufferline_groups.get_by_id then
+        local pinned_group = bufferline_groups.get_by_id("pinned")
+        if pinned_group and pinned_group.icon and pinned_group.icon ~= "" then
+            return pinned_group.icon .. " "
+        end
+    end
+    return config_module.UI.PIN_MARKER
 end
 
 -- Extended picking mode implementation
@@ -905,7 +925,15 @@ local function create_buffer_line(component, j, total_components, current_buffer
         end
     end
     
-    -- 6. Filename with optional prefix
+    -- 6. Pin indicator
+    if is_buffer_pinned(component.id) then
+        local pin_parts = components.create_pin_indicator(get_pin_icon())
+        for _, part in ipairs(pin_parts) do
+            table.insert(parts, part)
+        end
+    end
+
+    -- 7. Filename with optional prefix
     local path_dir, display_name = get_buffer_path_info(component)
     local final_name = display_name or component.name
     
@@ -923,7 +951,7 @@ local function create_buffer_line(component, j, total_components, current_buffer
         table.insert(parts, part)
     end
     
-    -- 7. Modified indicator (moved to end)
+    -- 8. Modified indicator (moved to end)
     local is_modified = is_buffer_actually_modified(component.id)
     local modified_parts = components.create_modified_indicator(is_modified)
     for _, part in ipairs(modified_parts) do
