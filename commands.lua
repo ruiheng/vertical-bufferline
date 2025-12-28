@@ -1182,6 +1182,12 @@ function M.setup()
         local status = config.DEFAULTS.adaptive_width and "enabled" or "disabled"
         vim.notify(string.format("VBL adaptive width: %s", status), vim.log.levels.INFO)
 
+        local state = require('vertical-bufferline.state')
+        local win_id = state.get_win_id()
+        if win_id and vim.api.nvim_win_is_valid(win_id) then
+            vim.api.nvim_win_set_option(win_id, 'winfixwidth', not config.DEFAULTS.adaptive_width)
+        end
+
         -- Refresh to apply the change
         require('vertical-bufferline').refresh("adaptive_width_toggle")
     end, {

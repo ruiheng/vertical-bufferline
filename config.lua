@@ -6,7 +6,7 @@ local M = {}
 -- UI Configuration
 M.UI = {
     -- Sidebar dimensions
-    DEFAULT_WIDTH = 25,  -- Minimum width for adaptive sizing
+    DEFAULT_MIN_WIDTH = 15,  -- Minimum width for adaptive sizing
     DEFAULT_MAX_WIDTH = 60,  -- Maximum width for adaptive sizing
 
 
@@ -134,7 +134,7 @@ M.DEFAULTS = {
     session_name_strategy = "cwd_hash", -- "cwd_hash" or "cwd_path" or "manual"
 
     -- UI settings
-    width = M.UI.DEFAULT_WIDTH,  -- Minimum width (adaptive sizing will use this as base)
+    min_width = M.UI.DEFAULT_MIN_WIDTH,  -- Minimum width (adaptive sizing will use this as base)
     max_width = M.UI.DEFAULT_MAX_WIDTH,  -- Maximum width for adaptive sizing
     adaptive_width = true,  -- Enable adaptive width based on content
     show_inactive_group_buffers = false,  -- Show buffer list for inactive groups (default: only show active group)
@@ -209,8 +209,8 @@ M.SYSTEM = {
 }
 
 -- Validation functions
-function M.validate_width(width)
-    return type(width) == "number" and width > 0 and width <= 200
+function M.validate_min_width(min_width)
+    return type(min_width) == "number" and min_width > 0 and min_width <= 200
 end
 
 function M.validate_max_width(max_width)

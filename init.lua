@@ -1550,7 +1550,7 @@ local function apply_adaptive_width(content_width)
     end
 
     -- Get min and max width from configuration
-    local min_width = config_module.DEFAULTS.width
+    local min_width = config_module.DEFAULTS.min_width
     local max_width = config_module.DEFAULTS.max_width
 
     -- Calculate desired width: content width + 2 for padding
@@ -1564,6 +1564,7 @@ local function apply_adaptive_width(content_width)
 
     -- Only update if width actually changed
     if new_width ~= current_width then
+        api.nvim_win_set_option(win_id, 'winfixwidth', false)
         api.nvim_win_set_width(win_id, new_width)
 
         -- Update saved width for next open
@@ -2081,7 +2082,7 @@ local function open_sidebar()
     local current_win = api.nvim_get_current_win()
 
     -- Use saved width if available, otherwise use default width
-    local width = state_module.get_last_width() or config_module.DEFAULTS.width
+    local width = state_module.get_last_width() or config_module.DEFAULTS.min_width
 
     local new_win_id
 
@@ -2116,7 +2117,7 @@ local function open_sidebar()
     end
     
     -- Configure window options after creation
-    api.nvim_win_set_option(new_win_id, 'winfixwidth', true)  -- Prevent window from auto-resizing width
+    api.nvim_win_set_option(new_win_id, 'winfixwidth', not config_module.DEFAULTS.adaptive_width)
     api.nvim_win_set_option(new_win_id, 'number', false)
     api.nvim_win_set_option(new_win_id, 'relativenumber', false)
     api.nvim_win_set_option(new_win_id, 'cursorline', false)
@@ -2907,7 +2908,7 @@ M.cycle_show_history = M.cycle_show_history_setting
 
 --- Setup function for user configuration (e.g., from lazy.nvim)
 --- @param user_config? table Configuration options
---- @field user_config.width? number Minimum sidebar width (default: 25)
+--- @field user_config.min_width? number Minimum sidebar width (default: 25)
 --- @field user_config.max_width? number Maximum sidebar width (default: 60)
 --- @field user_config.adaptive_width? boolean Enable adaptive width sizing (default: true)
 --- @field user_config.show_inactive_group_buffers? boolean Show buffer list for inactive groups (default: false)

@@ -316,7 +316,7 @@ The sidebar automatically adjusts its width based on the content being displayed
 
 ```lua
 require('vertical-bufferline').setup({
-    width = 25,              -- Minimum width
+    min_width = 15,          -- Minimum width
     max_width = 60,          -- Maximum width
     adaptive_width = true,   -- Enable adaptive sizing (default: true)
 })
@@ -352,7 +352,7 @@ Toggle adaptive width on/off:
 Or disable it in configuration for fixed width behavior:
 ```lua
 require('vertical-bufferline').setup({
-    width = 40,
+    min_width = 40,
     adaptive_width = false,  -- Fixed width mode
 })
 ```
@@ -380,7 +380,7 @@ The algorithm automatically determines the minimal path suffix needed to uniquel
   "ruiheng/vertical-bufferline",
   opts = {
     -- UI settings
-    width = 25,                     -- Minimum sidebar width (for adaptive sizing)
+    min_width = 15,                 -- Minimum sidebar width (for adaptive sizing)
     max_width = 60,                 -- Maximum sidebar width (for adaptive sizing)
     adaptive_width = true,          -- Enable adaptive width based on content
     show_inactive_group_buffers = false,  -- Show buffer lists for inactive groups (default: only active group)
@@ -483,7 +483,7 @@ Add to your lazy.nvim configuration:
 {
   "ruiheng/vertical-bufferline",
   opts = {
-    width = 40,
+    min_width = 40,
     show_inactive_group_buffers = false,  -- Show only active group (default)
     show_icons = false,
     position = "left",
@@ -506,7 +506,7 @@ use {
   'ruiheng/vertical-bufferline',
   config = function()
     require('vertical-bufferline').setup({
-      width = 40,
+      min_width = 40,
       show_inactive_group_buffers = false,  -- Show only active group (default)
       show_icons = false,
       position = "left",
@@ -523,7 +523,7 @@ Plug 'ruiheng/vertical-bufferline'
 " In your init.vim or init.lua
 lua << EOF
 require('vertical-bufferline').setup({
-  width = 40,
+  min_width = 40,
   show_inactive_group_buffers = false,  -- Show only active group (default)
   show_icons = false,
   position = "left",

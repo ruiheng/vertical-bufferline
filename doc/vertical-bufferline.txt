@@ -44,7 +44,7 @@ Using lazy.nvim (recommended):
     {
       "your-username/vertical-bufferline",
       opts = {
-        width = 25,
+        min_width = 15,
         max_width = 60,
         adaptive_width = true,
         show_icons = false,
@@ -67,7 +67,7 @@ Using packer.nvim:
       'your-username/vertical-bufferline',
       config = function()
         require('vertical-bufferline').setup({
-          width = 25,
+          min_width = 15,
           max_width = 60,
           adaptive_width = true,
         })
@@ -81,7 +81,7 @@ Using vim-plug:
 
     lua << EOF
     require('vertical-bufferline').setup({
-      width = 25,
+      min_width = 15,
       adaptive_width = true,
     })
     EOF
@@ -114,7 +114,7 @@ Default configuration:
 >lua
     {
       -- UI settings
-      width = 25,                         -- Minimum sidebar width
+      min_width = 15,                         -- Minimum sidebar width
       max_width = 60,                     -- Maximum sidebar width
       adaptive_width = true,              -- Enable adaptive width sizing
       show_inactive_group_buffers = false,-- Show buffer list for inactive groups
@@ -161,8 +161,8 @@ Default configuration:
 
 Configuration options explained:
 
-                                         *vertical-bufferline-config-width*
-width                   Minimum width for the sidebar. When adaptive_width is
+                                     *vertical-bufferline-config-min-width*
+min_width               Minimum width for the sidebar. When adaptive_width is
                         enabled, this acts as the minimum width bound.
                         Default: 25
 
@@ -174,7 +174,7 @@ max_width               Maximum width for the sidebar when adaptive_width is
                                  *vertical-bufferline-config-adaptive-width*
 adaptive_width          Enable automatic width adjustment based on content.
                         When true, the sidebar dynamically resizes between
-                        `width` and `max_width` to fit the displayed content.
+                        `min_width` and `max_width` to fit the displayed content.
                         Default: true
 
                       *vertical-bufferline-config-show-inactive-group-buffers*
@@ -394,7 +394,7 @@ How It Works:
 Configuration:
 >lua
     require('vertical-bufferline').setup({
-        width = 25,              -- Minimum width
+        min_width = 15,              -- Minimum width
         max_width = 60,          -- Maximum width
         adaptive_width = true,   -- Enable adaptive sizing (default: true)
     })
@@ -428,7 +428,7 @@ Toggle adaptive width at runtime:
 Disable adaptive width for fixed width behavior:
 >lua
     require('vertical-bufferline').setup({
-        width = 40,
+        min_width = 40,
         adaptive_width = false,  -- Fixed width mode
     })
 <

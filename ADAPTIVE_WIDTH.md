@@ -10,7 +10,7 @@ The VBL sidebar now supports adaptive width that automatically adjusts based on 
 
 ```lua
 require('vertical-bufferline').setup({
-    width = 25,              -- Minimum width (default: 25)
+    min_width = 15,          -- Minimum width (default: 15)
     max_width = 60,          -- Maximum width (default: 60)
     adaptive_width = true,   -- Enable adaptive width (default: true)
 })
@@ -18,7 +18,7 @@ require('vertical-bufferline').setup({
 
 ### Option Details
 
-- **`width`**: Minimum width for the sidebar. The sidebar will never be narrower than this value.
+- **`min_width`**: Minimum width for the sidebar. The sidebar will never be narrower than this value.
 - **`max_width`**: Maximum width for the sidebar. The sidebar will never be wider than this value.
 - **`adaptive_width`**: Boolean flag to enable/disable adaptive width feature.
 
@@ -29,7 +29,7 @@ require('vertical-bufferline').setup({
 2. **Width Calculation**:
    - Takes the maximum line width from the content
    - Adds 2 characters for padding
-   - Clamps the result between `width` (min) and `max_width` (max)
+   - Clamps the result between `min_width` (min) and `max_width` (max)
 
 3. **Smart Updates**:
    - Only updates when the calculated width differs from current width
@@ -85,7 +85,7 @@ end
 ```lua
 -- Keep sidebar compact
 require('vertical-bufferline').setup({
-    width = 20,
+    min_width = 20,
     max_width = 40,
     adaptive_width = true,
 })
@@ -95,7 +95,7 @@ require('vertical-bufferline').setup({
 ```lua
 -- Allow sidebar to grow with content
 require('vertical-bufferline').setup({
-    width = 25,
+    min_width = 15,
     max_width = 80,
     adaptive_width = true,
 })
@@ -105,7 +105,7 @@ require('vertical-bufferline').setup({
 ```lua
 -- Fixed width (traditional behavior)
 require('vertical-bufferline').setup({
-    width = 40,
+    min_width = 40,
     adaptive_width = false,
 })
 ```

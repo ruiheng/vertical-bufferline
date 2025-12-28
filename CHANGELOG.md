@@ -9,8 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Adaptive width feature** - Sidebar automatically adjusts width based on content
-  - `width` option now acts as minimum width (default: 25, changed from 40)
-  - `max_width` option for maximum sidebar width (default: 60)
+  - `min_width` option sets minimum width (default: 15, changed from 40)
+  - `max_width` option sets maximum sidebar width (default: 60)
   - `adaptive_width` option to enable/disable feature (default: true)
   - `:VBufferLineToggleAdaptiveWidth` command to toggle at runtime
   - Width state persists across sidebar open/close cycles
@@ -137,9 +137,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Existing configurations continue to work
 
 ### From v1.1.0 to Unreleased
-- **Configuration change**: Default `width` changed from 40 to 25
-  - If you want to keep the old width, explicitly set `width = 40` in your config
-  - New adaptive width feature automatically adjusts between `width` (min) and `max_width` (max)
+- **Configuration change**: Default `min_width` changed from 40 to 15
+  - If you want to keep the old width, explicitly set `min_width = 40` in your config
+  - New adaptive width feature automatically adjusts between `min_width` (min) and `max_width` (max)
   - To disable adaptive width: set `adaptive_width = false`
 - History feature is enabled by default with "auto" mode
 - Existing keymaps are preserved, new sidebar hotkeys added (`h`, `p`)
