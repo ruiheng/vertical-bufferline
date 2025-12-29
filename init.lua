@@ -464,6 +464,8 @@ local function switch_to_buffer_and_group(buffer_id, target_group_id)
     -- Then switch to buffer
     vim.schedule(function()
         api.nvim_set_current_buf(buffer_id)
+        -- Update history with the selected buffer
+        groups.sync_group_history_with_current(target_group_id, buffer_id)
         -- Restore buffer state in new group context
         groups.restore_buffer_state_for_current_group(buffer_id)
     end)
