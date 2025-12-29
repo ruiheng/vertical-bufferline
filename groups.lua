@@ -443,6 +443,7 @@ function M.set_active_group(group_id, target_buffer_id)
     end
 
     local old_group_id = groups_data.active_group_id
+    local bufferline_integration = require('vertical-bufferline.bufferline-integration')
     
     -- Store previous group ID for switching back
     if old_group_id then
@@ -461,33 +462,35 @@ function M.set_active_group(group_id, target_buffer_id)
         end
         
         -- Save current group's position info before switching (only local positions)
-        local ok, position_info = pcall(function()
-            -- Get fresh position info from bufferline for the current group
-            local state = require('bufferline.state')
-            local visible_buffers = state.visible_components or {}
-            
-            local info = {}
-            
-            -- Build visible buffer ID to local position mapping
-            for local_idx, component in ipairs(visible_buffers) do
-                if component and component.id then
-                    info[component.id] = local_idx
+        if bufferline_integration.is_available() then
+            local ok, position_info = pcall(function()
+                -- Get fresh position info from bufferline for the current group
+                local state = require('bufferline.state')
+                local visible_buffers = state.visible_components or {}
+                
+                local info = {}
+                
+                -- Build visible buffer ID to local position mapping
+                for local_idx, component in ipairs(visible_buffers) do
+                    if component and component.id then
+                        info[component.id] = local_idx
+                    end
                 end
+                
+                return info
+            end)
+            if ok and position_info then
+                old_group.position_info = position_info
             end
-            
-            return info
-        end)
-        if ok and position_info then
-            old_group.position_info = position_info
         end
     end
 
     -- disable copying bufferline buffer list to group
-    local bufferline_integration = require('vertical-bufferline.bufferline-integration')
-    bufferline_integration.set_sync_target(nil)
-
-    -- Reverse control: set new group's buffer list to bufferline
-    bufferline_integration.set_bufferline_buffers(group.buffers)
+    if bufferline_integration.is_available() then
+        bufferline_integration.set_sync_target(nil)
+        -- Reverse control: set new group's buffer list to bufferline
+        bufferline_integration.set_bufferline_buffers(group.buffers)
+    end
 
     -- Switch to group's remembered current buffer or fallback intelligently
     if #group.buffers > 0 then
@@ -536,22 +539,26 @@ function M.set_active_group(group_id, target_buffer_id)
     groups_data.active_group_id = group_id
 
     -- Sync pointer to new group
-    bufferline_integration.set_sync_target(group_id)
+    if bufferline_integration.is_available() then
+        bufferline_integration.set_sync_target(group_id)
+    end
 
     -- Initialize position info for the new active group after bufferline sync
-    vim.schedule(function()
-        -- Force refresh bufferline first
-        local bufferline_ui = require('bufferline.ui')
-        if bufferline_ui.refresh then
-            bufferline_ui.refresh()
-        end
-        
-        -- Then update position info for new active group
-        vim.defer_fn(function()
-            local position_info = bufferline_integration.get_buffer_position_info(group_id)
-            M.update_group_position_info(group_id, position_info)
-        end, 50)  -- Small delay to ensure bufferline is updated
-    end)
+    if bufferline_integration.is_available() then
+        vim.schedule(function()
+            -- Force refresh bufferline first
+            local ok_ui, bufferline_ui = pcall(require, 'bufferline.ui')
+            if ok_ui and bufferline_ui.refresh then
+                bufferline_ui.refresh()
+            end
+            
+            -- Then update position info for new active group
+            vim.defer_fn(function()
+                local position_info = bufferline_integration.get_buffer_position_info(group_id)
+                M.update_group_position_info(group_id, position_info)
+            end, 50)  -- Small delay to ensure bufferline is updated
+        end)
+    end
 
     -- Note: Additional refresh will be triggered by the GROUP_CHANGED autocmd
 
@@ -587,37 +594,37 @@ function M.add_buffer_to_group(buffer_id, group_id)
     -- Allow buffer to exist in multiple groups (commented out original restriction)
     -- M.remove_buffer_from_all_groups(buffer_id)
 
-    -- Add to specified group in correct order based on bufferline's sorting
+    -- Add to specified group in correct order based on bufferline's sorting (if available)
     local bufferline_integration = require('vertical-bufferline.bufferline-integration')
-    local sorted_buffers = bufferline_integration.get_sorted_buffers()
-    
-    -- Find the correct position to insert the buffer
     local insert_position = #group.buffers + 1
-    
-    -- Get buffer's position in bufferline's sorted order
-    local buffer_position_in_sorted = nil
-    for i, buf_id in ipairs(sorted_buffers) do
-        if buf_id == buffer_id then
-            buffer_position_in_sorted = i
-            break
+    if bufferline_integration.is_available() then
+        local sorted_buffers = bufferline_integration.get_sorted_buffers()
+
+        -- Get buffer's position in bufferline's sorted order
+        local buffer_position_in_sorted = nil
+        for i, buf_id in ipairs(sorted_buffers) do
+            if buf_id == buffer_id then
+                buffer_position_in_sorted = i
+                break
+            end
         end
-    end
-    
-    if buffer_position_in_sorted then
-        -- Find the correct insertion point by comparing with existing buffers
-        for i, existing_buf_id in ipairs(group.buffers) do
-            local existing_position_in_sorted = nil
-            for j, buf_id in ipairs(sorted_buffers) do
-                if buf_id == existing_buf_id then
-                    existing_position_in_sorted = j
+
+        if buffer_position_in_sorted then
+            -- Find the correct insertion point by comparing with existing buffers
+            for i, existing_buf_id in ipairs(group.buffers) do
+                local existing_position_in_sorted = nil
+                for j, buf_id in ipairs(sorted_buffers) do
+                    if buf_id == existing_buf_id then
+                        existing_position_in_sorted = j
+                        break
+                    end
+                end
+
+                -- If we found the position and the new buffer should come before this one
+                if existing_position_in_sorted and buffer_position_in_sorted < existing_position_in_sorted then
+                    insert_position = i
                     break
                 end
-            end
-            
-            -- If we found the position and the new buffer should come before this one
-            if existing_position_in_sorted and buffer_position_in_sorted < existing_position_in_sorted then
-                insert_position = i
-                break
             end
         end
     end
@@ -830,6 +837,15 @@ function M.is_auto_add_disabled()
     return groups_data.auto_add_disabled
 end
 
+-- Convenience functions for enabling/disabling auto-add
+function M.disable_auto_add()
+    groups_data.auto_add_disabled = true
+end
+
+function M.enable_auto_add()
+    groups_data.auto_add_disabled = false
+end
+
 -- History sync control
 function M.set_history_sync_disabled(disabled)
     groups_data.history_sync_disabled = disabled
@@ -924,7 +940,9 @@ function M.setup(opts)
     init_default_group()
 
     local bufferline_integration = require('vertical-bufferline.bufferline-integration')
-    bufferline_integration.set_sync_target(groups_data.active_group_id)
+    if bufferline_integration.is_available() then
+        bufferline_integration.set_sync_target(groups_data.active_group_id)
+    end
 
     -- Force refresh to ensure initial state displays correctly
     vim.schedule(function()
@@ -935,8 +953,51 @@ function M.setup(opts)
         })
     end)
 
-    -- No longer need BufEnter autocmd for buffer management, changed to sync through bufferline
-    -- Cleanup invalid buffer autocmd also no longer needed, handled by bufferline state sync
+    -- Auto-add new buffers to active group (for VBL standalone mode without bufferline)
+    vim.api.nvim_create_autocmd("BufEnter", {
+        pattern = "*",
+        callback = function(args)
+            -- Only auto-add if bufferline is not available
+            local bufferline_integration = require('vertical-bufferline.bufferline-integration')
+            if bufferline_integration.is_available() then
+                return  -- Let bufferline sync handle this
+            end
+
+            -- Only proceed if auto_add is enabled
+            if not groups_data.settings.auto_add_new_buffers or groups_data.auto_add_disabled then
+                return
+            end
+
+            -- Get buffer number - args.buf should be a number, but ensure it is
+            local buf_id = tonumber(args.buf)
+            if not buf_id then
+                return  -- Invalid buffer number
+            end
+
+            -- Skip special buffers
+            if not vim.api.nvim_buf_is_valid(buf_id) then return end
+
+            local buftype = vim.api.nvim_buf_get_option(buf_id, 'buftype')
+            if buftype ~= '' then return end  -- Skip special buffers
+
+            local bufname = vim.api.nvim_buf_get_name(buf_id)
+            if bufname == '' then return end  -- Skip unnamed buffers
+
+            -- Check if buffer is already in any group
+            for _, group in ipairs(groups_data.groups) do
+                if vim.tbl_contains(group.buffers or {}, buf_id) then
+                    return  -- Already in a group
+                end
+            end
+
+            -- Add to active group
+            local active_group = M.get_active_group()
+            if active_group then
+                M.add_buffer_to_group(buf_id, active_group.id)
+            end
+        end,
+        desc = "Auto-add new buffers to active group (VBL standalone)"
+    })
 
     -- Periodically clean up invalid buffers and buffer states
     vim.defer_fn(function()

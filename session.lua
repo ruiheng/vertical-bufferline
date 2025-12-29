@@ -290,16 +290,35 @@ local function expand_buffer_path(buffer_path)
 end
 
 local function get_pinned_buffers()
-    local pinned = vim.g.BufferlinePinnedBuffers
-    if not pinned or pinned == "" then
-        return {}
+    local bufferline_integration = require('vertical-bufferline.bufferline-integration')
+    if bufferline_integration.is_available() then
+        local pinned = vim.g.BufferlinePinnedBuffers
+        if not pinned or pinned == "" then
+            return {}
+        end
+
+        local result = {}
+        for _, path in ipairs(vim.split(pinned, ",", { plain = true, trimempty = true })) do
+            local normalized = normalize_buffer_path(path)
+            if normalized ~= "" then
+                table.insert(result, normalized)
+            end
+        end
+
+        return result
     end
 
+    local state_module = require('vertical-bufferline.state')
     local result = {}
-    for _, path in ipairs(vim.split(pinned, ",", { plain = true, trimempty = true })) do
-        local normalized = normalize_buffer_path(path)
-        if normalized ~= "" then
-            table.insert(result, normalized)
+    for _, buf_id in ipairs(state_module.get_pinned_buffers()) do
+        if api.nvim_buf_is_valid(buf_id) then
+            local buffer_path = api.nvim_buf_get_name(buf_id)
+            if buffer_path ~= "" then
+                local normalized = normalize_buffer_path(buffer_path)
+                if normalized ~= "" then
+                    table.insert(result, normalized)
+                end
+            end
         end
     end
 
@@ -564,11 +583,10 @@ local function find_buffer_by_path_patterns(target_path)
 end
 
 local function find_existing_buffers(session_data)
-    local logger = require('vertical-bufferline.logger')
     local buffer_mappings = {} -- file_path -> buffer_id
     local found_count = 0
 
-    -- Get all existing buffers for debugging
+    -- Get all existing buffers
     local all_bufs = vim.api.nvim_list_bufs()
     local existing_buf_names = {}
     for _, buf_id in ipairs(all_bufs) do
@@ -579,12 +597,6 @@ local function find_existing_buffers(session_data)
             end
         end
     end
-    
-    logger.info("session", "finding existing buffers", {
-        existing_count = #existing_buf_names,
-        current_cwd = vim.fn.getcwd(),
-        existing_buffers = existing_buf_names
-    })
 
     -- Try to match session data buffers with existing buffers
     for _, group_data in ipairs(session_data.groups) do
@@ -783,35 +795,14 @@ local function rebuild_groups(session_data, buffer_mappings)
         
         -- Restore current buffer for this group if available
         if group_data.current_buffer_path then
-            local logger = require('vertical-bufferline.logger')
             local current_buffer_file_path = expand_buffer_path(group_data.current_buffer_path)
             local current_buf_id = buffer_mappings[current_buffer_file_path]
-            
-            logger.info("session", "restoring current buffer for group", {
-                group_id = new_group_id,
-                saved_path = group_data.current_buffer_path,
-                expanded_path = current_buffer_file_path,
-                found_buf_id = current_buf_id,
-                buffer_valid = current_buf_id and vim.api.nvim_buf_is_valid(current_buf_id) or false
-            })
-            
+
             if current_buf_id and vim.api.nvim_buf_is_valid(current_buf_id) then
                 local restored_group = groups.find_group_by_id(new_group_id)
                 if restored_group then
                     restored_group.current_buffer = current_buf_id
-                    logger.info("session", "current buffer restored successfully", {
-                        group_id = new_group_id,
-                        buf_id = current_buf_id,
-                        buf_name = vim.api.nvim_buf_get_name(current_buf_id)
-                    })
                 end
-            else
-                logger.warn("session", "failed to restore current buffer", {
-                    group_id = new_group_id,
-                    saved_path = group_data.current_buffer_path,
-                    expanded_path = current_buffer_file_path,
-                    available_mappings = vim.tbl_keys(buffer_mappings)
-                })
             end
         end
         
@@ -868,25 +859,40 @@ local function rebuild_groups(session_data, buffer_mappings)
     end
 
     if session_data.pinned_buffers and type(session_data.pinned_buffers) == "table" then
-        local ok_groups, bufferline_groups = pcall(require, "bufferline.groups")
-        if ok_groups then
-            local pin_set = {}
-            for _, pinned_path in ipairs(session_data.pinned_buffers) do
-                local expanded = expand_buffer_path(pinned_path)
-                local buf_id = buffer_mappings[expanded]
-                if buf_id and vim.api.nvim_buf_is_valid(buf_id) then
-                    pin_set[buf_id] = true
-                    bufferline_groups.add_element("pinned", { id = buf_id })
-                end
+        local pin_set = {}
+        for _, pinned_path in ipairs(session_data.pinned_buffers) do
+            local expanded = expand_buffer_path(pinned_path)
+            local buf_id = buffer_mappings[expanded]
+            if buf_id and vim.api.nvim_buf_is_valid(buf_id) then
+                pin_set[buf_id] = true
             end
-            for _, buf_id in ipairs(vim.api.nvim_list_bufs()) do
-                if vim.api.nvim_buf_is_valid(buf_id) and not pin_set[buf_id] then
-                    bufferline_groups.remove_element("pinned", { id = buf_id })
-                end
+        end
+
+        local state_module = require('vertical-bufferline.state')
+        for _, buf_id in ipairs(vim.api.nvim_list_bufs()) do
+            if vim.api.nvim_buf_is_valid(buf_id) then
+                state_module.set_buffer_pinned(buf_id, pin_set[buf_id] == true)
             end
-            local ok_ui, bufferline_ui = pcall(require, "bufferline.ui")
-            if ok_ui and bufferline_ui.refresh then
-                bufferline_ui.refresh()
+        end
+
+        local bufferline_integration = require('vertical-bufferline.bufferline-integration')
+        if bufferline_integration.is_available() then
+            local ok_groups, bufferline_groups = pcall(require, "bufferline.groups")
+            if ok_groups then
+                for _, buf_id in ipairs(vim.api.nvim_list_bufs()) do
+                    if vim.api.nvim_buf_is_valid(buf_id) then
+                        local element = { id = buf_id }
+                        if pin_set[buf_id] then
+                            bufferline_groups.add_element("pinned", element)
+                        else
+                            bufferline_groups.remove_element("pinned", element)
+                        end
+                    end
+                end
+                local ok_ui, bufferline_ui = pcall(require, "bufferline.ui")
+                if ok_ui and bufferline_ui.refresh then
+                    bufferline_ui.refresh()
+                end
             end
         end
     end
@@ -1209,39 +1215,15 @@ end
 
 -- State restoration from global variable (simplified synchronous version)
 local function restore_state_from_global()
-    local logger = require('vertical-bufferline.logger')
-
-    -- Auto-enable logging for session debugging (disabled for normal use)
-    -- if not logger.is_enabled() then
-    --     logger.enable(vim.fn.expand("~/vbl-session-debug.log"), "DEBUG")
-    --     logger.info("session", "auto-enabled debug logging for session restore")
-    -- end
-
-    logger.info("session", "starting session restore", {
-        cwd = vim.fn.getcwd(),
-        global_session_exists = vim.g.VerticalBufferlineSession ~= nil
-    })
-
     if not vim.g.VerticalBufferlineSession then
-        logger.warn("session", "no VBL session data found")
         return false
     end
 
     local success, session_data = pcall(vim.json.decode, vim.g.VerticalBufferlineSession)
     if not success then
-        logger.error("session", "failed to decode VBL session data", {
-            error = session_data,
-            raw_data = vim.g.VerticalBufferlineSession
-        })
         vim.notify("Failed to decode VBL session data", vim.log.levels.ERROR)
         return false
     end
-    
-    logger.info("session", "session data decoded successfully", {
-        group_count = #session_data.groups,
-        active_group_id = session_data.active_group_id,
-        timestamp = session_data.timestamp
-    })
     
     
     -- Validate session data
@@ -1255,10 +1237,13 @@ local function restore_state_from_global()
         return false
     end
     _G._vbl_session_restore_in_progress = true
-    
+
     -- Synchronous execution - remove vim.schedule() wrapper
     local groups = require('vertical-bufferline.groups')
     local bufferline_integration = require('vertical-bufferline.bufferline-integration')
+
+    -- CRITICAL: Disable auto-add during session restore to prevent BufEnter from interfering
+    groups.disable_auto_add()
     
     -- Show progress notification
     vim.notify("Restoring VBL state...", vim.log.levels.INFO)
@@ -1276,10 +1261,13 @@ local function restore_state_from_global()
     finalize_session_restore(session_data, vim.tbl_count(buffer_mappings), #session_data.groups)
     
     vim.notify(string.format("VBL state restored (%d groups)", #session_data.groups), vim.log.levels.INFO)
-    
+
+    -- Re-enable auto-add after session restore completes
+    groups.enable_auto_add()
+
     -- Mark that session restore is complete to prevent duplicate calls
     _G._vbl_session_restore_in_progress = false
-    
+
     return true
 end
 
@@ -1390,14 +1378,19 @@ local function setup_session_integration()
     if session_config.mini_sessions_integration then
         -- Save state before session write
         vim.api.nvim_create_autocmd("User", {
-            pattern = "SessionSavePre", 
+            pattern = "SessionSavePre",
             callback = function()
                 -- Stop auto-serialization during session save
                 stop_auto_serialize()
-                
+
+                -- CRITICAL: Remove 'blank' from sessionoptions to prevent saving empty buffers
+                -- (like the VBL sidebar which becomes empty when special buffers can't be saved)
+                vim.g._vbl_saved_sessionoptions = vim.o.sessionoptions
+                vim.opt.sessionoptions:remove('blank')
+
                 -- Save all buffer visibility states and temporarily make all group buffers visible
                 setup_complete_buffer_visibility_for_session()
-                
+
                 -- Save VBL state
                 vim.g.VerticalBufferlineSession = vim.json.encode(collect_current_state())
             end,
@@ -1410,7 +1403,13 @@ local function setup_session_integration()
             callback = function()
                 -- Restore original buffer visibility states
                 restore_original_buffer_visibility()
-                
+
+                -- Restore original sessionoptions
+                if vim.g._vbl_saved_sessionoptions then
+                    vim.o.sessionoptions = vim.g._vbl_saved_sessionoptions
+                    vim.g._vbl_saved_sessionoptions = nil
+                end
+
                 -- Restart auto-serialization if enabled
                 if session_config.auto_serialize then
                     start_auto_serialize()
@@ -1441,6 +1440,11 @@ local function setup_session_integration()
                     if vim.g.VerticalBufferlineSession and not _G._vbl_session_restore_completed then
                         restore_state_from_global()
                         _G._vbl_session_restore_completed = true
+
+                        -- NOW safe to start auto-serialize after restore is complete
+                        if session_config.auto_serialize then
+                            start_auto_serialize()
+                        end
                     end
                 end, 50)
             end,
@@ -1450,22 +1454,18 @@ local function setup_session_integration()
     
     -- Auto-serialization for native mksession
     if session_config.auto_serialize then
-        start_auto_serialize()
-        
-        -- Immediate serialization on state changes
-        vim.api.nvim_create_autocmd("User", {
-            pattern = {
-                "VBufferLineGroupChanged",
-                "VBufferLineGroupCreated",
-                "VBufferLineGroupDeleted",
-                "VBufferLineBufferAddedToGroup",
-                "VBufferLineBufferRemovedFromGroup"
-            },
-            callback = function()
-                vim.g.VerticalBufferlineSession = vim.json.encode(collect_current_state())
-            end,
-            desc = "Real-time serialize VBL state on changes"
-        })
+        -- CRITICAL: Delay auto-serialize start to give SessionLoadPost a chance to run first
+        -- If there's a session being restored, SessionLoadPost will start auto-serialize after restoration
+        -- If there's no session, we start it after a delay to avoid race conditions
+        vim.defer_fn(function()
+            -- Only start if not already started by SessionLoadPost
+            if not auto_serialize_timer then
+                start_auto_serialize()
+            end
+        end, 200)  -- 200ms delay: SessionLoadPost has 50ms delay, so this gives it 150ms buffer
+
+        -- NOTE: Removed immediate serialization on every state change
+        -- The 3-second auto-serialize timer is sufficient and avoids lag when creating groups
     end
     
     -- Manual restore command

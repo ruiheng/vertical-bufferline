@@ -1,31 +1,30 @@
 # Vertical Bufferline
 
-**Vertical sidebar for bufferline.nvim, with groups and history for large projects.**
+**Vertical sidebar for buffer groups, with optional bufferline.nvim integration and history for large projects.**
 
 Use the unused space on the left/right to show every buffer at a glance, organized by group. Bufferline.nvim then only shows the buffers for your *current* group, keeping the horizontal bar clean and focused.
 
 ## Quick Start
 
-1) Install and set up bufferline.nvim (required).
-2) Install this plugin and call setup.
-3) Add your own keymaps (only the sidebar has built-in keymaps).
+1) Install this plugin and call setup.
+2) Optional: install bufferline.nvim for integration (visible ordinals, shared picking, and pin sync).
+3) (Optional) Apply the opt-in keymap preset.
 
 ```lua
 -- lazy.nvim
 {
   "ruiheng/vertical-bufferline",
-  dependencies = { "akinsho/bufferline.nvim" },
+  -- Optional: add bufferline.nvim for integration
+  -- dependencies = { "akinsho/bufferline.nvim" },
   opts = {},
-  keys = {
-    -- Example keymaps (define your own)
-    { "<leader>vb", function() require("vertical-bufferline").toggle() end, desc = "Toggle VBL" },
-    { "<leader>gc", function() require("vertical-bufferline").create_group() end, desc = "Create group" },
-    { "<leader>gn", function() require("vertical-bufferline").switch_to_next_group() end, desc = "Next group" },
-  },
+  config = function()
+    local vbl = require("vertical-bufferline")
+    vbl.apply_keymaps(vbl.keymap_preset())
+  end,
 }
 ```
 
-Recommended bufferline integration (for smart buffer closing):
+Recommended bufferline integration (optional, for smart buffer closing):
 ```lua
 require('bufferline').setup({
   options = {
@@ -52,12 +51,12 @@ require('bufferline').setup({
 - **Vertical sidebar** showing buffer groups and their contents
 - **Adaptive width** - sidebar automatically adjusts width based on content (configurable min/max)
 - **Dynamic buffer grouping** with automatic management
-- **Seamless bufferline integration** - bufferline only shows current group's buffers
+- **Optional bufferline integration** - bufferline only shows current group's buffers when installed
 - **Perfect picking mode compatibility** with synchronized highlighting
 - **Two display modes**: Show only active group (default) or expand all groups
 - **Smart filename disambiguation** - automatically resolves duplicate filenames with minimal path context
 - **Cursor alignment** - VBL content automatically aligns with your cursor position in the main window
-- **Pinned buffer indicator** - shows bufferline pinned state in the sidebar
+- **Pinned buffer indicator** - shows pin state in the sidebar (syncs with bufferline when installed)
 - **Edit mode (modal)** - batch edit groups in a temporary buffer and apply
 
 ### Group Management
@@ -69,7 +68,27 @@ require('bufferline').setup({
 
 ## Keymaps
 
-### Plugin Functions (You Must Map These)
+### Opt-in Keymap Preset
+
+Apply the preset:
+```lua
+local vbl = require("vertical-bufferline")
+vbl.apply_keymaps(vbl.keymap_preset())
+```
+
+Customize prefixes:
+```lua
+local vbl = require("vertical-bufferline")
+vbl.apply_keymaps(vbl.keymap_preset({
+  history_prefix = "<leader>h", -- defaults to <leader>h
+  buffer_prefix = "<leader>",   -- defaults to <leader>
+  group_prefix = "<leader>g",   -- defaults to <leader>g
+}))
+```
+
+You can also override or remove any entry by editing the returned table before applying it.
+
+### Plugin Functions (If You Prefer Custom Keymaps)
 
 The following functions are available for you to map to your preferred keybindings. See Installation section for keymap examples.
 
@@ -88,8 +107,9 @@ The following functions are available for you to map to your preferred keybindin
 
 **History Quick Access:**
 - `require('vertical-bufferline').switch_to_history_file(n)` - Switch to nth recent file in current group history
+- `require('vertical-bufferline').switch_to_group_buffer(n)` - Switch to nth buffer in current group
 
-Note: `BufferLineGoToBuffer` and `BufferLinePick` are provided by bufferline.nvim, not this plugin.
+Note: `BufferLineGoToBuffer` and `BufferLinePick` are provided by bufferline.nvim. Without bufferline, use `:VBufferLinePick`.
 
 ## Commands
 
@@ -107,6 +127,8 @@ Note: `BufferLineGoToBuffer` and `BufferLinePick` are provided by bufferline.nvi
 - `:VBufferLineNextGroup` - Switch to next group
 - `:VBufferLinePrevGroup` - Switch to previous group
 - `:VBufferLineToggleInactiveGroupBuffers` - Toggle showing buffer lists for inactive groups (same as `:VBufferLineToggleExpandAll`)
+- `:VBufferLinePick` - Pick a buffer across groups
+- `:VBufferLinePickClose` - Pick a buffer across groups and close it
 
 ### Group Reordering
 - `:VBufferLineMoveGroupUp` - Move current group up in the list
@@ -158,7 +180,7 @@ Toggle between modes with `:VBufferLineToggleInactiveGroupBuffers` or by calling
 
 ### Buffer Lines
 
-**Dual Numbering System:**
+**Dual Numbering System (bufferline.nvim only):**
 
 VBL displays buffer ordinal numbers to help you navigate efficiently. Each buffer shows its position with one or two numbers:
 
@@ -176,7 +198,7 @@ Examples:
 -|9 Config.json        # Not in bufferline visible elements, 9th in group
 ```
 
-The visible ordinal corresponds to bufferline's ordinal numbers (for example, if you map them to `<leader>1`, `<leader>2`, etc.), making it easy to jump to visible buffers using those shortcuts.
+The visible ordinal corresponds to bufferline's ordinal numbers (for example, if you map them to `<leader>1`, `<leader>2`, etc.), making it easy to jump to visible buffers using those shortcuts. Without bufferline.nvim, VBL shows only the group ordinal.
 
 **Buffer Display Elements:**
 - `► 1 🌙 filename.lua` - Current buffer with arrow marker
@@ -185,7 +207,7 @@ The visible ordinal corresponds to bufferline's ordinal numbers (for example, if
 - `└─ 3 📋 src/config.json` - Tree structure with smart disambiguation for duplicate names
 
 ### Picking Mode Integration
-When using `:BufferLinePick` (whatever key you map), the sidebar shows hint characters:
+When using `:BufferLinePick` (bufferline.nvim) or `:VBufferLinePick` (built-in), the sidebar shows hint characters:
 ```
 ├─ a ► 1 🌙 App.tsx
 ├─ s 2 📄 Button.jsx
@@ -212,7 +234,7 @@ Use commands directly, or map them to your own keys.
 2. **Auto-cleanup deleted buffers** - Deleted files are automatically removed from all groups
 3. **Smart buffer filtering** - Only normal file buffers are managed (excludes terminals, quickfix, etc.)
 4. **Instant refresh** - UI updates immediately on group operations
-5. **BufferLine synchronization** - BufferLine automatically shows only current group's buffers
+5. **BufferLine synchronization** - BufferLine automatically shows only current group's buffers (bufferline.nvim only)
 6. **Session persistence** - Automatically save and restore group configurations across sessions
 7. **Smart filename disambiguation** - When multiple files have the same name, automatically shows minimal unique paths
 

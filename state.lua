@@ -16,6 +16,7 @@ local state = {
     hint_to_buffer_id = {}, -- Maps a hint character to a buffer ID
     line_group_context = {}, -- Maps a line number to the group ID it belongs to
     group_header_lines = {}, -- Maps line numbers to group header information
+    line_offset = 0, -- Cursor alignment offset for rendered lines
     was_picking = false, -- Track picking mode state to avoid spam
     session_loading = false, -- Flag to prevent interference during session loading
     highlight_timer = nil, -- Timer for picking highlights
@@ -27,7 +28,10 @@ local state = {
         line_hints = {},  -- line_number -> hint_char
         hint_lines = {},  -- hint_char -> line_number
         bufferline_hints = {}  -- existing bufferline hints for reference
-    }
+    },
+
+    -- Pin state (fallback when bufferline.nvim is not available)
+    pinned_buffers = {}
 }
 
 -- State validation functions
@@ -185,6 +189,18 @@ function M.clear_group_header_lines()
     state.group_header_lines = {}
 end
 
+-- Line offset management (for cursor alignment)
+function M.get_line_offset()
+    return state.line_offset or 0
+end
+
+function M.set_line_offset(offset)
+    if type(offset) ~= "number" then
+        error("line_offset must be number, got: " .. type(offset))
+    end
+    state.line_offset = offset
+end
+
 -- Picking mode state
 function M.was_picking()
     return state.was_picking
@@ -218,6 +234,43 @@ end
 
 function M.set_highlight_timer(timer)
     state.highlight_timer = timer
+end
+
+-- Pin state management (fallback when bufferline.nvim is unavailable)
+function M.is_buffer_pinned(buf_id)
+    return state.pinned_buffers[buf_id] == true
+end
+
+function M.set_buffer_pinned(buf_id, pinned)
+    if pinned then
+        state.pinned_buffers[buf_id] = true
+    else
+        state.pinned_buffers[buf_id] = nil
+    end
+end
+
+function M.set_pinned_buffers(pinned_list)
+    state.pinned_buffers = {}
+    if type(pinned_list) ~= "table" then
+        return
+    end
+    for _, buf_id in ipairs(pinned_list) do
+        state.pinned_buffers[buf_id] = true
+    end
+end
+
+function M.get_pinned_buffers()
+    local result = {}
+    for buf_id, pinned in pairs(state.pinned_buffers) do
+        if pinned then
+            table.insert(result, buf_id)
+        end
+    end
+    return result
+end
+
+function M.clear_pinned_buffers()
+    state.pinned_buffers = {}
 end
 
 function M.stop_highlight_timer()

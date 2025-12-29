@@ -459,6 +459,21 @@ function M.setup()
         desc = "Toggle showing buffer lists for inactive groups"
     })
 
+    -- Picking commands
+    vim.api.nvim_create_user_command("VBufferLinePick", function()
+        require('vertical-bufferline').pick_buffer()
+    end, {
+        nargs = 0,
+        desc = "Pick a buffer across groups"
+    })
+
+    vim.api.nvim_create_user_command("VBufferLinePickClose", function()
+        require('vertical-bufferline').pick_close()
+    end, {
+        nargs = 0,
+        desc = "Pick a buffer across groups and close it"
+    })
+
     -- Group reordering commands
     vim.api.nvim_create_user_command("VBufferLineMoveGroupUp", move_group_up_command, {
         nargs = 0,
@@ -1194,6 +1209,17 @@ function M.setup()
         nargs = 0,
         desc = "Toggle adaptive width for VBL sidebar"
     })
+
+    -- Debug pick mode hints
+    vim.api.nvim_create_user_command("VBufferLineDebugPickMode", function()
+        logger.enable(vim.fn.expand("~/vbl-pick-debug.log"), "DEBUG")
+        vim.notify("VBL pick mode debug logging enabled: ~/vbl-pick-debug.log\nNow enter pick mode and check the log file", vim.log.levels.INFO)
+    end, {
+        nargs = 0,
+        desc = "Enable debug logging for pick mode hints"
+    })
+
+    -- Pick mode commands removed - using VBufferLinePick and VBufferLinePickClose defined earlier
 end
 
 -- Export functions for use by other modules

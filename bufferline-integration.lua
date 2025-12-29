@@ -25,6 +25,15 @@ end
 
 _G._vertical_bufferline_integration_loaded = true
 
+local function is_bufferline_available()
+    local ok_state, _ = pcall(require, 'bufferline.state')
+    return ok_state
+end
+
+function M.is_available()
+    return is_bufferline_available()
+end
+
 
 -- Get buffer index in our target list (for sorting)
 local function get_buffer_index_in_list(buf_id, buffer_list)
@@ -44,6 +53,10 @@ end
 
 -- Get bufferline's custom sort order for proper buffer ordering
 local function get_bufferline_sorted_buffers()
+    if not is_bufferline_available() then
+        return {}
+    end
+
     local bufferline_utils = require('bufferline.utils')
     local bufferline_state = require('bufferline.state')
     
@@ -85,6 +98,10 @@ end
 --- Get real buffer position information from bufferline state
 --- @return table Buffer position mapping {buffer_id -> {local_pos = N or nil, global_pos = M}}
 local function get_real_position_info()
+    if not is_bufferline_available() then
+        return {}
+    end
+
     local state = require('bufferline.state')
     local all_buffers = state.components or {}
     local visible_buffers = state.visible_components or {}
@@ -124,6 +141,10 @@ end
 
 -- Direction 1: bufferline → current group (timer, 99% of the time)
 local function sync_bufferline_to_group()
+    if not is_bufferline_available() then
+        return
+    end
+
     -- Auto-enable logging for sync debugging (disabled for normal use)
     -- if not logger.is_enabled() and not _G._vbl_auto_logging_enabled then
     --     logger.enable(vim.fn.expand("~/vbl-sync-debug.log"), "DEBUG")
@@ -256,7 +277,7 @@ end
 --- Direction 2: group → bufferline (when switching groups, 1% of the time)
 --- @param buffer_list table List of buffer IDs to show in bufferline
 function M.set_bufferline_buffers(buffer_list)
-    if not is_enabled then
+    if not is_enabled or not is_bufferline_available() then
         return
     end
 
@@ -313,8 +334,8 @@ function M.set_bufferline_buffers(buffer_list)
     end
 
     -- Refresh bufferline
-    local bufferline_ui = require('bufferline.ui')
-    if bufferline_ui.refresh then
+    local ok_ui, bufferline_ui = pcall(require, 'bufferline.ui')
+    if ok_ui and bufferline_ui.refresh then
         bufferline_ui.refresh()
     end
 
@@ -385,9 +406,11 @@ end
 
 --- Manual sync function
 function M.manual_sync()
-    local bufferline_ui = require('bufferline.ui')
-    if bufferline_ui and bufferline_ui.refresh then
-        bufferline_ui.refresh()
+    if is_bufferline_available() then
+        local ok_ui, bufferline_ui = pcall(require, 'bufferline.ui')
+        if ok_ui and bufferline_ui.refresh then
+            bufferline_ui.refresh()
+        end
     end
 
     local vbl = require('vertical-bufferline')
@@ -406,9 +429,7 @@ function M.enable()
     end
 
     -- Ensure bufferline is loaded
-    local ok_state, _ = pcall(require, 'bufferline.state')
-    if not ok_state then
-        vim.notify("bufferline.nvim not found", vim.log.levels.WARN)
+    if not is_bufferline_available() then
         return false
     end
 
@@ -459,7 +480,7 @@ end
 --- Status check
 --- @return table Integration status information
 function M.status()
-    local bufferline_available = pcall(require, 'bufferline.state')
+    local bufferline_available = is_bufferline_available()
     return {
         is_enabled = is_enabled,
         has_timer = sync_timer ~= nil,
@@ -522,7 +543,7 @@ function M.get_buffer_position_info(group_id)
     local active_group = groups.get_active_group()
     local is_current_group = active_group and (group_id == active_group.id)
     
-    if is_current_group then
+    if is_current_group and is_bufferline_available() then
         -- For current group: always get fresh position info from bufferline
         local position_info = get_real_position_info()
         
@@ -542,9 +563,11 @@ end
 --- Force refresh (for compatibility with session.lua)
 function M.force_refresh()
     vim.schedule(function()
-        local bufferline_ui = require('bufferline.ui')
-        if bufferline_ui.refresh then
-            bufferline_ui.refresh()
+        if is_bufferline_available() then
+            local ok_ui, bufferline_ui = pcall(require, 'bufferline.ui')
+            if ok_ui and bufferline_ui.refresh then
+                bufferline_ui.refresh()
+            end
         end
 
         -- Refresh our sidebar

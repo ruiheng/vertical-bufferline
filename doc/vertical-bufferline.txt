@@ -27,7 +27,7 @@ Key Features:
 - Vertical sidebar showing buffer groups and their contents
 - Adaptive width that automatically adjusts based on content
 - Dynamic buffer grouping with automatic management
-- Seamless bufferline.nvim integration
+- Optional bufferline.nvim integration
 - Perfect picking mode compatibility with synchronized highlighting
 - Two display modes: Expand all groups or show only active group
 - Smart filename disambiguation with minimal path context
@@ -43,6 +43,10 @@ Using lazy.nvim (recommended):
 >lua
     {
       "your-username/vertical-bufferline",
+      config = function()
+        local vbl = require("vertical-bufferline")
+        vbl.apply_keymaps(vbl.keymap_preset())
+      end,
       opts = {
         min_width = 15,
         max_width = 60,
@@ -102,7 +106,7 @@ Then add to your init.lua:
 3. REQUIREMENTS                               *vertical-bufferline-requirements*
 
 - Neovim 0.8.0 or higher
-- Optional: bufferline.nvim for enhanced integration and picking mode
+- Optional: bufferline.nvim for integration, visible ordinals, and shared picking mode
 - Optional: scope.nvim for tabpage-scoped buffer management
 - Optional: mini.sessions for enhanced session management
 <
@@ -291,6 +295,8 @@ Navigation:
 :VBufferLineNextGroup                 Switch to next group
 :VBufferLinePrevGroup                 Switch to previous group
 :VBufferLineToggleExpandAll           Toggle expand all groups mode
+:VBufferLinePick                      Pick a buffer across groups
+:VBufferLinePickClose                 Pick a buffer across groups and close it
 
 Group Reordering:
 :VBufferLineMoveGroupUp               Move current group up in the list
@@ -329,6 +335,23 @@ Plugin Functions (User Configuration Required):
 NOTE: The following keymaps require user configuration. See examples below
 and |vertical-bufferline-installation| for setup.
 
+Opt-in Preset:
+Call the preset helper and apply the mappings:
+>lua
+    local vbl = require("vertical-bufferline")
+    vbl.apply_keymaps(vbl.keymap_preset())
+<
+
+Customize prefixes:
+>lua
+    local vbl = require("vertical-bufferline")
+    vbl.apply_keymaps(vbl.keymap_preset({
+      history_prefix = "<leader>h",
+      buffer_prefix = "<leader>",
+      group_prefix = "<leader>g",
+    }))
+<
+
 Sidebar Control:
 <leader>vb                            Toggle vertical bufferline sidebar
 <leader>ve                            Toggle expand all groups mode
@@ -347,15 +370,21 @@ History Quick Access:                          *vertical-bufferline-history-keym
 <leader>h1 to <leader>h9              Quick switch to recent files 1-9 in history
                                       (<leader>h1 = most recent, <leader>h2 = second most recent, etc.)
 
-Recommended BufferLine Integration:     *vertical-bufferline-bufferline-keymaps*
+Group Buffer Quick Access:
+<leader>1 to <leader>9                Switch to buffers 1-9 in current group
 
-This plugin is designed to work with bufferline.nvim. The following keymaps
+Recommended BufferLine Integration (optional):     *vertical-bufferline-bufferline-keymaps*
+
+This plugin can integrate with bufferline.nvim. The following keymaps
 are provided by bufferline.nvim (not this plugin) and complement the workflow:
 
 Buffer Quick Access (provided by bufferline.nvim):
 <leader>1 to <leader>9                Quick switch to buffers 1-9 in current group
 <leader>0                             Switch to 10th buffer in current group
 <leader>p                             BufferLine picking mode
+
+When bufferline.nvim is not installed, use:
+:VBufferLinePick                      Pick a buffer across groups
 
 Example configuration with both plugins:
 >lua
@@ -496,10 +525,11 @@ Integration:
 ==============================================================================
 11. INTEGRATION                              *vertical-bufferline-integration*
 
-BufferLine.nvim:
-- Seamlessly filters buffers to show only current group
-- Perfect picking mode integration with synchronized highlights
-- All BufferLine commands work within current group context
+BufferLine.nvim (optional):
+- Filters buffers to show only current group
+- Picking mode integration with synchronized highlights
+- BufferLine commands work within current group context
+- Without bufferline.nvim, VBL manages ordering and picking internally
 
 Scope.nvim:
 - Compatible with tabpage-scoped buffer management

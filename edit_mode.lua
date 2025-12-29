@@ -53,11 +53,13 @@ local function is_modified_buffer(buf_id)
 end
 
 local function is_pinned_buffer(buf_id)
-    local ok_groups, bufferline_groups = pcall(require, "bufferline.groups")
-    if not ok_groups or not bufferline_groups or not bufferline_groups._is_pinned then
-        return false
+    if bufferline_integration.is_available() then
+        local ok_groups, bufferline_groups = pcall(require, "bufferline.groups")
+        if ok_groups and bufferline_groups and bufferline_groups._is_pinned then
+            return bufferline_groups._is_pinned({ id = buf_id }) and true or false
+        end
     end
-    return bufferline_groups._is_pinned({ id = buf_id }) and true or false
+    return state_module.is_buffer_pinned(buf_id)
 end
 
 local function format_buffer_line(buf_id)
@@ -369,21 +371,29 @@ local function apply_edit_buffer(buf_id)
     bufferline_integration.set_sync_target(nil)
     groups.replace_groups_from_edit(group_buffers)
     if pin_set then
-        local ok_groups, bufferline_groups = pcall(require, "bufferline.groups")
-        if ok_groups then
-            for _, buf_id in ipairs(api.nvim_list_bufs()) do
-                if api.nvim_buf_is_valid(buf_id) then
-                    local element = { id = buf_id }
-                    if pin_set[buf_id] then
-                        bufferline_groups.add_element("pinned", element)
-                    else
-                        bufferline_groups.remove_element("pinned", element)
+        for _, buf_id in ipairs(api.nvim_list_bufs()) do
+            if api.nvim_buf_is_valid(buf_id) then
+                state_module.set_buffer_pinned(buf_id, pin_set[buf_id] == true)
+            end
+        end
+
+        if bufferline_integration.is_available() then
+            local ok_groups, bufferline_groups = pcall(require, "bufferline.groups")
+            if ok_groups then
+                for _, buf_id in ipairs(api.nvim_list_bufs()) do
+                    if api.nvim_buf_is_valid(buf_id) then
+                        local element = { id = buf_id }
+                        if pin_set[buf_id] then
+                            bufferline_groups.add_element("pinned", element)
+                        else
+                            bufferline_groups.remove_element("pinned", element)
+                        end
                     end
                 end
-            end
-            local ok_ui, bufferline_ui = pcall(require, "bufferline.ui")
-            if ok_ui and bufferline_ui.refresh then
-                bufferline_ui.refresh()
+                local ok_ui, bufferline_ui = pcall(require, "bufferline.ui")
+                if ok_ui and bufferline_ui.refresh then
+                    bufferline_ui.refresh()
+                end
             end
         end
     end
