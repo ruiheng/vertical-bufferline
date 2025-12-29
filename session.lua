@@ -942,31 +942,42 @@ function M.load_session(filename)
     -- Temporarily disable bufferline sync during loading
     local bufferline_integration = require('vertical-bufferline.bufferline-integration')
     local groups = require('vertical-bufferline.groups')
-    
+
     -- Disable auto-add during session restore to prevent BufEnter from interfering
     groups.disable_auto_add()
-    
+
     bufferline_integration.set_sync_target(nil)
 
-    -- Step 1: Handle existing buffers
-    local handled_buffers = handle_existing_buffers(session_data)
+    -- Wrap in pcall to ensure cleanup always happens
+    local success, result = pcall(function()
+        -- Step 1: Handle existing buffers
+        local handled_buffers = handle_existing_buffers(session_data)
 
-    -- Step 2: Collect all session files
-    local session_files = collect_session_files(session_data)
+        -- Step 2: Collect all session files
+        local session_files = collect_session_files(session_data)
 
-    -- Step 3: Open all session files
-    local buffer_mappings, opened_count = open_session_files(session_files)
+        -- Step 3: Open all session files
+        local buffer_mappings, opened_count = open_session_files(session_files)
 
-    -- Step 4: Rebuild group structure
-    rebuild_groups(session_data, buffer_mappings)
+        -- Step 4: Rebuild group structure
+        rebuild_groups(session_data, buffer_mappings)
 
-    -- Step 5: Common finalization
-    finalize_session_restore(session_data, opened_count, #session_data.groups)
+        -- Step 5: Common finalization
+        finalize_session_restore(session_data, opened_count, #session_data.groups)
 
-    -- Re-enable auto-add after session restore completes
+        return opened_count
+    end)
+
+    -- Always re-enable auto-add and reset state, even if there was an error
     groups.enable_auto_add()
     state_module.set_session_loading(false)
 
+    if not success then
+        vim.notify("Session load error: " .. tostring(result), vim.log.levels.ERROR)
+        return false
+    end
+
+    local opened_count = result
     vim.notify(string.format("Session loaded: %s (%d buffers, %d groups)",
         vim.fn.fnamemodify(filename, ":t"), opened_count, #session_data.groups), vim.log.levels.INFO)
 
@@ -1257,31 +1268,36 @@ local function restore_state_from_global()
     -- CRITICAL: Disable auto-add during session restore to prevent BufEnter from interfering
     state_module.set_session_loading(true)
     groups.disable_auto_add()
-    
+
     -- Show progress notification
     vim.notify("Restoring VBL state...", vim.log.levels.INFO)
-    
+
     -- Temporarily disable bufferline sync during loading
     bufferline_integration.set_sync_target(nil)
-    
-    -- Find existing buffers that were already loaded by Vim session
-    local buffer_mappings = find_existing_buffers(session_data)
-    
-    -- Basic group restoration with existing buffers
-    rebuild_groups(session_data, buffer_mappings)
-    
-    -- Common finalization
-    finalize_session_restore(session_data, vim.tbl_count(buffer_mappings), #session_data.groups)
-    
-    vim.notify(string.format("VBL state restored (%d groups)", #session_data.groups), vim.log.levels.INFO)
 
-    -- Re-enable auto-add after session restore completes
+    -- Wrap in pcall to ensure cleanup always happens
+    local success, err = pcall(function()
+        -- Find existing buffers that were already loaded by Vim session
+        local buffer_mappings = find_existing_buffers(session_data)
+
+        -- Basic group restoration with existing buffers
+        rebuild_groups(session_data, buffer_mappings)
+
+        -- Common finalization
+        finalize_session_restore(session_data, vim.tbl_count(buffer_mappings), #session_data.groups)
+    end)
+
+    -- Always re-enable auto-add and reset state, even if there was an error
     groups.enable_auto_add()
     state_module.set_session_loading(false)
-
-    -- Mark that session restore is complete to prevent duplicate calls
     _G._vbl_session_restore_in_progress = false
 
+    if not success then
+        vim.notify("VBL state restore error: " .. tostring(err), vim.log.levels.ERROR)
+        return false
+    end
+
+    vim.notify(string.format("VBL state restored (%d groups)", #session_data.groups), vim.log.levels.INFO)
     return true
 end
 

@@ -998,13 +998,6 @@ function M.setup(opts)
             local bufname = vim.api.nvim_buf_get_name(buf_id)
             if bufname == '' then return end  -- Skip unnamed buffers
 
-            -- Check if buffer is already in any group
-            for _, group in ipairs(groups_data.groups) do
-                if vim.tbl_contains(group.buffers or {}, buf_id) then
-                    return  -- Already in a group
-                end
-            end
-
             -- Add to active group
             local active_group = M.get_active_group()
             if active_group then
