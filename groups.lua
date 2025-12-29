@@ -38,9 +38,6 @@ local groups_data = {
     -- Counter for next group ID
     next_group_id = config_module.SYSTEM.FIRST_INDEX,
     
-    -- Counter for stable display numbers (never decreases)
-    next_display_number = config_module.SYSTEM.FIRST_INDEX,
-
     -- Group settings
     settings = {
         auto_create_groups = config_module.DEFAULTS.auto_create_groups,
@@ -54,6 +51,13 @@ local groups_data = {
     -- Flag to temporarily disable history sync (when clicking history items)
     history_sync_disabled = false,
 }
+
+--- Re-index all groups to ensure display numbers are continuous
+local function reindex_groups()
+    for i, group in ipairs(groups_data.groups) do
+        group.display_number = i
+    end
+end
 
 --- Update group's buffer list and sync history accordingly
 --- @param group table Group object
@@ -82,14 +86,15 @@ local function init_default_group()
             buffers = {},
             created_at = os.time(),
             color = config_module.COLORS.BLUE,
-            display_number = groups_data.next_display_number,
+            display_number = config_module.SYSTEM.FIRST_INDEX,
             buffer_states = {},  -- Store per-buffer window states (cursor, scroll, etc.)
             position_info = {},   -- Store bufferline position info {buffer_id -> local_pos}
             history = {}  -- Store recent file access history, first item is current buffer
         }
-        groups_data.next_display_number = groups_data.next_display_number + 1
         table.insert(groups_data.groups, default_group)
         groups_data.active_group_id = groups_data.default_group_id
+        
+        reindex_groups()
 
         -- Don't auto-add buffers during initialization, left to caller
     end
@@ -107,12 +112,8 @@ end
 
 -- Find group by display number
 local function find_group_by_display_number(display_number)
-    for _, group in ipairs(groups_data.groups) do
-        if group.display_number == display_number then
-            return group
-        end
-    end
-    return nil
+    -- Display numbers are now guaranteed to match the index (1-based)
+    return groups_data.groups[display_number]
 end
 
 -- Buffer state management utilities (defined early to be available everywhere)
@@ -247,14 +248,14 @@ function M.create_group(name, color)
         buffers = {},
         created_at = os.time(),
         color = color or config_module.COLORS.GREEN,
-        display_number = groups_data.next_display_number,
+        display_number = 0, -- Will be set by reindex_groups
         buffer_states = {},  -- Store per-buffer window states (cursor, scroll, etc.)
         position_info = {},  -- Store bufferline position info {buffer_id -> local_pos}
         history = {}         -- Store recent file access history {buffer_id, ...} (newest first, first item is current buffer)
     }
-    groups_data.next_display_number = groups_data.next_display_number + 1
 
     table.insert(groups_data.groups, new_group)
+    reindex_groups()
 
     -- Trigger event
     vim.api.nvim_exec_autocmds("User", {
@@ -313,6 +314,7 @@ function M.delete_group(group_id)
 
     -- Delete group
     table.remove(groups_data.groups, group_index)
+    reindex_groups()
 
     -- If deleting current active group, switch to default group
     if groups_data.active_group_id == group_id then
@@ -382,12 +384,11 @@ function M.replace_groups_from_edit(group_specs)
                 buffers = {},
                 created_at = os.time(),
                 color = config_module.COLORS.GREEN,
-                display_number = groups_data.next_display_number,
+                display_number = 0,
                 buffer_states = {},
                 position_info = {},
                 history = {},
             }
-            groups_data.next_display_number = groups_data.next_display_number + 1
         else
             group.name = spec.name or ""
         end
@@ -397,6 +398,7 @@ function M.replace_groups_from_edit(group_specs)
     end
 
     groups_data.groups = new_groups
+    reindex_groups()
     if #groups_data.groups == 0 then
         init_default_group()
     end
@@ -758,6 +760,8 @@ function M.move_group_up(group_id)
     local temp = groups_data.groups[group_index]
     groups_data.groups[group_index] = groups_data.groups[group_index - 1]
     groups_data.groups[group_index - 1] = temp
+    
+    reindex_groups()
 
     -- Trigger event
     vim.api.nvim_exec_autocmds("User", {
@@ -779,6 +783,8 @@ function M.move_group_down(group_id)
     local temp = groups_data.groups[group_index]
     groups_data.groups[group_index] = groups_data.groups[group_index + 1]
     groups_data.groups[group_index + 1] = temp
+
+    reindex_groups()
 
     -- Trigger event
     vim.api.nvim_exec_autocmds("User", {
@@ -810,6 +816,8 @@ function M.move_group_to_position(group_id, target_position)
 
     -- Insert at target position
     table.insert(groups_data.groups, target_position, group)
+
+    reindex_groups()
 
     -- Trigger event
     vim.api.nvim_exec_autocmds("User", {
