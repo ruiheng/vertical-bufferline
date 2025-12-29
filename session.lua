@@ -936,9 +936,16 @@ function M.load_session(filename)
         return false
     end
 
+    local state_module = require('vertical-bufferline.state')
+    state_module.set_session_loading(true)
+
     -- Temporarily disable bufferline sync during loading
     local bufferline_integration = require('vertical-bufferline.bufferline-integration')
     local groups = require('vertical-bufferline.groups')
+    
+    -- Disable auto-add during session restore to prevent BufEnter from interfering
+    groups.disable_auto_add()
+    
     bufferline_integration.set_sync_target(nil)
 
     -- Step 1: Handle existing buffers
@@ -955,6 +962,10 @@ function M.load_session(filename)
 
     -- Step 5: Common finalization
     finalize_session_restore(session_data, opened_count, #session_data.groups)
+
+    -- Re-enable auto-add after session restore completes
+    groups.enable_auto_add()
+    state_module.set_session_loading(false)
 
     vim.notify(string.format("Session loaded: %s (%d buffers, %d groups)",
         vim.fn.fnamemodify(filename, ":t"), opened_count, #session_data.groups), vim.log.levels.INFO)
@@ -1239,10 +1250,12 @@ local function restore_state_from_global()
     _G._vbl_session_restore_in_progress = true
 
     -- Synchronous execution - remove vim.schedule() wrapper
+    local state_module = require('vertical-bufferline.state')
     local groups = require('vertical-bufferline.groups')
     local bufferline_integration = require('vertical-bufferline.bufferline-integration')
 
     -- CRITICAL: Disable auto-add during session restore to prevent BufEnter from interfering
+    state_module.set_session_loading(true)
     groups.disable_auto_add()
     
     -- Show progress notification
@@ -1264,6 +1277,7 @@ local function restore_state_from_global()
 
     -- Re-enable auto-add after session restore completes
     groups.enable_auto_add()
+    state_module.set_session_loading(false)
 
     -- Mark that session restore is complete to prevent duplicate calls
     _G._vbl_session_restore_in_progress = false

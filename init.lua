@@ -3131,7 +3131,9 @@ local function initialize_plugin()
     if not bufferline_integration.is_available() then
         vim.schedule(function()
             open_sidebar()
-            populate_startup_buffers()
+            if not (config_module.DEFAULTS.auto_load and session.has_session()) then
+                populate_startup_buffers()
+            end
             M.refresh("no_bufferline_auto_open")
         end)
     end
@@ -3232,18 +3234,25 @@ populate_startup_buffers = function()
                 return
             end
 
-            local all_buffers = vim.api.nvim_list_bufs()
-            local default_group = groups.get_active_group()
-            if default_group then
+            local visible_buffers = {}
+            for _, win_id in ipairs(vim.api.nvim_list_wins()) do
+                if vim.api.nvim_win_is_valid(win_id) then
+                    local win_buf = vim.api.nvim_win_get_buf(win_id)
+                    visible_buffers[win_buf] = true
+                end
+            end
+            local active_group = groups.get_active_group()
+            if active_group then
                 local added_count = 0
-                for _, buf in ipairs(all_buffers) do
+                for buf, _ in pairs(visible_buffers) do
                     if vim.api.nvim_buf_is_valid(buf) then
                         local buf_type = vim.api.nvim_buf_get_option(buf, 'buftype')
-                        -- Only add buffers that bufferline would track, not already in groups
+                        -- Only add visible buffers not already in groups
                         if not utils.is_special_buffer(buf) and
                            buf_type == config_module.SYSTEM.EMPTY_BUFTYPE and
-                           not vim.tbl_contains(default_group.buffers, buf) then
-                            groups.add_buffer_to_group(buf, default_group.id)
+                           not vim.tbl_contains(active_group.buffers, buf) and
+                           not groups.find_buffer_group(buf) then
+                            groups.add_buffer_to_group(buf, active_group.id)
                             added_count = added_count + 1
                         end
                     end

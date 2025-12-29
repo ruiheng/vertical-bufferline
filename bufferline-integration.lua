@@ -156,6 +156,11 @@ local function sync_bufferline_to_group()
         return
     end
 
+    local state_module = require('vertical-bufferline.state')
+    if state_module.is_session_loading() then
+        return
+    end
+
     -- Check pointer: if nil, copy is invalid
     if not sync_target_group_id then
         return
