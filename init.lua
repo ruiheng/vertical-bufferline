@@ -3516,6 +3516,66 @@ function M.switch_to_group_buffer(position)
     return true
 end
 
+--- Switch to next buffer in current group
+--- @return boolean success
+function M.switch_to_next_buffer()
+    local active_group = groups.get_active_group()
+    if not active_group then
+        return false
+    end
+
+    local buffers = groups.get_group_buffers(active_group.id)
+    if not buffers or #buffers <= 1 then
+        return false
+    end
+
+    local current_buf = api.nvim_get_current_buf()
+    local current_idx = nil
+    for i, buf_id in ipairs(buffers) do
+        if buf_id == current_buf then
+            current_idx = i
+            break
+        end
+    end
+
+    if not current_idx then
+        current_idx = 0
+    end
+
+    local next_idx = current_idx % #buffers + 1
+    return M.switch_to_group_buffer(next_idx)
+end
+
+--- Switch to previous buffer in current group
+--- @return boolean success
+function M.switch_to_prev_buffer()
+    local active_group = groups.get_active_group()
+    if not active_group then
+        return false
+    end
+
+    local buffers = groups.get_group_buffers(active_group.id)
+    if not buffers or #buffers <= 1 then
+        return false
+    end
+
+    local current_buf = api.nvim_get_current_buf()
+    local current_idx = nil
+    for i, buf_id in ipairs(buffers) do
+        if buf_id == current_buf then
+            current_idx = i
+            break
+        end
+    end
+
+    if not current_idx then
+        current_idx = 1
+    end
+
+    local prev_idx = current_idx == 1 and #buffers or current_idx - 1
+    return M.switch_to_group_buffer(prev_idx)
+end
+
 --- Build a keymap preset table (opt-in)
 --- @param opts? table
 --- @return table
@@ -3566,6 +3626,14 @@ function M.keymap_preset(opts)
             add(buffer_prefix .. i, function() M.switch_to_group_buffer(i) end,
                 "Switch to group buffer " .. i)
         end
+        -- Add <leader>0 for the 10th buffer
+        add(buffer_prefix .. "0", function() M.switch_to_group_buffer(10) end,
+            "Switch to group buffer 10")
+    end
+
+    if include_section("buffer_navigation") then
+        add(leader .. "bn", function() M.switch_to_next_buffer() end, "Switch to next buffer")
+        add(leader .. "bp", function() M.switch_to_prev_buffer() end, "Switch to previous buffer")
     end
 
     if include_section("pick") then
