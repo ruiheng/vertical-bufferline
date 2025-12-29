@@ -232,18 +232,6 @@ local function parse_lines(lines)
         ::continue::
     end
 
-    local name_counts = {}
-    for _, group in ipairs(group_specs) do
-        local name = group.name or ""
-        local count = name_counts[name] or 0
-        if count > 0 then
-            local new_name = name ~= "" and (name .. " (" .. (count + 1) .. ")") or ("(" .. (count + 1) .. ")")
-            table.insert(warnings, string.format("Line %d: duplicate group name '%s' renamed to '%s'", group.line, name, new_name))
-            group.name = new_name
-        end
-        name_counts[name] = count + 1
-    end
-
     return group_specs, warnings
 end
 
@@ -531,9 +519,9 @@ function M.open()
 
     api.nvim_buf_set_lines(buf_id, 0, -1, false, build_edit_lines())
 
-    local width = math.max(60, math.floor(vim.o.columns * 0.6))
-    local height = math.max(15, math.floor(vim.o.lines * 0.6))
-    local row = math.floor((vim.o.lines - height) / 2 - 1)
+    local width = math.max(60, vim.o.columns - 4)
+    local height = math.max(15, vim.o.lines - 4)
+    local row = math.floor((vim.o.lines - height) / 2)
     local col = math.floor((vim.o.columns - width) / 2)
 
     local backdrop_buf = api.nvim_create_buf(false, true)
