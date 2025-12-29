@@ -2961,6 +2961,52 @@ function M.pick_close_buffer()
     start_extended_picking("close")
 end
 
+--- Close all buffers in the current group except the current buffer
+--- @return nil
+function M.close_other_buffers_in_group()
+    local active_group = groups.get_active_group()
+    if not active_group then
+        vim.notify("No active group found", vim.log.levels.ERROR)
+        return
+    end
+
+    local current_buf = api.nvim_get_current_buf()
+    local buffers_to_close = {}
+    local has_current_in_group = false
+
+    for _, buf_id in ipairs(active_group.buffers) do
+        if buf_id == current_buf then
+            has_current_in_group = true
+        elseif api.nvim_buf_is_valid(buf_id) then
+            table.insert(buffers_to_close, buf_id)
+        end
+    end
+
+    if not has_current_in_group then
+        vim.notify("Current buffer is not in the active group", vim.log.levels.WARN)
+        return
+    end
+
+    if #buffers_to_close == 0 then
+        vim.notify("No other buffers to close in the current group", vim.log.levels.INFO)
+        return
+    end
+
+    -- Close buffers (use :bdelete to handle modified buffers gracefully)
+    for _, buf_id in ipairs(buffers_to_close) do
+        pcall(api.nvim_buf_delete, buf_id, { force = false })
+    end
+
+    vim.notify(string.format("Closed %d buffer(s) in group '%s'",
+        #buffers_to_close, active_group.name), vim.log.levels.INFO)
+
+    -- Cleanup and refresh
+    vim.schedule(function()
+        groups.cleanup_invalid_buffers()
+        M.refresh("close_other_buffers")
+    end)
+end
+
 --- Toggle between showing all groups expanded vs only active group
 --- When enabled, all groups show their buffer lists
 --- When disabled, only the active group shows its buffer list
@@ -3565,6 +3611,7 @@ function M.keymap_preset(opts)
     if include_section("basic") then
         add(leader .. "vb", function() M.toggle() end, "Toggle vertical bufferline")
         add(leader .. "ve", function() M.toggle_expand_all() end, "Toggle expand all groups")
+        add(leader .. "vi", function() require('vertical-bufferline.edit_mode').open() end, "Edit buffer groups")
         add(leader .. "gn", function() M.switch_to_next_group() end, "Switch to next group")
         add(leader .. "gp", function() M.switch_to_prev_group() end, "Switch to previous group")
         add(leader .. "gc", function() M.create_group() end, "Create new group")
@@ -3597,6 +3644,10 @@ function M.keymap_preset(opts)
     if include_section("buffer_navigation") then
         add(leader .. "bn", function() M.switch_to_next_buffer() end, "Switch to next buffer")
         add(leader .. "bp", function() M.switch_to_prev_buffer() end, "Switch to previous buffer")
+    end
+
+    if include_section("buffer_management") then
+        add(leader .. "bo", function() M.close_other_buffers_in_group() end, "Close other buffers in group")
     end
 
     if include_section("pick") then
