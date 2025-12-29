@@ -3077,6 +3077,8 @@ local function setup_bufferline_hook()
     end
 end
 
+local populate_startup_buffers
+
 -- Plugin initialization function (called on load)
 local function initialize_plugin()
     -- Set global flag so bufferline knows VBL is enabled
@@ -3125,6 +3127,14 @@ local function initialize_plugin()
     -- Setup highlights
     setup_highlights()
     setup_pick_highlights()
+
+    if not bufferline_integration.is_available() then
+        vim.schedule(function()
+            open_sidebar()
+            populate_startup_buffers()
+            M.refresh("no_bufferline_auto_open")
+        end)
+    end
 end
 
 --- Wrapper function to refresh only when sidebar is open
@@ -3212,6 +3222,41 @@ function M.check_quit_condition()
     end)
 end
 
+populate_startup_buffers = function()
+    -- Manually add existing buffers to default group
+    -- Use multiple delayed attempts to ensure buffers are correctly identified
+    for _, delay in ipairs(config_module.UI.STARTUP_DELAYS) do
+        vim.defer_fn(function()
+            -- If loading session, skip auto-add to avoid conflicts
+            if state_module.is_session_loading() then
+                return
+            end
+
+            local all_buffers = vim.api.nvim_list_bufs()
+            local default_group = groups.get_active_group()
+            if default_group then
+                local added_count = 0
+                for _, buf in ipairs(all_buffers) do
+                    if vim.api.nvim_buf_is_valid(buf) then
+                        local buf_type = vim.api.nvim_buf_get_option(buf, 'buftype')
+                        -- Only add buffers that bufferline would track, not already in groups
+                        if not utils.is_special_buffer(buf) and
+                           buf_type == config_module.SYSTEM.EMPTY_BUFTYPE and
+                           not vim.tbl_contains(default_group.buffers, buf) then
+                            groups.add_buffer_to_group(buf, default_group.id)
+                            added_count = added_count + 1
+                        end
+                    end
+                end
+                if added_count > 0 then
+                    -- Refresh interface
+                    M.refresh("auto_add_buffers")
+                end
+            end
+        end, delay)
+    end
+end
+
 --- Toggle the vertical bufferline sidebar on/off
 --- Opens the sidebar if closed, closes it if open
 --- @return nil
@@ -3220,40 +3265,7 @@ function M.toggle()
         M.close_sidebar()
     else
         open_sidebar()
-
-        -- Manually add existing buffers to default group
-        -- Use multiple delayed attempts to ensure buffers are correctly identified
-        for _, delay in ipairs(config_module.UI.STARTUP_DELAYS) do
-            vim.defer_fn(function()
-                -- If loading session, skip auto-add to avoid conflicts
-                if state_module.is_session_loading() then
-                    return
-                end
-
-                local all_buffers = vim.api.nvim_list_bufs()
-                local default_group = groups.get_active_group()
-                if default_group then
-                    local added_count = 0
-                    for _, buf in ipairs(all_buffers) do
-                        if vim.api.nvim_buf_is_valid(buf) then
-                            local buf_name = vim.api.nvim_buf_get_name(buf)
-                            local buf_type = vim.api.nvim_buf_get_option(buf, 'buftype')
-                            -- Only add buffers that bufferline would track, not already in groups
-                            if not utils.is_special_buffer(buf) and
-                               buf_type == config_module.SYSTEM.EMPTY_BUFTYPE and
-                               not vim.tbl_contains(default_group.buffers, buf) then
-                                groups.add_buffer_to_group(buf, default_group.id)
-                                added_count = added_count + 1
-                            end
-                        end
-                    end
-                    if added_count > 0 then
-                        -- Refresh interface
-                        M.refresh("auto_add_buffers")
-                    end
-                end
-            end, delay)
-        end
+        populate_startup_buffers()
 
         -- Ensure initial state displays correctly
         vim.schedule(function()
