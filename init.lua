@@ -778,22 +778,11 @@ local function get_main_window_current_buffer()
     local current_win = api.nvim_get_current_win()
     local sidebar_win = state_module.get_win_id()
     
-    logger.debug("current_buffer", "detecting current buffer", {
-        current_win = current_win,
-        sidebar_win = sidebar_win,
-        is_current_sidebar = current_win == sidebar_win
-    })
-    
     -- If current window is not the sidebar, use its buffer directly
     if current_win ~= sidebar_win then
         local win_config = api.nvim_win_get_config(current_win)
         if win_config.relative == "" then  -- Not a floating window
             local buf_id = api.nvim_win_get_buf(current_win)
-            logger.debug("current_buffer", "using current window buffer", {
-                win_id = current_win,
-                buf_id = buf_id,
-                buf_name = vim.api.nvim_buf_get_name(buf_id)
-            })
             return buf_id
         end
     end
@@ -816,11 +805,6 @@ local function get_main_window_current_buffer()
     -- Try to find a window that has a real file (not fugitive, etc.)
     for _, win_info in ipairs(main_windows) do
         if not win_info.buf_name:match("^fugitive://") and win_info.buf_name ~= "" then
-            logger.debug("current_buffer", "found main file window buffer", {
-                win_id = win_info.id,
-                buf_id = win_info.buf_id,
-                buf_name = win_info.buf_name
-            })
             return win_info.buf_id
         end
     end
@@ -828,20 +812,11 @@ local function get_main_window_current_buffer()
     -- If no real file window found, use the first main window
     if #main_windows > 0 then
         local win_info = main_windows[1]
-        logger.debug("current_buffer", "using first main window buffer", {
-            win_id = win_info.id,
-            buf_id = win_info.buf_id,
-            buf_name = win_info.buf_name
-        })
         return win_info.buf_id
     end
 
     -- Fallback to global current buffer if no main window found
     local fallback_buf = api.nvim_get_current_buf()
-    logger.warn("current_buffer", "using fallback current buffer", {
-        buf_id = fallback_buf,
-        buf_name = vim.api.nvim_buf_get_name(fallback_buf)
-    })
     return fallback_buf
 end
 
@@ -910,11 +885,6 @@ local function validate_and_initialize_refresh()
         components = build_components_from_group(active_group, current_buffer_id)
         local extended_picking_active = state_module.get_extended_picking_state().is_active
         bufferline_state = { components = components, is_picking = extended_picking_active }
-
-        logger.debug("validate_refresh", "creating fake bufferline_state", {
-            extended_picking_active = extended_picking_active,
-            is_picking = bufferline_state.is_picking
-        })
     end
 
     -- Filter out invalid components and special buffers
@@ -1247,15 +1217,6 @@ local function create_buffer_line(component, j, total_components, current_buffer
     
     -- Render the complete line
     local rendered_line = renderer.render_line(parts)
-
-    logger.debug("render_line", "rendered buffer line", {
-        buffer_id = component.id,
-        buffer_name = component.name,
-        is_picking = is_picking,
-        parts_count = #parts,
-        line_text = rendered_line.text,
-        text_length = #rendered_line.text
-    })
 
     -- Create path line if needed
     local path_line = nil
