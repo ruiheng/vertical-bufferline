@@ -586,13 +586,13 @@ local function start_extended_picking(mode_type)
     -- Use a blocking input loop in a coroutine to prevent keys from reaching vim
     vim.schedule(function()
         local input_buffer = ""
-        local extended_picking = state_module.get_extended_picking_state()
 
         -- Save current mode and switch to a safe state
         local saved_mode = vim.api.nvim_get_mode().mode
 
-        -- Input loop
-        while extended_picking.is_active do
+        -- Input loop - check state_module directly each iteration
+        while state_module.get_extended_picking_state().is_active do
+            local extended_picking = state_module.get_extended_picking_state()
             -- Prompt for input (non-blocking)
             vim.api.nvim_echo({{string.format("Pick buffer [%s]: ", input_buffer), "Question"}}, false, {})
 
@@ -621,9 +621,6 @@ local function start_extended_picking(mode_type)
             -- Only handle single printable characters
             if type(char) == "string" and #char == 1 and char:match("[%w]") then
                 input_buffer = input_buffer .. char
-
-                -- Refresh extended_picking state in case it changed
-                extended_picking = state_module.get_extended_picking_state()
 
                 -- Check if we have a complete hint
                 if extended_picking.hint_lines[input_buffer] then

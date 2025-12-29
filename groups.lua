@@ -434,6 +434,13 @@ end
 --- @param group_id string ID of group to activate
 --- @return boolean success
 function M.set_active_group(group_id, target_buffer_id)
+    -- Safety: Clear any lingering extended_picking state when switching groups
+    -- This prevents issues where picking mode might interfere with group switching
+    local state_module = require('vertical-bufferline.state')
+    if state_module.get_extended_picking_state().is_active then
+        state_module.set_extended_picking_active(false)
+    end
+
     local group = find_group_by_id(group_id)
     if not group then
         vim.notify("Group not found: " .. group_id, vim.log.levels.ERROR)
