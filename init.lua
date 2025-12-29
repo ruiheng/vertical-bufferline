@@ -243,12 +243,12 @@ local function get_pin_icon()
 end
 
 -- Extended picking mode implementation
-local PICK_ALPHABET = "asdfjkl;ghqwertyuiopzxcvbnm1234567890ASDFJKL;GHQWERTYUIOPZXCVBNM"
+local PICK_ALPHABET = "asdfjklghqwertyuiopzxcvbnm1234567890ASDFJKLGHQWERTYUIOPZXCVBNM"
 
 -- Generate multi-character hint for overflow cases
 local function generate_multi_char_hint(overflow_index)
     -- Use two-character combinations: aa, ab, ac, ..., ba, bb, bc, ...
-    local base_chars = "asdfjklghq"  -- Use first 10 chars as base for multi-char hints
+    local base_chars = PICK_ALPHABET
     local base = #base_chars
     local first_char_index = math.floor((overflow_index - 1) / base) + 1
     local second_char_index = ((overflow_index - 1) % base) + 1
