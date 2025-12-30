@@ -529,15 +529,23 @@ function M.set_active_group(group_id, target_buffer_id)
             end
         end
         
-        -- Switch to the determined buffer
+        -- Switch to the determined buffer (suppress auto-add during programmatic switch)
         if target_buffer then
-            vim.api.nvim_set_current_buf(target_buffer)
-            -- Update history with current buffer (ensure it's at the front)
-            M.sync_group_history_with_current(group.id, target_buffer)
+            M.set_auto_add_disabled(true)
+            local ok = pcall(vim.api.nvim_set_current_buf, target_buffer)
+            if ok then
+                -- Update history with current buffer (ensure it's at the front)
+                M.sync_group_history_with_current(group.id, target_buffer)
+            end
             
             -- Restore saved window state for this buffer in this group
             vim.schedule(function()
-                restore_buffer_state(group, target_buffer)
+                if ok then
+                    restore_buffer_state(group, target_buffer)
+                end
+            end)
+            vim.schedule(function()
+                M.set_auto_add_disabled(false)
             end)
         end
     end
