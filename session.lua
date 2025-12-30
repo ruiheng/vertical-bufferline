@@ -20,6 +20,7 @@ local config = {
 
 -- Auto-save debounce timer
 local auto_save_timer = nil
+local saved_cmdheight = nil
 
 local function apply_session_position(session_data)
     if not session_data or not session_data.position then
@@ -331,6 +332,15 @@ local function finalize_session_restore(session_data, opened_count, total_groups
     end)
 
     reopen_sidebar_for_position(session_data)
+
+    if saved_cmdheight ~= nil then
+        vim.defer_fn(function()
+            if vim.o.cmdheight ~= saved_cmdheight then
+                vim.o.cmdheight = saved_cmdheight
+            end
+            saved_cmdheight = nil
+        end, 150)
+    end
 end
 
 -- Ensure session directory exists
@@ -1029,6 +1039,7 @@ function M.load_session(filename)
     apply_session_position(session_data)
 
     local state_module = require('vertical-bufferline.state')
+    saved_cmdheight = vim.o.cmdheight
     state_module.set_session_loading(true)
 
     -- Temporarily disable bufferline sync during loading
@@ -1359,6 +1370,7 @@ local function restore_state_from_global()
     local state_module = require('vertical-bufferline.state')
     local groups = require('vertical-bufferline.groups')
     local bufferline_integration = require('vertical-bufferline.bufferline-integration')
+    saved_cmdheight = vim.o.cmdheight
 
     -- CRITICAL: Disable auto-add during session restore to prevent BufEnter from interfering
     state_module.set_session_loading(true)
