@@ -1210,6 +1210,39 @@ function M.setup()
         desc = "Toggle adaptive width for VBL sidebar"
     })
 
+    -- Set sidebar position
+    vim.api.nvim_create_user_command("VBufferLineSetPosition", function(opts)
+        local config = require('vertical-bufferline.config')
+        local position = opts.args
+        if position == "" then
+            vim.notify("Usage: VBufferLineSetPosition <left|right|top|bottom>", vim.log.levels.ERROR)
+            return
+        end
+
+        if not config.validate_position(position) then
+            vim.notify("Invalid position. Use: left, right, top, bottom", vim.log.levels.ERROR)
+            return
+        end
+
+        config.DEFAULTS.position = position
+        vim.notify(string.format("VBL position set to %s", position), vim.log.levels.INFO)
+
+        local state = require('vertical-bufferline.state')
+        if state.is_sidebar_open() then
+            local vbl = require('vertical-bufferline')
+            vbl.close_sidebar()
+            vim.schedule(function()
+                vbl.toggle()
+            end)
+        end
+    end, {
+        nargs = 1,
+        desc = "Set VBL position (left/right/top/bottom)",
+        complete = function()
+            return { "left", "right", "top", "bottom" }
+        end
+    })
+
     -- Debug pick mode hints
     vim.api.nvim_create_user_command("VBufferLineDebugPickMode", function()
         logger.enable(vim.fn.expand("~/vbl-pick-debug.log"), "DEBUG")

@@ -12,9 +12,11 @@ local state = {
     buf_id = nil,
     is_sidebar_open = false,
     last_width = nil, -- Remember the last width before closing sidebar
+    last_height = nil, -- Remember the last height before closing sidebar (top/bottom)
     line_to_buffer_id = {}, -- Maps a line number in our window to a buffer ID
     hint_to_buffer_id = {}, -- Maps a hint character to a buffer ID
     line_group_context = {}, -- Maps a line number to the group ID it belongs to
+    line_buffer_ranges = {}, -- Maps a line to buffer ranges for hit testing
     group_header_lines = {}, -- Maps line numbers to group header information
     line_offset = 0, -- Cursor alignment offset for rendered lines
     was_picking = false, -- Track picking mode state to avoid spam
@@ -31,7 +33,10 @@ local state = {
     },
 
     -- Pin state (fallback when bufferline.nvim is not available)
-    pinned_buffers = {}
+    pinned_buffers = {},
+
+    -- Layout mode: "vertical" (left/right) or "horizontal" (top/bottom)
+    layout_mode = "vertical",
 }
 
 -- State validation functions
@@ -121,6 +126,17 @@ function M.set_last_width(width)
     state.last_width = width
 end
 
+function M.get_last_height()
+    return state.last_height
+end
+
+function M.set_last_height(height)
+    if height and (type(height) ~= "number" or height <= 0) then
+        error("last_height must be a positive number, got: " .. tostring(height))
+    end
+    state.last_height = height
+end
+
 -- Line to buffer mapping
 function M.get_line_to_buffer_id()
     return state.line_to_buffer_id
@@ -139,6 +155,22 @@ end
 
 function M.clear_line_mapping()
     state.line_to_buffer_id = {}
+end
+
+-- Line buffer range mapping
+function M.get_line_buffer_ranges()
+    return state.line_buffer_ranges
+end
+
+function M.set_line_buffer_ranges(mapping)
+    if type(mapping) ~= "table" then
+        error("line_buffer_ranges must be table, got: " .. type(mapping))
+    end
+    state.line_buffer_ranges = mapping
+end
+
+function M.clear_line_buffer_ranges()
+    state.line_buffer_ranges = {}
 end
 
 -- Hint to buffer mapping
@@ -199,6 +231,17 @@ function M.set_line_offset(offset)
         error("line_offset must be number, got: " .. type(offset))
     end
     state.line_offset = offset
+end
+
+function M.get_layout_mode()
+    return state.layout_mode
+end
+
+function M.set_layout_mode(mode)
+    if mode ~= "vertical" and mode ~= "horizontal" then
+        error("layout_mode must be 'vertical' or 'horizontal', got: " .. tostring(mode))
+    end
+    state.layout_mode = mode
 end
 
 -- Picking mode state
@@ -329,10 +372,13 @@ function M.reset_state()
     state.buf_id = nil
     state.is_sidebar_open = false
     state.last_width = nil
+    state.last_height = nil
     state.line_to_buffer_id = {}
     state.hint_to_buffer_id = {}
+    state.line_buffer_ranges = {}
     state.was_picking = false
     state.session_loading = false
+    state.layout_mode = "vertical"
 end
 
 function M.cleanup_invalid_state()
@@ -355,6 +401,23 @@ function M.cleanup_invalid_state()
         end
     end
     state.line_to_buffer_id = valid_mapping
+
+    -- Clean up invalid range mappings
+    local valid_ranges = {}
+    for line, ranges in pairs(state.line_buffer_ranges) do
+        if type(ranges) == "table" then
+            local valid_line_ranges = {}
+            for _, range in ipairs(ranges) do
+                if range and (is_valid_buf_id(range.buffer_id) or range.is_group_entry) then
+                    table.insert(valid_line_ranges, range)
+                end
+            end
+            if #valid_line_ranges > 0 then
+                valid_ranges[line] = valid_line_ranges
+            end
+        end
+    end
+    state.line_buffer_ranges = valid_ranges
 end
 
 -- Debug and introspection

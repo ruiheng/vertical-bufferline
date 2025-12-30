@@ -405,9 +405,12 @@ The algorithm automatically determines the minimal path suffix needed to uniquel
     min_width = 15,                 -- Minimum sidebar width (for adaptive sizing)
     max_width = 60,                 -- Maximum sidebar width (for adaptive sizing)
     adaptive_width = true,          -- Enable adaptive width based on content
+    min_height = 3,                 -- Minimum bar height for top/bottom
+    max_height = 10,                -- Maximum bar height for top/bottom
+    adaptive_height = true,         -- Enable adaptive height based on content
     show_inactive_group_buffers = false,  -- Show buffer lists for inactive groups (default: only active group)
     show_icons = false,             -- Show file type emoji icons
-    position = "left",              -- Sidebar position: "left" or "right"
+    position = "left",              -- Sidebar position: "left", "right", "top", "bottom"
     show_tree_lines = false,        -- Show tree-style connection lines
     
     -- Group management  
@@ -453,6 +456,8 @@ The algorithm automatically determines the minimal path suffix needed to uniquel
   }
 }
 ```
+
+Top/bottom positions use a compact, multi-item layout with wrapping; History comes first, then the active group file list, then a group list. Each file shows its ordinal number, and path lines are suppressed to save vertical space.
 
 For a minimal setup, `require("vertical-bufferline").setup()` is enough.
 

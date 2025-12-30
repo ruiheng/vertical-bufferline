@@ -4,6 +4,7 @@
 local M = {}
 
 local api = vim.api
+local config_module = require('vertical-bufferline.config')
 
 -- Session configuration
 local config = {
@@ -342,6 +343,7 @@ function M.save_session(filename)
         timestamp = os.time(),
         working_directory = vim.fn.getcwd(),
         active_group_id = active_group_id,
+        position = config_module.DEFAULTS.position,
         groups = {},
         pinned_buffers = {}
     }
@@ -936,6 +938,10 @@ function M.load_session(filename)
         return false
     end
 
+    if session_data.position and config_module.validate_position(session_data.position) then
+        config_module.DEFAULTS.position = session_data.position
+    end
+
     local state_module = require('vertical-bufferline.state')
     state_module.set_session_loading(true)
 
@@ -1158,6 +1164,7 @@ local function collect_current_state()
         version = "1.0",
         timestamp = os.time(),
         active_group_id = active_group_id,
+        position = config_module.DEFAULTS.position,
         groups = {},
         pinned_buffers = {}
     }
@@ -1252,6 +1259,10 @@ local function restore_state_from_global()
     if not session_data.groups or type(session_data.groups) ~= "table" then
         vim.notify("Invalid VBL session data format", vim.log.levels.ERROR)
         return false
+    end
+
+    if session_data.position and config_module.validate_position(session_data.position) then
+        config_module.DEFAULTS.position = session_data.position
     end
     
     -- Prevent duplicate execution

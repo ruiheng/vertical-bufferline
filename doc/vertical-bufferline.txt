@@ -121,9 +121,12 @@ Default configuration:
       min_width = 15,                         -- Minimum sidebar width
       max_width = 60,                     -- Maximum sidebar width
       adaptive_width = true,              -- Enable adaptive width sizing
+      min_height = 3,                      -- Minimum bar height (top/bottom)
+      max_height = 10,                     -- Maximum bar height (top/bottom)
+      adaptive_height = true,              -- Enable adaptive height sizing
       show_inactive_group_buffers = false,-- Show buffer list for inactive groups
       show_icons = false,                 -- Show file type emoji icons
-      position = "left",                  -- Sidebar position: "left" or "right"
+      position = "left",                  -- Sidebar position: "left", "right", "top", "bottom"
       show_tree_lines = false,            -- Show tree-style connection lines
       floating = false,                   -- Use floating window instead of split
 
@@ -181,6 +184,22 @@ adaptive_width          Enable automatic width adjustment based on content.
                         `min_width` and `max_width` to fit the displayed content.
                         Default: true
 
+                                    *vertical-bufferline-config-min-height*
+min_height              Minimum height for top/bottom bars. When adaptive_height
+                        is enabled, this acts as the minimum height bound.
+                        Default: 3
+
+                                    *vertical-bufferline-config-max-height*
+max_height              Maximum height for top/bottom bars when adaptive_height
+                        is enabled. The bar will never exceed this height.
+                        Default: 10
+
+                                *vertical-bufferline-config-adaptive-height*
+adaptive_height         Enable automatic height adjustment based on content
+                        for top/bottom bars. When true, the bar dynamically
+                        resizes between `min_height` and `max_height`.
+                        Default: true
+
                       *vertical-bufferline-config-show-inactive-group-buffers*
 show_inactive_group_buffers
                         Show buffer lists for inactive groups. When false,
@@ -192,7 +211,11 @@ show_icons              Show file type emoji icons next to filenames.
                         Default: false
 
                                       *vertical-bufferline-config-position*
-position                Sidebar position, either "left" or "right".
+position                Sidebar position: "left", "right", "top", or "bottom".
+                        Top/bottom use a compact, multi-item layout with
+                        wrapping: History, then the active group file list,
+                        then a group list. Files include ordinal numbers, and
+                        path lines are suppressed to save vertical space.
                         Default: "left"
 
                                 *vertical-bufferline-config-show-tree-lines*
@@ -311,6 +334,7 @@ Utilities:
 :VBufferLineRefreshBuffers            Manually refresh and add current buffers
 :VBufferLineToggleCursorAlign         Toggle cursor alignment feature
 :VBufferLineToggleAdaptiveWidth       Toggle adaptive width on/off
+:VBufferLineSetPosition <pos>         Set sidebar position: left/right/top/bottom
 
 Debug Commands:                                *vertical-bufferline-debug-commands*
 :VBufferLineDebugEnable [file] [level] Enable debug logging to file

@@ -55,6 +55,11 @@ local extended_picking_state = {
     saved_offset = 0  -- Save scroll offset before entering pick mode
 }
 
+local function is_horizontal_position()
+    local position = config_module.DEFAULTS.position
+    return position == "top" or position == "bottom"
+end
+
 -- Setup highlight groups function
 local function setup_highlights()
     -- Buffer state highlights using semantic nvim highlight groups for theme compatibility
@@ -105,6 +110,17 @@ local function setup_highlights()
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_NUMBER, { link = "Number", bold = true, default = true })
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_SEPARATOR, { link = "Comment", default = true })
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_MARKER, { link = "Special", bold = true, default = true })
+    api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_TAB_ACTIVE, {
+        fg = pmenusel_attrs.fg or title_attrs.fg,
+        bg = pmenusel_attrs.bg,
+        bold = true,
+        default = true
+    })
+    api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_TAB_INACTIVE, {
+        fg = pmenu_attrs.fg or comment_attrs.fg,
+        bg = pmenu_attrs.bg,
+        default = true
+    })
 
     -- Recent Files header highlight removed - kept subtle without special highlighting
 end
@@ -656,6 +672,13 @@ local function rebuild_extended_picking_hints()
         return
     end
 
+    if state_module.get_layout_mode() == "horizontal" then
+        local existing = state_module.get_extended_picking_state()
+        state_module.set_extended_picking_hints({}, existing.hint_lines or {}, existing.bufferline_hints or {})
+        extended_picking_state.extended_hints = {}
+        return
+    end
+
     local components = {}
     if bufferline_integration.is_available() then
         local bufferline_state = require('bufferline.state')
@@ -1009,6 +1032,10 @@ end
 
 -- Determine if path should be shown for a buffer based on configuration
 local function should_show_path_for_buffer(buffer_id)
+    if state_module.get_layout_mode() == "horizontal" then
+        return false
+    end
+
     local show_path_setting = config_module.DEFAULTS.show_path
     
     if show_path_setting == "no" then
@@ -1084,11 +1111,113 @@ end
 local renderer = require('vertical-bufferline.renderer')
 local components = require('vertical-bufferline.components')
 
+local function build_component_list_from_buffers(buffer_ids, buffer_hints, window_width)
+    local valid_buffers = {}
+    for _, buf_id in ipairs(buffer_ids or {}) do
+        if api.nvim_buf_is_valid(buf_id) and not utils.is_special_buffer(buf_id) then
+            table.insert(valid_buffers, buf_id)
+        end
+    end
+
+    local minimal_prefixes = filename_utils.generate_minimal_prefixes(valid_buffers, window_width)
+    local list = {}
+    for i, buf_id in ipairs(valid_buffers) do
+        local buf_name = api.nvim_buf_get_name(buf_id)
+        local filename = buf_name == "" and "[No Name]" or vim.fn.fnamemodify(buf_name, ":t")
+        table.insert(list, {
+            id = buf_id,
+            name = filename,
+            minimal_prefix = minimal_prefixes[i],
+            icon = "",
+            focused = false,
+            letter = buffer_hints and buffer_hints[buf_id] or nil
+        })
+    end
+
+    return list
+end
+
+local function build_horizontal_item_parts(component, number_index, max_digits, is_current, is_visible, is_picking)
+    local parts = {}
+
+    if number_index then
+        local number_parts = components.create_simple_numbering(number_index, max_digits or 1, is_current, is_visible)
+        for _, part in ipairs(number_parts) do
+            table.insert(parts, part)
+        end
+        table.insert(parts, renderer.create_part(" ", nil))
+    end
+
+    if is_picking then
+        local letter = component.letter
+        if letter then
+            local pick_parts = components.create_pick_letter(letter, is_current, is_visible)
+            for _, part in ipairs(pick_parts) do
+                table.insert(parts, part)
+            end
+        end
+    end
+
+    local prefix_info = nil
+    local final_name = component.name
+    if component.minimal_prefix and component.minimal_prefix.prefix and component.minimal_prefix.prefix ~= "" then
+        prefix_info = {
+            prefix = component.minimal_prefix.prefix,
+            filename = component.minimal_prefix.filename
+        }
+        final_name = prefix_info.prefix .. prefix_info.filename
+    end
+
+    local filename_parts = components.create_filename(prefix_info, final_name, is_current, is_visible)
+    for _, part in ipairs(filename_parts) do
+        table.insert(parts, part)
+    end
+
+    local is_modified = is_buffer_actually_modified(component.id)
+    local modified_parts = components.create_modified_indicator(is_modified)
+    for _, part in ipairs(modified_parts) do
+        table.insert(parts, part)
+    end
+
+    return parts
+end
+
+local function get_group_display_name(group)
+    if not group then
+        return "Group"
+    end
+    if group.name and group.name ~= "" then
+        return group.name
+    end
+    if group.id == "default" then
+        return "Default"
+    end
+    return tostring(group.id or "Group")
+end
+
+local function build_horizontal_group_parts(group, number_index, max_digits, is_active)
+    local num_str = tostring(number_index)
+    local padding = max_digits - #num_str
+    local padded_num = string.rep(" ", padding) .. num_str
+    local name = group and group.name or ""
+    local label = padded_num .. (name ~= "" and (" " .. name) or "")
+    local tab_hl = is_active and config_module.HIGHLIGHTS.GROUP_TAB_ACTIVE or config_module.HIGHLIGHTS.GROUP_TAB_INACTIVE
+
+    return {
+        renderer.create_part("[", tab_hl),
+        renderer.create_part(label, tab_hl),
+        renderer.create_part("]", tab_hl)
+    }
+end
+
 -- Create individual buffer line with proper formatting and highlights
 local function create_buffer_line(component, j, total_components, current_buffer_id, is_picking, line_number, group_id, max_local_digits, max_global_digits, has_any_local_info, should_hide_local_numbering)
     local is_last = (j == total_components)
     local is_visible = component.focused or false  -- Assuming focused means visible
     local has_pick = false
+    local compact_mode = state_module.get_layout_mode() == "horizontal"
+    local show_tree_lines = config_module.DEFAULTS.show_tree_lines and not compact_mode
+    local show_icons = config_module.DEFAULTS.show_icons and not compact_mode
     
     -- Check if this buffer is in the currently active group
     local groups = require('vertical-bufferline.groups')
@@ -1113,7 +1242,7 @@ local function create_buffer_line(component, j, total_components, current_buffer
     local parts = {}
     
     -- 1. Tree prefix (optional, but always show for current buffer in history)
-    if config_module.DEFAULTS.show_tree_lines then
+    if show_tree_lines then
         local tree_parts = components.create_tree_prefix(is_last, is_current, is_in_active_group)
         for _, part in ipairs(tree_parts) do
             table.insert(parts, part)
@@ -1168,7 +1297,7 @@ local function create_buffer_line(component, j, total_components, current_buffer
     end
     
     -- 5. Icon (moved before filename) - only if enabled
-    if config_module.DEFAULTS.show_icons then
+    if show_icons then
         local icon = component.icon or ""
         if icon == "" then
             local extension = component.name:match("%.([^%.]+)$")
@@ -1229,7 +1358,7 @@ local function create_buffer_line(component, j, total_components, current_buffer
             local base_indent = 0
             
             -- Tree prefix: only if show_tree_lines is enabled
-            if config_module.DEFAULTS.show_tree_lines then
+            if show_tree_lines then
                 base_indent = base_indent + 4  -- " " + tree_chars (4 chars total)
             elseif group_id == "history" and is_current then
                 base_indent = base_indent + 2  -- current marker for history
@@ -1257,7 +1386,7 @@ local function create_buffer_line(component, j, total_components, current_buffer
             end
             
             -- Add icon width if icons are enabled (emoji + space)
-            if config_module.DEFAULTS.show_icons then
+            if show_icons then
                 base_indent = base_indent + 2  -- "🌙 " (emoji + space)
             end
             
@@ -1283,7 +1412,7 @@ local function create_buffer_line(component, j, total_components, current_buffer
             local display_path = filename_utils.compress_path_contextual(raw_path, window_width, ui_context)
             
             -- Only add tree continuation if tree lines are enabled
-            if config_module.DEFAULTS.show_tree_lines then
+            if show_tree_lines then
                 -- Use different continuation character for active vs inactive groups
                 local continuation_char = is_in_active_group and "┃" or "│"
                 local tree_continuation = is_last and string.rep(" ", base_indent) or (" " .. continuation_char .. string.rep(" ", base_indent - 2))
@@ -1458,9 +1587,247 @@ local function render_group_header(group, i, is_active, buffer_count, lines_text
     }
 end
 
+-- Render horizontal layout with multiple buffers per line
+local function render_horizontal_layout(active_group, bufferline_components, current_buffer_id, is_picking, lines_text, line_types, line_infos, line_buffer_ranges, buffer_hints)
+    if not active_group then
+        return
+    end
+
+    local win_id = state_module.get_win_id()
+    local window_width = 80
+    if win_id and api.nvim_win_is_valid(win_id) then
+        window_width = api.nvim_win_get_width(win_id)
+    end
+
+    local current_parts = {}
+    local current_ranges = {}
+    local current_line_width = 0
+    local current_line_len = 0
+    local line_has_items = false
+    local line_has_pick = false
+    local continuation_prefix = nil
+
+    local function reset_line(prefix_parts)
+        current_parts = {}
+        current_ranges = {}
+        current_line_width = 0
+        current_line_len = 0
+        line_has_items = false
+        line_has_pick = false
+
+        if prefix_parts then
+            for _, part in ipairs(prefix_parts) do
+                table.insert(current_parts, part)
+                current_line_width = current_line_width + vim.fn.strdisplaywidth(part.text)
+                current_line_len = current_line_len + #part.text
+            end
+        end
+    end
+
+    local function flush_line()
+        if #current_parts == 0 then
+            return
+        end
+        local rendered = renderer.render_line(current_parts)
+        table.insert(lines_text, rendered.text)
+        local line_num = #lines_text
+        line_infos[line_num] = {
+            rendered_line = rendered,
+            has_pick = line_has_pick
+        }
+        line_types[line_num] = "horizontal"
+        if #current_ranges > 0 then
+            line_buffer_ranges[line_num] = current_ranges
+        end
+        reset_line(nil)
+    end
+
+    local function add_item(parts, buffer_id, group_id, is_history, is_group_entry)
+        local sep_text = "  "
+        local sep_width = vim.fn.strdisplaywidth(sep_text)
+        local sep_len = #sep_text
+
+        local item_width = 0
+        local item_len = 0
+        for _, part in ipairs(parts) do
+            item_width = item_width + vim.fn.strdisplaywidth(part.text)
+            item_len = item_len + #part.text
+            if part.highlight and part.highlight:match("Pick") then
+                line_has_pick = true
+            end
+        end
+
+        local needed_width = item_width + (line_has_items and sep_width or 0)
+        if current_line_width + needed_width > window_width and current_line_width > 0 then
+            flush_line()
+            reset_line(continuation_prefix)
+        end
+
+        if line_has_items then
+            table.insert(current_parts, renderer.create_part(sep_text, nil))
+            current_line_width = current_line_width + sep_width
+            current_line_len = current_line_len + sep_len
+        end
+
+        local start_col = current_line_len
+        for _, part in ipairs(parts) do
+            table.insert(current_parts, part)
+        end
+        current_line_width = current_line_width + item_width
+        current_line_len = current_line_len + item_len
+
+        table.insert(current_ranges, {
+            start_col = start_col,
+            end_col = start_col + item_len,
+            buffer_id = buffer_id,
+            group_id = group_id,
+            is_history = is_history or false,
+            is_group_entry = is_group_entry or false
+        })
+        line_has_items = true
+    end
+
+    local function render_section(label_text, label_highlight, item_entries, group_id, is_history, current_id, max_digits, is_group_entry)
+        if #current_parts > 0 then
+            flush_line()
+        end
+
+        local label_parts = {
+            renderer.create_part(label_text, label_highlight),
+            renderer.create_part(" ", nil)
+        }
+        local label_len = #label_text + 1
+        continuation_prefix = {
+            renderer.create_part(string.rep(" ", label_len), nil)
+        }
+        reset_line(label_parts)
+
+        if item_entries and #item_entries > 0 then
+            for _, entry in ipairs(item_entries) do
+                local component = entry.component
+                local number_index = entry.index
+                local is_current = (component.id == current_id)
+                local parts = build_horizontal_item_parts(component, number_index, max_digits, is_current, component.focused or false, is_picking)
+                add_item(parts, component.id, group_id, is_history)
+            end
+        end
+
+        flush_line()
+    end
+
+    -- History section (active group only)
+    if groups.should_show_history(active_group.id) then
+        local history = groups.get_group_history(active_group.id)
+        local history_entries = {}
+        local buffer_ids = {}
+        for i, buf_id in ipairs(history or {}) do
+            if i > config_module.DEFAULTS.history_display_count then
+                break
+            end
+            table.insert(buffer_ids, buf_id)
+        end
+        if #buffer_ids > 0 then
+            local history_items = build_component_list_from_buffers(buffer_ids, buffer_hints, window_width)
+            for i, component in ipairs(history_items) do
+                table.insert(history_entries, { component = component, index = i })
+            end
+            local max_digits = #tostring(#history_entries)
+            render_section("History:", config_module.HIGHLIGHTS.GROUP_INACTIVE, history_entries, active_group.id, true, current_buffer_id, max_digits)
+        end
+    end
+
+    -- Active group section
+    local active_group_entries = {}
+    local active_group_max_digits = 1
+    if active_group then
+        local active_components = {}
+        if bufferline_components then
+            for _, comp in ipairs(bufferline_components or {}) do
+                if comp.id and comp.name and api.nvim_buf_is_valid(comp.id) and not utils.is_special_buffer(comp.id) then
+                    table.insert(active_components, comp)
+                end
+            end
+        end
+
+        if #active_components > 1 then
+            local buffer_ids = {}
+            for _, comp in ipairs(active_components) do
+                table.insert(buffer_ids, comp.id)
+            end
+            local minimal_prefixes = filename_utils.generate_minimal_prefixes(buffer_ids, window_width)
+            for j, comp in ipairs(active_components) do
+                comp.minimal_prefix = minimal_prefixes[j]
+                comp.letter = buffer_hints and buffer_hints[comp.id] or comp.letter
+            end
+        end
+
+        for i, component in ipairs(active_components) do
+            table.insert(active_group_entries, { component = component, index = i })
+        end
+        if #active_group_entries > 0 then
+            active_group_max_digits = #tostring(#active_group_entries)
+        end
+
+        local group_label = "Files:"
+        local group_current_id = nil
+        if current_buffer_id and vim.tbl_contains(active_group.buffers or {}, current_buffer_id) then
+            group_current_id = current_buffer_id
+        elseif active_group.current_buffer and vim.tbl_contains(active_group.buffers or {}, active_group.current_buffer) then
+            group_current_id = active_group.current_buffer
+        end
+        render_section(group_label, config_module.HIGHLIGHTS.GROUP_ACTIVE, active_group_entries, active_group.id, false, group_current_id, active_group_max_digits)
+    end
+
+    -- Group list section
+    local group_entries = {}
+    local all_groups = groups.get_all_groups()
+    local max_display_number = 1
+    for i, group in ipairs(all_groups) do
+        local display_number = group.display_number or i
+        if display_number > max_display_number then
+            max_display_number = display_number
+        end
+        table.insert(group_entries, {
+            group = group,
+            index = display_number
+        })
+    end
+
+    local group_max_digits = #tostring(max_display_number)
+    if #group_entries > 0 then
+        if #current_parts > 0 then
+            flush_line()
+        end
+
+        local label_text = "Groups:"
+        local label_parts = {
+            renderer.create_part(label_text, config_module.HIGHLIGHTS.GROUP_INACTIVE),
+            renderer.create_part(" ", nil)
+        }
+        local label_len = #label_text + 1
+        continuation_prefix = {
+            renderer.create_part(string.rep(" ", label_len), nil)
+        }
+        reset_line(label_parts)
+
+        for _, entry in ipairs(group_entries) do
+            local group = entry.group
+            local is_active = active_group and group.id == active_group.id
+            local parts = build_horizontal_group_parts(group, entry.index, group_max_digits, is_active)
+            add_item(parts, nil, group.id, false, true)
+        end
+
+        flush_line()
+    end
+end
+
 -- Render current group's history as a unified group
 -- @param current_components: Current bufferline components (for filtering history to match display)
 local function render_current_group_history(active_group, current_buffer_id, is_picking, lines_text, new_line_map, group_header_lines, line_types, all_components, line_components, line_group_context, line_infos, current_components, buffer_hints)
+    if state_module.get_layout_mode() == "horizontal" then
+        return
+    end
+
     if not active_group or not groups.should_show_history(active_group.id) then
         return
     end
@@ -1565,6 +1932,7 @@ local function render_all_groups(active_group, components, current_buffer_id, is
         return components
     end
 
+    local compact_mode = state_module.get_layout_mode() == "horizontal"
     local all_groups = groups.get_all_groups()
     local remaining_components = components
 
@@ -1572,6 +1940,9 @@ local function render_all_groups(active_group, components, current_buffer_id, is
         local is_active = group.id == active_group.id
         local group_buffers = groups.get_group_buffers(group.id) or {}
 
+        if compact_mode and not is_active then
+            goto continue
+        end
 
         -- Calculate valid buffer count (filter out special buffers only)
         local valid_buffer_count = 0
@@ -1583,10 +1954,12 @@ local function render_all_groups(active_group, components, current_buffer_id, is
         local buffer_count = valid_buffer_count
 
         -- Render group header
-        render_group_header(group, i, is_active, buffer_count, lines_text, group_header_lines)
+        if not compact_mode then
+            render_group_header(group, i, is_active, buffer_count, lines_text, group_header_lines)
+        end
 
         -- Decide whether to expand group based on active status and setting
-        local should_expand = is_active or config_module.DEFAULTS.show_inactive_group_buffers
+        local should_expand = is_active or (not compact_mode and config_module.DEFAULTS.show_inactive_group_buffers)
         if should_expand then
             -- Get current group buffers and display them
             local group_components = {}
@@ -1666,7 +2039,8 @@ local function render_all_groups(active_group, components, current_buffer_id, is
 
             -- If group is empty, show clean empty group hint
             if #group_components == 0 then
-                local empty_line = config_module.DEFAULTS.show_tree_lines and 
+                local show_tree_lines = config_module.DEFAULTS.show_tree_lines and not compact_mode
+                local empty_line = show_tree_lines and 
                     ("  " .. config_module.UI.TREE_LAST .. config_module.UI.TREE_EMPTY) or 
                     ("  " .. config_module.UI.TREE_EMPTY)
                 table.insert(lines_text, empty_line)
@@ -1706,6 +2080,8 @@ local function render_all_groups(active_group, components, current_buffer_id, is
                 remaining_components = {}
             end
         end
+
+        ::continue::
     end
 
     return remaining_components
@@ -1737,6 +2113,10 @@ end
 local function calculate_cursor_based_offset(content_length)
     -- Check if cursor alignment is enabled
     if not config_module.DEFAULTS.align_with_cursor then
+        return 0
+    end
+
+    if state_module.get_layout_mode() == "horizontal" then
         return 0
     end
 
@@ -1870,8 +2250,33 @@ local function apply_adaptive_width(content_width)
     end
 end
 
+-- Calculate and apply adaptive height to the sidebar window (top/bottom only)
+local function apply_adaptive_height(content_height)
+    if not config_module.DEFAULTS.adaptive_height then
+        return
+    end
+
+    local win_id = state_module.get_win_id()
+    if not win_id or not api.nvim_win_is_valid(win_id) then
+        return
+    end
+
+    local min_height = config_module.DEFAULTS.min_height
+    local max_height = config_module.DEFAULTS.max_height
+
+    local desired_height = content_height
+    local new_height = math.max(min_height, math.min(desired_height, max_height))
+
+    local current_height = api.nvim_win_get_height(win_id)
+    if new_height ~= current_height then
+        api.nvim_win_set_option(win_id, 'winfixheight', false)
+        api.nvim_win_set_height(win_id, new_height)
+        state_module.set_last_height(new_height)
+    end
+end
+
 -- Finalize buffer display with lines and mapping
-local function finalize_buffer_display(lines_text, new_line_map, line_group_context, group_header_lines, line_infos, line_types, line_components)
+local function finalize_buffer_display(lines_text, new_line_map, line_group_context, group_header_lines, line_infos, line_types, line_components, line_buffer_ranges)
     api.nvim_buf_set_option(state_module.get_buf_id(), "modifiable", true)
 
     -- Calculate vertical offset to align with cursor
@@ -1886,6 +2291,24 @@ local function finalize_buffer_display(lines_text, new_line_map, line_group_cont
     local adjusted_line_infos = {}
     local adjusted_line_types = {}
     local adjusted_line_components = {}
+    local adjusted_line_buffer_ranges = {}
+
+    if (not line_buffer_ranges or vim.tbl_isempty(line_buffer_ranges)) and new_line_map then
+        line_buffer_ranges = {}
+        for line_num, buffer_id in pairs(new_line_map) do
+            local line_text = lines_text[line_num] or ""
+            local line_len = #line_text
+            line_buffer_ranges[line_num] = {
+                {
+                    start_col = 0,
+                    end_col = line_len,
+                    buffer_id = buffer_id,
+                    group_id = line_group_context[line_num],
+                    is_history = line_types[line_num] == "history"
+                }
+            }
+        end
+    end
 
     -- Add empty lines for offset
     for i = 1, offset do
@@ -1937,10 +2360,21 @@ local function finalize_buffer_display(lines_text, new_line_map, line_group_cont
         adjusted_line_components[line_num + offset] = line_component
     end
 
+    -- Adjust line buffer ranges to account for offset
+    for line_num, ranges in pairs(line_buffer_ranges or {}) do
+        if type(line_num) == "number" then
+            adjusted_line_buffer_ranges[line_num + offset] = ranges
+        else
+            adjusted_line_buffer_ranges[line_num] = ranges
+        end
+    end
+
     api.nvim_buf_set_lines(state_module.get_buf_id(), 0, -1, false, final_lines)
 
-    -- Calculate and apply adaptive width based on content
-    if config_module.DEFAULTS.adaptive_width then
+    -- Calculate and apply adaptive size based on layout
+    if is_horizontal_position() then
+        apply_adaptive_height(#final_lines)
+    elseif config_module.DEFAULTS.adaptive_width then
         local content_width = calculate_content_width(lines_text)
         apply_adaptive_width(content_width)
     end
@@ -1949,9 +2383,10 @@ local function finalize_buffer_display(lines_text, new_line_map, line_group_cont
     state_module.set_line_to_buffer_id(adjusted_line_map)
     state_module.set_line_group_context(adjusted_group_context)
     state_module.set_group_header_lines(adjusted_header_lines)
+    state_module.set_line_buffer_ranges(adjusted_line_buffer_ranges)
 
     -- Return adjusted data so the caller can use it for highlighting
-    return adjusted_line_infos, adjusted_line_map, adjusted_line_types, adjusted_line_components, adjusted_header_lines
+    return adjusted_line_infos, adjusted_line_map, adjusted_line_types, adjusted_line_components, adjusted_header_lines, adjusted_line_buffer_ranges
 end
 
 -- Complete buffer setup and make it read-only
@@ -1988,6 +2423,8 @@ function M.refresh(reason)
         })
         return 
     end
+
+    state_module.set_layout_mode(is_horizontal_position() and "horizontal" or "vertical")
 
     local components = refresh_data.components
     local current_buffer_id = refresh_data.current_buffer_id
@@ -2072,15 +2509,20 @@ function M.refresh(reason)
     local line_components = {}  -- Store specific component for each line (handles multi-group buffers)
     local line_infos = {}  -- Store complete line_info for each line (includes number_highlights)
     local line_group_context = {}  -- Store which group each line belongs to
+    local line_buffer_ranges = {}  -- Store buffer column ranges per line (horizontal layout)
 
-    -- Render current group's history first (at the top)
-    render_current_group_history(active_group, current_buffer_id, is_picking, lines_text, new_line_map, group_header_lines, line_types, all_components, line_components, line_group_context, line_infos, components, buffer_hints)
+    if state_module.get_layout_mode() == "horizontal" then
+        render_horizontal_layout(active_group, components, current_buffer_id, is_picking, lines_text, line_types, line_infos, line_buffer_ranges, buffer_hints)
+    else
+        -- Render current group's history first (at the top)
+        render_current_group_history(active_group, current_buffer_id, is_picking, lines_text, new_line_map, group_header_lines, line_types, all_components, line_components, line_group_context, line_infos, components, buffer_hints)
 
-    -- Render all groups with their buffers (without applying highlights yet)
-    local remaining_components = render_all_groups(active_group, components, current_buffer_id, is_picking, lines_text, new_line_map, group_header_lines, line_types, all_components, line_components, line_group_context, line_infos, buffer_hints)
+        -- Render all groups with their buffers (without applying highlights yet)
+        render_all_groups(active_group, components, current_buffer_id, is_picking, lines_text, new_line_map, group_header_lines, line_types, all_components, line_components, line_group_context, line_infos, buffer_hints)
+    end
 
     -- Finalize buffer display (set lines but keep modifiable) - this clears highlights
-    line_infos, new_line_map, line_types, line_components, group_header_lines = finalize_buffer_display(lines_text, new_line_map, line_group_context, group_header_lines, line_infos, line_types, line_components)
+    line_infos, new_line_map, line_types, line_components, group_header_lines, line_buffer_ranges = finalize_buffer_display(lines_text, new_line_map, line_group_context, group_header_lines, line_infos, line_types, line_components, line_buffer_ranges)
     
     -- Clear old highlights and apply all highlights AFTER buffer content is set
     api.nvim_buf_clear_namespace(state_module.get_buf_id(), ns_id, 0, -1)
@@ -2102,6 +2544,15 @@ function M.refresh(reason)
     
     -- Apply group header highlights
     apply_group_highlights(group_header_lines, lines_text)
+
+    if state_module.get_layout_mode() == "horizontal" then
+        for line_num, line_info in pairs(line_infos or {}) do
+            if line_info and line_info.rendered_line then
+                renderer.apply_highlights(state_module.get_buf_id(), ns_id, line_num - 1, line_info.rendered_line)
+            end
+        end
+        return
+    end
     
     -- Log highlight application start
     logger.info("highlight", "applying buffer highlights", {
@@ -2208,6 +2659,7 @@ M.setup_pick_highlights = setup_pick_highlights
 --- Apply extended picking highlights for all sidebar buffers
 function M.apply_extended_picking_highlights()
     if not state_module.is_sidebar_open() then return end
+    if state_module.get_layout_mode() == "horizontal" then return end
 
     if bufferline_integration.is_available() then
         local bufferline_state = require('bufferline.state')
@@ -2271,6 +2723,7 @@ end
 --- Apply picking highlights continuously during picking mode
 function M.apply_picking_highlights()
     if not state_module.is_sidebar_open() then return end
+    if state_module.get_layout_mode() == "horizontal" then return end
 
     if not bufferline_integration.is_available() then
         return
@@ -2364,10 +2817,18 @@ function M.close_sidebar()
     local current_win = api.nvim_get_current_win()
     local all_windows = api.nvim_list_wins()
     local sidebar_win_id = state_module.get_win_id()
+    local position = config_module.DEFAULTS.position
+    local is_horizontal = position == "top" or position == "bottom"
+    local use_floating = config_module.DEFAULTS.floating and not is_horizontal
 
     -- Save the current width before closing
-    local current_width = api.nvim_win_get_width(sidebar_win_id)
-    state_module.set_last_width(current_width)
+    if is_horizontal then
+        local current_height = api.nvim_win_get_height(sidebar_win_id)
+        state_module.set_last_height(current_height)
+    else
+        local current_width = api.nvim_win_get_width(sidebar_win_id)
+        state_module.set_last_width(current_width)
+    end
 
     -- Check if only one window remains (sidebar is the last window)
     if #all_windows == 1 then
@@ -2375,7 +2836,7 @@ function M.close_sidebar()
         vim.cmd("qall")
     else
         -- Normal case: close sidebar (floating or split)
-        if config_module.DEFAULTS.floating then
+        if use_floating then
             -- Close floating window
             api.nvim_win_close(sidebar_win_id, false)
         else
@@ -2440,12 +2901,17 @@ local function open_sidebar()
     api.nvim_buf_set_option(buf_id, 'filetype', 'vertical-bufferline')
     local current_win = api.nvim_get_current_win()
 
-    -- Use saved width if available, otherwise use default width
+    local position = config_module.DEFAULTS.position
+    local is_horizontal = position == "top" or position == "bottom"
+    local use_floating = config_module.DEFAULTS.floating and not is_horizontal
+
+    -- Use saved size if available, otherwise use defaults
     local width = state_module.get_last_width() or config_module.DEFAULTS.min_width
+    local height = state_module.get_last_height() or config_module.DEFAULTS.min_height
 
     local new_win_id
 
-    if config_module.DEFAULTS.floating then
+    if use_floating then
         -- Create floating sidebar (right side, focusable=false)
         local screen_width = vim.o.columns
         local screen_height = vim.o.lines
@@ -2465,18 +2931,30 @@ local function open_sidebar()
         })
     else
         -- Create traditional split sidebar
-        if config_module.DEFAULTS.position == "left" then
-            vim.cmd("topleft vsplit")
+        if is_horizontal then
+            if position == "top" then
+                vim.cmd("topleft split")
+            else
+                vim.cmd("botright split")
+            end
+            new_win_id = api.nvim_get_current_win()
+            api.nvim_win_set_buf(new_win_id, buf_id)
+            api.nvim_win_set_height(new_win_id, height)
         else
-            vim.cmd("botright vsplit")
+            if position == "left" then
+                vim.cmd("topleft vsplit")
+            else
+                vim.cmd("botright vsplit")
+            end
+            new_win_id = api.nvim_get_current_win()
+            api.nvim_win_set_buf(new_win_id, buf_id)
+            api.nvim_win_set_width(new_win_id, width)
         end
-        new_win_id = api.nvim_get_current_win()
-        api.nvim_win_set_buf(new_win_id, buf_id)
-        api.nvim_win_set_width(new_win_id, width)
     end
     
     -- Configure window options after creation
     api.nvim_win_set_option(new_win_id, 'winfixwidth', not config_module.DEFAULTS.adaptive_width)
+    api.nvim_win_set_option(new_win_id, 'winfixheight', not config_module.DEFAULTS.adaptive_height)
     api.nvim_win_set_option(new_win_id, 'number', false)
     api.nvim_win_set_option(new_win_id, 'relativenumber', false)
     api.nvim_win_set_option(new_win_id, 'cursorline', false)
@@ -2496,7 +2974,7 @@ local function open_sidebar()
     api.nvim_create_augroup(group_name, { clear = true })
     
     -- Handle window resize for floating sidebar (only needed in floating mode)
-    if config_module.DEFAULTS.floating then
+    if use_floating then
         api.nvim_create_autocmd("VimResized", {
             group = group_name,
             callback = function()
@@ -2673,7 +3151,8 @@ function M.handle_mouse_click()
     end
     
     -- Handle selection directly using mouse position
-    M.handle_selection(nil, mouse_pos.line)
+    local col = (mouse_pos.column or 1) - 1
+    M.handle_selection(nil, mouse_pos.line, col)
 end
 
 --- Cycle through show_path settings (yes -> no -> auto -> yes)
@@ -2732,19 +3211,44 @@ function M.cycle_show_history_setting()
 end
 
 --- Handle buffer selection from sidebar
-function M.handle_selection(captured_buffer_id, captured_line_number)
+function M.handle_selection(captured_buffer_id, captured_line_number, captured_col)
     if not state_module.is_sidebar_open() then 
         return 
     end
     
     -- Use passed parameters if available, otherwise fallback to cursor position
-    local line_number = captured_line_number or api.nvim_win_get_cursor(state_module.get_win_id())[1]
+    local cursor = api.nvim_win_get_cursor(state_module.get_win_id())
+    local line_number = captured_line_number or cursor[1]
+    local col = captured_col
+    if col == nil then
+        col = cursor[2]
+    end
     local bufnr = captured_buffer_id
     
     -- If no captured buffer ID provided, get it from current mapping (fallback for backwards compatibility)
     if not bufnr then
-        local line_to_buffer = state_module.get_line_to_buffer_id()
-        bufnr = line_to_buffer[line_number]
+        if state_module.get_layout_mode() == "horizontal" then
+            local ranges = state_module.get_line_buffer_ranges()[line_number] or {}
+            for _, range in ipairs(ranges) do
+                if col >= range.start_col and col < range.end_col then
+                    bufnr = range.buffer_id
+                    if not bufnr and range.is_group_entry and range.group_id then
+                        local target_group = groups.find_group_by_id(range.group_id)
+                        if target_group then
+                            groups.set_active_group(range.group_id)
+                            local label = target_group.name and target_group.name ~= "" and target_group.name
+                                or ("Group " .. tostring(target_group.display_number or ""))
+                            vim.notify("Switched to group: " .. label, vim.log.levels.INFO)
+                        end
+                        return
+                    end
+                    break
+                end
+            end
+        else
+            local line_to_buffer = state_module.get_line_to_buffer_id()
+            bufnr = line_to_buffer[line_number]
+        end
     end
     
     
@@ -2782,14 +3286,27 @@ function M.handle_selection(captured_buffer_id, captured_line_number)
     local clicked_group_id = line_group_context[line_number]
     local current_active_group = groups.get_active_group()
     local is_history_click = false
+
+    if state_module.get_layout_mode() == "horizontal" then
+        local ranges = state_module.get_line_buffer_ranges()[line_number] or {}
+        for _, range in ipairs(ranges) do
+            if range.buffer_id == bufnr then
+                clicked_group_id = range.group_id or clicked_group_id
+                is_history_click = range.is_history or false
+                break
+            end
+        end
+    end
     
     if clicked_group_id and current_active_group and clicked_group_id == current_active_group.id then
         -- Check if this buffer is in the history
-        local history = groups.get_group_history(current_active_group.id)
-        for _, hist_buf_id in ipairs(history) do
-            if hist_buf_id == bufnr then
-                is_history_click = true
-                break
+        if not is_history_click then
+            local history = groups.get_group_history(current_active_group.id)
+            for _, hist_buf_id in ipairs(history) do
+                if hist_buf_id == bufnr then
+                    is_history_click = true
+                    break
+                end
             end
         end
     end
@@ -3357,9 +3874,12 @@ M.cycle_show_history = M.cycle_show_history_setting
 --- @field user_config.min_width? number Minimum sidebar width (default: 25)
 --- @field user_config.max_width? number Maximum sidebar width (default: 60)
 --- @field user_config.adaptive_width? boolean Enable adaptive width sizing (default: true)
+--- @field user_config.min_height? number Minimum bar height for top/bottom (default: 3)
+--- @field user_config.max_height? number Maximum bar height for top/bottom (default: 10)
+--- @field user_config.adaptive_height? boolean Enable adaptive height sizing (default: true)
 --- @field user_config.show_inactive_group_buffers? boolean Show buffer list for inactive groups (default: false)
 --- @field user_config.show_icons? boolean Show file type emoji icons (default: false)
---- @field user_config.position? "left"|"right" Sidebar position (default: "left")
+--- @field user_config.position? "left"|"right"|"top"|"bottom" Sidebar position (default: "left")
 --- @field user_config.show_tree_lines? boolean Show tree-style connection lines (default: false)
 --- @field user_config.floating? boolean Use floating window instead of split (default: false)
 --- @field user_config.auto_create_groups? boolean Enable automatic group creation (default: true)
