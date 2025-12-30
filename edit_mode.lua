@@ -99,6 +99,8 @@ local function add_missing_modified_buffers(group_list)
     end
 end
 
+--- Build edit lines and return them with initial cursor position
+--- @return table lines, number initial_cursor_line
 local function build_edit_lines()
     local lines = {
         "# Vertical Bufferline edit mode",
@@ -111,7 +113,9 @@ local function build_edit_lines()
     local group_list = groups.get_all_groups()
     add_missing_modified_buffers(group_list)
 
-    for _, group in ipairs(group_list) do
+    local initial_cursor_line = nil
+
+    for i, group in ipairs(group_list) do
         local header = "[Group]"
         if group.name and group.name ~= "" then
             header = header .. " " .. group.name
@@ -122,13 +126,25 @@ local function build_edit_lines()
             local line = format_buffer_line(buf_id)
             if line then
                 table.insert(lines, line)
+                -- Record first buffer line as initial cursor position
+                if not initial_cursor_line then
+                    initial_cursor_line = #lines
+                end
             end
         end
 
-        table.insert(lines, "")
+        -- Only add empty line between groups, not after the last one
+        if i < #group_list then
+            table.insert(lines, "")
+        end
     end
 
-    return lines
+    -- Fallback: if no buffers found, place cursor after header comments
+    if not initial_cursor_line then
+        initial_cursor_line = #lines
+    end
+
+    return lines, initial_cursor_line
 end
 
 local function strip_comment(line)
@@ -517,7 +533,8 @@ function M.open()
     api.nvim_buf_set_var(buf_id, "vbl_edit_prev_buf", edit_state.prev_buf_id)
     api.nvim_buf_set_var(buf_id, "vbl_edit_prev_win", edit_state.prev_win_id)
 
-    api.nvim_buf_set_lines(buf_id, 0, -1, false, build_edit_lines())
+    local lines, initial_cursor_line = build_edit_lines()
+    api.nvim_buf_set_lines(buf_id, 0, -1, false, lines)
 
     local width = math.max(60, vim.o.columns - 4)
     local height = math.max(15, vim.o.lines - 4)
@@ -551,6 +568,9 @@ function M.open()
         zindex = 50,
     })
     api.nvim_win_set_option(edit_state.win_id, "wrap", false)
+
+    -- Move cursor to first buffer line
+    api.nvim_win_set_cursor(edit_state.win_id, {initial_cursor_line, 0})
 end
 
 M.apply = apply_edit_buffer
