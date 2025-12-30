@@ -1345,39 +1345,72 @@ local function build_menu_lines(items, include_hint)
     return lines
 end
 
-local function remap_menu_hints(buffer_ids, buffer_hints)
+local function assign_menu_hints(items, buffer_hints)
     local reserved = { j = true, k = true, q = true }
     local used = {}
 
-    for _, hint in pairs(buffer_hints or {}) do
-        if hint and #hint == 1 and not reserved[hint] then
-            used[hint] = true
+    local function is_available_hint(hint)
+        if not hint or #hint ~= 1 then
+            return false
+        end
+        if reserved[hint] or used[hint] then
+            return false
+        end
+        return PICK_ALPHABET:find(hint, 1, true) ~= nil
+    end
+
+    -- Assign based on filename letters (left to right), try lower then upper
+    for _, item in ipairs(items) do
+        if not item.hint then
+            local name = item.name or ""
+            for i = 1, #name do
+                local ch = name:sub(i, i)
+                if ch:match("%a") then
+                    local lower = ch:lower()
+                    local upper = ch:upper()
+                    local picked = nil
+                    if is_available_hint(lower) then
+                        picked = lower
+                    elseif lower ~= upper and is_available_hint(upper) then
+                        picked = upper
+                    end
+                    if picked then
+                        item.hint = picked
+                        used[picked] = true
+                        break
+                    end
+                end
+            end
         end
     end
 
+    -- If name-based assignment failed, fall back to existing hints
+    for _, item in ipairs(items) do
+        if not item.hint then
+            local hint = buffer_hints and buffer_hints[item.id] or nil
+            if hint and is_available_hint(hint) then
+                item.hint = hint
+                used[hint] = true
+            end
+        end
+    end
+
+    -- Fallback to remaining available characters in PICK_ALPHABET order
     local available = {}
     for i = 1, #PICK_ALPHABET do
         local char = PICK_ALPHABET:sub(i, i)
-        if not reserved[char] and not used[char] then
+        if is_available_hint(char) then
             table.insert(available, char)
         end
     end
 
-    local new_hints = {}
     local next_index = 1
-    for _, buf_id in ipairs(buffer_ids) do
-        local hint = buffer_hints and buffer_hints[buf_id] or nil
-        if hint and (#hint > 1 or reserved[hint]) then
-            hint = nil
-        end
-        if not hint then
-            hint = available[next_index]
+    for _, item in ipairs(items) do
+        if not item.hint then
+            item.hint = available[next_index]
             next_index = next_index + 1
         end
-        new_hints[buf_id] = hint
     end
-
-    return new_hints
 end
 
 local function apply_menu_highlights(items, include_hint, title_offset)
@@ -3119,13 +3152,6 @@ function M.open_buffer_menu()
 
     local minimal_prefixes = filename_utils.generate_minimal_prefixes(buffer_ids, window_width)
 
-    local all_group_buffers = {}
-    for _, buf_id in ipairs(buffer_ids) do
-        table.insert(all_group_buffers, { buffer_id = buf_id, group_id = active_group.id })
-    end
-    local buffer_hints = generate_buffer_hints(all_group_buffers, {}, active_group.id, true)
-    local menu_hints = remap_menu_hints(buffer_ids, buffer_hints)
-
     local items = {}
     for i, buf_id in ipairs(buffer_ids) do
         local buf_name = api.nvim_buf_get_name(buf_id)
@@ -3134,13 +3160,18 @@ function M.open_buffer_menu()
         if prefix_info and prefix_info.prefix and prefix_info.prefix ~= "" then
             filename = prefix_info.prefix .. prefix_info.filename
         end
-        local hint = menu_hints[buf_id]
         table.insert(items, {
             id = buf_id,
             name = filename,
-            hint = hint,
         })
     end
+
+    local all_group_buffers = {}
+    for _, buf_id in ipairs(buffer_ids) do
+        table.insert(all_group_buffers, { buffer_id = buf_id, group_id = active_group.id })
+    end
+    local buffer_hints = generate_buffer_hints(all_group_buffers, {}, active_group.id, true)
+    assign_menu_hints(items, buffer_hints)
 
     local lines = build_menu_lines(items, true)
     open_menu(lines, "Buffers")
