@@ -177,6 +177,9 @@ M.DEFAULTS = {
     },
 }
 
+-- Runtime settings (mutable)
+M.settings = vim.deepcopy(M.DEFAULTS)
+
 -- File extensions and icons mapping
 M.ICONS = {
     lua = "🌙",

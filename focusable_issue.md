@@ -18,7 +18,7 @@ local function open_sidebar()
     local current_win = api.nvim_get_current_win()
     
     -- 创建窗口 (会自动切换到新窗口)
-    if config_module.DEFAULTS.position == "left" then
+    if config_module.settings.position == "left" then
         vim.cmd("topleft vsplit")
     else
         vim.cmd("botright vsplit")

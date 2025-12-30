@@ -40,8 +40,8 @@ local groups_data = {
     
     -- Group settings
     settings = {
-        auto_create_groups = config_module.DEFAULTS.auto_create_groups,
-        auto_add_new_buffers = config_module.DEFAULTS.auto_add_new_buffers,
+        auto_create_groups = config_module.settings.auto_create_groups,
+        auto_add_new_buffers = config_module.settings.auto_add_new_buffers,
         group_name_prefix = "Group",
     },
 
@@ -1147,7 +1147,7 @@ function M.sync_group_history_with_current(group_id, current_buffer_id)
     table.insert(group.history, 1, current_buffer_id)
     
     -- Limit history size
-    local max_size = config_module.DEFAULTS.history_size
+    local max_size = config_module.settings.history_size
     while #group.history > max_size do
         table.remove(group.history)
     end
@@ -1214,7 +1214,7 @@ end
 --- @param group_id string Group ID to check
 --- @return boolean Whether to show history for this group
 function M.should_show_history(group_id)
-    local show_history = config_module.DEFAULTS.show_history
+    local show_history = config_module.settings.show_history
     
     if show_history == "no" then
         return false
@@ -1222,7 +1222,7 @@ function M.should_show_history(group_id)
         return true
     else -- "auto"
         local history = M.get_group_history(group_id)
-        return #history >= config_module.DEFAULTS.history_auto_threshold
+        return #history >= config_module.settings.history_auto_threshold
     end
 end
 
@@ -1250,7 +1250,7 @@ end
 --- Cycle through show_history settings: auto -> yes -> no -> auto
 --- @return string new_setting The new show_history setting
 function M.cycle_show_history()
-    local current = config_module.DEFAULTS.show_history
+    local current = config_module.settings.show_history
     local new_setting
     
     if current == "auto" then
@@ -1261,7 +1261,7 @@ function M.cycle_show_history()
         new_setting = "auto"
     end
     
-    config_module.DEFAULTS.show_history = new_setting
+    config_module.settings.show_history = new_setting
     return new_setting
 end
 

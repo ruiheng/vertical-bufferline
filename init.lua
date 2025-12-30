@@ -56,7 +56,7 @@ local extended_picking_state = {
 }
 
 local function is_horizontal_position()
-    local position = config_module.DEFAULTS.position
+    local position = config_module.settings.position
     return position == "top" or position == "bottom"
 end
 
@@ -1036,7 +1036,7 @@ local function should_show_path_for_buffer(buffer_id)
         return false
     end
 
-    local show_path_setting = config_module.DEFAULTS.show_path
+    local show_path_setting = config_module.settings.show_path
     
     if show_path_setting == "no" then
         return false
@@ -1103,7 +1103,7 @@ local function get_buffer_path_info(component)
     
     -- Use smart path compression instead of crude truncation
     local filename_utils = require('vertical-bufferline.filename_utils')
-    relative_dir = filename_utils.compress_path_smart(relative_dir, config_module.DEFAULTS.path_max_length, 1)
+    relative_dir = filename_utils.compress_path_smart(relative_dir, config_module.settings.path_max_length, 1)
     
     return relative_dir, filename
 end
@@ -1216,8 +1216,8 @@ local function create_buffer_line(component, j, total_components, current_buffer
     local is_visible = component.focused or false  -- Assuming focused means visible
     local has_pick = false
     local compact_mode = state_module.get_layout_mode() == "horizontal"
-    local show_tree_lines = config_module.DEFAULTS.show_tree_lines and not compact_mode
-    local show_icons = config_module.DEFAULTS.show_icons and not compact_mode
+    local show_tree_lines = config_module.settings.show_tree_lines and not compact_mode
+    local show_icons = config_module.settings.show_icons and not compact_mode
     
     -- Check if this buffer is in the currently active group
     local groups = require('vertical-bufferline.groups')
@@ -1351,7 +1351,7 @@ local function create_buffer_line(component, j, total_components, current_buffer
     local path_line = nil
     local should_show_path = should_show_path_for_buffer(component.id)
     if path_dir and should_show_path then
-        local show_path_setting = config_module.DEFAULTS.show_path
+        local show_path_setting = config_module.settings.show_path
         if show_path_setting == "yes" or path_dir ~= "." then
             -- Calculate dynamic indentation to align with filename
             -- Use the same component calculation as filename lines for perfect alignment
@@ -1403,7 +1403,7 @@ local function create_buffer_line(component, j, total_components, current_buffer
             -- Calculate UI context for better compression
             local ui_context = {
                 base_indent = base_indent,
-                tree_chars = config_module.DEFAULTS.show_tree_lines and 2 or 0,
+                tree_chars = config_module.settings.show_tree_lines and 2 or 0,
                 numbering_width = max_global_digits + 2,  -- [N] format
                 preserve_segments = 1
             }
@@ -1721,7 +1721,7 @@ local function render_horizontal_layout(active_group, bufferline_components, cur
         local history_entries = {}
         local buffer_ids = {}
         for i, buf_id in ipairs(history or {}) do
-            if i > config_module.DEFAULTS.history_display_count then
+            if i > config_module.settings.history_display_count then
                 break
             end
             table.insert(buffer_ids, buf_id)
@@ -1857,7 +1857,7 @@ local function render_current_group_history(active_group, current_buffer_id, is_
     -- Only render if we have valid history items
     if #valid_history > 0 then
         -- Render history group header with enhanced styling
-        local header_text = string.format("📋 Recent Files (%d)", math.min(#valid_history, config_module.DEFAULTS.history_display_count))
+        local header_text = string.format(" 📋 Recent Files (%d)", math.min(#valid_history, config_module.settings.history_display_count))
         table.insert(lines_text, header_text)
         local header_line_num = #lines_text
         group_header_lines[header_line_num] = {
@@ -1871,7 +1871,7 @@ local function render_current_group_history(active_group, current_buffer_id, is_
         -- Generate minimal prefixes for history items (same logic as regular groups)
         local history_buffer_ids = {}
         for i, buffer_id in ipairs(valid_history) do
-            if i <= config_module.DEFAULTS.history_display_count then
+            if i <= config_module.settings.history_display_count then
                 table.insert(history_buffer_ids, buffer_id)
             end
         end
@@ -1886,12 +1886,12 @@ local function render_current_group_history(active_group, current_buffer_id, is_
 
         -- Render history items
         for i, buffer_id in ipairs(valid_history) do
-            if i > config_module.DEFAULTS.history_display_count then break end
+            if i > config_module.settings.history_display_count then break end
 
             local buf_name = api.nvim_buf_get_name(buffer_id)
             local filename = buf_name == "" and "[No Name]" or vim.fn.fnamemodify(buf_name, ":t")
             local is_current = buffer_id == current_buffer_id
-            local is_last = (i == math.min(#valid_history, config_module.DEFAULTS.history_display_count))
+            local is_last = (i == math.min(#valid_history, config_module.settings.history_display_count))
 
             -- Create component object for history buffer
             local history_component = {
@@ -1959,7 +1959,7 @@ local function render_all_groups(active_group, components, current_buffer_id, is
         end
 
         -- Decide whether to expand group based on active status and setting
-        local should_expand = is_active or (not compact_mode and config_module.DEFAULTS.show_inactive_group_buffers)
+        local should_expand = is_active or (not compact_mode and config_module.settings.show_inactive_group_buffers)
         if should_expand then
             -- Get current group buffers and display them
             local group_components = {}
@@ -2001,7 +2001,7 @@ local function render_all_groups(active_group, components, current_buffer_id, is
             end
 
             -- For inactive groups that should show buffers, manually construct components
-            if config_module.DEFAULTS.show_inactive_group_buffers and not is_active then
+            if config_module.settings.show_inactive_group_buffers and not is_active then
                 group_components = {}
 
                 -- First collect all valid buffer information
@@ -2039,7 +2039,7 @@ local function render_all_groups(active_group, components, current_buffer_id, is
 
             -- If group is empty, show clean empty group hint
             if #group_components == 0 then
-                local show_tree_lines = config_module.DEFAULTS.show_tree_lines and not compact_mode
+                local show_tree_lines = config_module.settings.show_tree_lines and not compact_mode
                 local empty_line = show_tree_lines and 
                     ("  " .. config_module.UI.TREE_LAST .. config_module.UI.TREE_EMPTY) or 
                     ("  " .. config_module.UI.TREE_EMPTY)
@@ -2076,7 +2076,7 @@ local function render_all_groups(active_group, components, current_buffer_id, is
             end
 
             -- If current active group and inactive groups not shown, clear remaining components
-            if is_active and not config_module.DEFAULTS.show_inactive_group_buffers then
+            if is_active and not config_module.settings.show_inactive_group_buffers then
                 remaining_components = {}
             end
         end
@@ -2112,7 +2112,7 @@ end
 -- Calculate vertical offset to align VBL content with main window cursor
 local function calculate_cursor_based_offset(content_length)
     -- Check if cursor alignment is enabled
-    if not config_module.DEFAULTS.align_with_cursor then
+    if not config_module.settings.align_with_cursor then
         return 0
     end
 
@@ -2199,7 +2199,7 @@ end
 
 -- Calculate and apply adaptive width to the sidebar window
 local function apply_adaptive_width(content_width)
-    if not config_module.DEFAULTS.adaptive_width then
+    if not config_module.settings.adaptive_width then
         return
     end
 
@@ -2209,8 +2209,8 @@ local function apply_adaptive_width(content_width)
     end
 
     -- Get min and max width from configuration
-    local min_width = config_module.DEFAULTS.min_width
-    local max_width = config_module.DEFAULTS.max_width
+    local min_width = config_module.settings.min_width
+    local max_width = config_module.settings.max_width
 
     -- Calculate desired width: content width + 2 for padding
     local desired_width = content_width + 2
@@ -2230,7 +2230,7 @@ local function apply_adaptive_width(content_width)
         state_module.set_last_width(new_width)
 
         -- For floating windows, also update position to keep it aligned
-        if config_module.DEFAULTS.floating then
+        if config_module.settings.floating then
             local win_config = api.nvim_win_get_config(win_id)
             if win_config and win_config.relative ~= "" then
                 local screen_width = vim.o.columns
@@ -2252,7 +2252,7 @@ end
 
 -- Calculate and apply adaptive height to the sidebar window (top/bottom only)
 local function apply_adaptive_height(content_height)
-    if not config_module.DEFAULTS.adaptive_height then
+    if not config_module.settings.adaptive_height then
         return
     end
 
@@ -2261,8 +2261,8 @@ local function apply_adaptive_height(content_height)
         return
     end
 
-    local min_height = config_module.DEFAULTS.min_height
-    local max_height = config_module.DEFAULTS.max_height
+    local min_height = config_module.settings.min_height
+    local max_height = config_module.settings.max_height
 
     local desired_height = content_height
     local new_height = math.max(min_height, math.min(desired_height, max_height))
@@ -2374,9 +2374,25 @@ local function finalize_buffer_display(lines_text, new_line_map, line_group_cont
     -- Calculate and apply adaptive size based on layout
     if is_horizontal_position() then
         apply_adaptive_height(#final_lines)
-    elseif config_module.DEFAULTS.adaptive_width then
+    elseif config_module.settings.adaptive_width then
         local content_width = calculate_content_width(lines_text)
         apply_adaptive_width(content_width)
+    end
+
+    -- Reset horizontal scroll to avoid left-shifted glyphs (e.g., emoji headers)
+    local win_id = state_module.get_win_id()
+    if win_id and api.nvim_win_is_valid(win_id) then
+        local view = vim.api.nvim_win_call(win_id, vim.fn.winsaveview)
+        if view and view.leftcol and view.leftcol ~= 0 then
+            view.leftcol = 0
+            vim.api.nvim_win_call(win_id, function()
+                vim.fn.winrestview(view)
+            end)
+        end
+        local cursor = api.nvim_win_get_cursor(win_id)
+        if cursor and cursor[2] ~= 0 then
+            pcall(api.nvim_win_set_cursor, win_id, { cursor[1], 0 })
+        end
     end
 
     state_module.set_line_offset(offset)
@@ -2817,9 +2833,9 @@ function M.close_sidebar()
     local current_win = api.nvim_get_current_win()
     local all_windows = api.nvim_list_wins()
     local sidebar_win_id = state_module.get_win_id()
-    local position = config_module.DEFAULTS.position
+    local position = config_module.settings.position
     local is_horizontal = position == "top" or position == "bottom"
-    local use_floating = config_module.DEFAULTS.floating and not is_horizontal
+    local use_floating = config_module.settings.floating and not is_horizontal
 
     -- Save the current width before closing
     if is_horizontal then
@@ -2863,6 +2879,7 @@ function M.close_sidebar()
     pcall(api.nvim_del_augroup_by_name, "VerticalBufferlineSidebarProtection")
     
     state_module.close_sidebar()
+    state_module.set_current_position(nil)
 end
 
 --- Setup standard keymaps for sidebar buffer
@@ -2901,13 +2918,18 @@ local function open_sidebar()
     api.nvim_buf_set_option(buf_id, 'filetype', 'vertical-bufferline')
     local current_win = api.nvim_get_current_win()
 
-    local position = config_module.DEFAULTS.position
+    local position = config_module.settings.position
     local is_horizontal = position == "top" or position == "bottom"
-    local use_floating = config_module.DEFAULTS.floating and not is_horizontal
+    local use_floating = config_module.settings.floating and not is_horizontal
 
     -- Use saved size if available, otherwise use defaults
-    local width = state_module.get_last_width() or config_module.DEFAULTS.min_width
-    local height = state_module.get_last_height() or config_module.DEFAULTS.min_height
+    local width = state_module.get_last_width() or config_module.settings.min_width
+    local height = state_module.get_last_height() or config_module.settings.min_height
+    if is_horizontal then
+        local min_h = config_module.settings.min_height
+        local max_h = config_module.settings.max_height
+        height = math.max(min_h, math.min(height, max_h))
+    end
 
     local new_win_id
 
@@ -2953,8 +2975,8 @@ local function open_sidebar()
     end
     
     -- Configure window options after creation
-    api.nvim_win_set_option(new_win_id, 'winfixwidth', not config_module.DEFAULTS.adaptive_width)
-    api.nvim_win_set_option(new_win_id, 'winfixheight', not config_module.DEFAULTS.adaptive_height)
+    api.nvim_win_set_option(new_win_id, 'winfixwidth', not config_module.settings.adaptive_width)
+    api.nvim_win_set_option(new_win_id, 'winfixheight', not config_module.settings.adaptive_height)
     api.nvim_win_set_option(new_win_id, 'number', false)
     api.nvim_win_set_option(new_win_id, 'relativenumber', false)
     api.nvim_win_set_option(new_win_id, 'cursorline', false)
@@ -3125,11 +3147,12 @@ local function open_sidebar()
     state_module.set_win_id(new_win_id)
     state_module.set_buf_id(buf_id)
     state_module.set_sidebar_open(true)
+    state_module.set_current_position(position)
 
     setup_sidebar_keymaps(buf_id)
 
     -- Switch back to original window (only needed for split mode)
-    if not config_module.DEFAULTS.floating then
+    if not config_module.settings.floating then
         api.nvim_set_current_win(current_win)
     end
     
@@ -3161,7 +3184,7 @@ function M.cycle_show_path_setting()
         return 
     end
     
-    local current_setting = config_module.DEFAULTS.show_path
+    local current_setting = config_module.settings.show_path
     local next_setting
     
     if current_setting == "yes" then
@@ -3173,7 +3196,7 @@ function M.cycle_show_path_setting()
     end
     
     -- Update the configuration
-    config_module.DEFAULTS.show_path = next_setting
+    config_module.settings.show_path = next_setting
     
     -- Provide visual feedback
     local mode_descriptions = {
@@ -3529,8 +3552,8 @@ end
 --- When disabled, only the active group shows its buffer list
 --- @return nil
 function M.toggle_expand_all()
-    config_module.DEFAULTS.show_inactive_group_buffers = not config_module.DEFAULTS.show_inactive_group_buffers
-    local status = config_module.DEFAULTS.show_inactive_group_buffers and "enabled" or "disabled"
+    config_module.settings.show_inactive_group_buffers = not config_module.settings.show_inactive_group_buffers
+    local status = config_module.settings.show_inactive_group_buffers and "enabled" or "disabled"
     vim.notify("Show inactive group buffers " .. status, vim.log.levels.INFO)
 
     -- Refresh display
@@ -3548,11 +3571,11 @@ function M.toggle_show_inactive_group_buffers()
         return 
     end
     
-    local current_setting = config_module.DEFAULTS.show_inactive_group_buffers
+    local current_setting = config_module.settings.show_inactive_group_buffers
     local new_setting = not current_setting
     
     -- Update the configuration
-    config_module.DEFAULTS.show_inactive_group_buffers = new_setting
+    config_module.settings.show_inactive_group_buffers = new_setting
     
     -- Provide visual feedback
     local status = new_setting and "enabled" or "disabled"
@@ -3612,8 +3635,8 @@ local function initialize_plugin()
 
     -- Initialize group functionality
     groups.setup({
-        auto_create_groups = config_module.DEFAULTS.auto_create_groups,
-        auto_add_new_buffers = config_module.DEFAULTS.auto_add_new_buffers
+        auto_create_groups = config_module.settings.auto_create_groups,
+        auto_add_new_buffers = config_module.settings.auto_add_new_buffers
     })
 
     -- Enable bufferline integration
@@ -3621,8 +3644,8 @@ local function initialize_plugin()
 
     -- Initialize session module
     session.setup({
-        auto_save = config_module.DEFAULTS.auto_save,
-        auto_load = config_module.DEFAULTS.auto_load,
+        auto_save = config_module.settings.auto_save,
+        auto_load = config_module.settings.auto_load,
     })
     
     -- Setup global variable session integration (for mini.sessions and native mksession)
@@ -3654,7 +3677,7 @@ local function initialize_plugin()
     if not bufferline_integration.is_available() then
         vim.schedule(function()
             open_sidebar()
-            if not (config_module.DEFAULTS.auto_load and session.has_session()) then
+            if not (config_module.settings.auto_load and session.has_session()) then
                 populate_startup_buffers()
             end
             M.refresh("no_bufferline_auto_open")
@@ -3679,7 +3702,7 @@ function M.refresh_cursor_alignment()
     end
 
     -- Only refresh if cursor alignment is enabled and sidebar is open
-    if not config_module.DEFAULTS.align_with_cursor or not state_module.is_sidebar_open() then
+    if not config_module.settings.align_with_cursor or not state_module.is_sidebar_open() then
         return
     end
 
@@ -3710,7 +3733,7 @@ function M.refresh_cursor_alignment()
     -- Create debounced refresh (100ms delay)
     cursor_alignment_timer = vim.loop.new_timer()
     cursor_alignment_timer:start(100, 0, vim.schedule_wrap(function()
-        if state_module.is_sidebar_open() and config_module.DEFAULTS.align_with_cursor then
+        if state_module.is_sidebar_open() and config_module.settings.align_with_cursor then
             M.refresh("cursor_alignment")
         end
         if cursor_alignment_timer then
@@ -3901,16 +3924,16 @@ function M.setup(user_config)
     if user_config then
         -- Merge user configuration with defaults
         for key, value in pairs(user_config) do
-            if config_module.DEFAULTS[key] ~= nil then
-                config_module.DEFAULTS[key] = value
+            if config_module.settings[key] ~= nil then
+                config_module.settings[key] = value
             end
         end
 
         -- Handle nested session configuration
         if user_config.session then
             for key, value in pairs(user_config.session) do
-                if config_module.DEFAULTS.session[key] ~= nil then
-                    config_module.DEFAULTS.session[key] = value
+                if config_module.settings.session[key] ~= nil then
+                    config_module.settings.session[key] = value
                 end
             end
         end

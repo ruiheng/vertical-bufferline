@@ -1179,8 +1179,8 @@ function M.setup()
     -- Toggle cursor alignment
     vim.api.nvim_create_user_command("VBufferLineToggleCursorAlign", function()
         local config = require('vertical-bufferline.config')
-        config.DEFAULTS.align_with_cursor = not config.DEFAULTS.align_with_cursor
-        local status = config.DEFAULTS.align_with_cursor and "enabled" or "disabled"
+        config.settings.align_with_cursor = not config.settings.align_with_cursor
+        local status = config.settings.align_with_cursor and "enabled" or "disabled"
         vim.notify(string.format("VBL cursor alignment: %s", status), vim.log.levels.INFO)
 
         -- Refresh to apply the change
@@ -1193,14 +1193,14 @@ function M.setup()
     -- Toggle adaptive width
     vim.api.nvim_create_user_command("VBufferLineToggleAdaptiveWidth", function()
         local config = require('vertical-bufferline.config')
-        config.DEFAULTS.adaptive_width = not config.DEFAULTS.adaptive_width
-        local status = config.DEFAULTS.adaptive_width and "enabled" or "disabled"
+        config.settings.adaptive_width = not config.settings.adaptive_width
+        local status = config.settings.adaptive_width and "enabled" or "disabled"
         vim.notify(string.format("VBL adaptive width: %s", status), vim.log.levels.INFO)
 
         local state = require('vertical-bufferline.state')
         local win_id = state.get_win_id()
         if win_id and vim.api.nvim_win_is_valid(win_id) then
-            vim.api.nvim_win_set_option(win_id, 'winfixwidth', not config.DEFAULTS.adaptive_width)
+            vim.api.nvim_win_set_option(win_id, 'winfixwidth', not config.settings.adaptive_width)
         end
 
         -- Refresh to apply the change
@@ -1224,7 +1224,7 @@ function M.setup()
             return
         end
 
-        config.DEFAULTS.position = position
+        config.settings.position = position
         vim.notify(string.format("VBL position set to %s", position), vim.log.levels.INFO)
 
         local state = require('vertical-bufferline.state')

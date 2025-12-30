@@ -21,6 +21,92 @@ local config = {
 -- Auto-save debounce timer
 local auto_save_timer = nil
 
+local function apply_session_position(session_data)
+    if not session_data or not session_data.position then
+        return
+    end
+
+    if config_module.validate_position(session_data.position) then
+        config_module.settings.position = session_data.position
+    end
+end
+
+local function detect_sidebar_position(win_id)
+    if not win_id or not vim.api.nvim_win_is_valid(win_id) then
+        return nil
+    end
+
+    local row, col = unpack(vim.api.nvim_win_get_position(win_id))
+    local win_w = vim.api.nvim_win_get_width(win_id)
+    local win_h = vim.api.nvim_win_get_height(win_id)
+    local screen_w = vim.o.columns
+    local screen_h = vim.o.lines
+
+    local is_horizontal = win_h < win_w and win_h < (screen_h - 2)
+    if is_horizontal then
+        return row == 0 and "top" or "bottom"
+    end
+
+    return col == 0 and "left" or "right"
+end
+
+local function reopen_sidebar_for_position(session_data)
+    if not session_data then
+        return
+    end
+
+    if not session_data.position then
+        return
+    end
+
+    local state_module = require('vertical-bufferline.state')
+    local win_id = nil
+    local sidebar_open = state_module.is_sidebar_open()
+    if sidebar_open then
+        win_id = state_module.get_win_id()
+    else
+        for _, win in ipairs(vim.api.nvim_list_wins()) do
+            if vim.api.nvim_win_is_valid(win) then
+                local buf = vim.api.nvim_win_get_buf(win)
+                if vim.api.nvim_buf_is_valid(buf) and vim.api.nvim_buf_get_option(buf, 'filetype') == 'vertical-bufferline' then
+                    win_id = win
+                    break
+                end
+            end
+        end
+    end
+
+    if not win_id then
+        return
+    end
+
+    local current_position = state_module.get_current_position()
+    if current_position == session_data.position then
+        return
+    end
+
+    local actual_position = detect_sidebar_position(win_id)
+    if actual_position == session_data.position then
+        state_module.set_current_position(actual_position)
+        return
+    end
+
+    vim.defer_fn(function()
+        local vbl = require('vertical-bufferline')
+        if sidebar_open then
+            vbl.close_sidebar()
+            vim.schedule(function()
+                vbl.toggle()
+            end)
+        else
+            pcall(vim.api.nvim_win_close, win_id, false)
+            vim.schedule(function()
+                vbl.toggle()
+            end)
+        end
+    end, 30)
+end
+
 -- Common session restore finalization
 local function finalize_session_restore(session_data, opened_count, total_groups)
     local groups = require('vertical-bufferline.groups')
@@ -243,6 +329,8 @@ local function finalize_session_restore(session_data, opened_count, total_groups
             end
         end, 100) -- Delay a bit more to ensure VBL sidebar is fully opened
     end)
+
+    reopen_sidebar_for_position(session_data)
 end
 
 -- Ensure session directory exists
@@ -343,7 +431,7 @@ function M.save_session(filename)
         timestamp = os.time(),
         working_directory = vim.fn.getcwd(),
         active_group_id = active_group_id,
-        position = config_module.DEFAULTS.position,
+        position = config_module.settings.position,
         groups = {},
         pinned_buffers = {}
     }
@@ -938,9 +1026,7 @@ function M.load_session(filename)
         return false
     end
 
-    if session_data.position and config_module.validate_position(session_data.position) then
-        config_module.DEFAULTS.position = session_data.position
-    end
+    apply_session_position(session_data)
 
     local state_module = require('vertical-bufferline.state')
     state_module.set_session_loading(true)
@@ -1164,7 +1250,7 @@ local function collect_current_state()
         version = "1.0",
         timestamp = os.time(),
         active_group_id = active_group_id,
-        position = config_module.DEFAULTS.position,
+        position = config_module.settings.position,
         groups = {},
         pinned_buffers = {}
     }
@@ -1261,9 +1347,7 @@ local function restore_state_from_global()
         return false
     end
 
-    if session_data.position and config_module.validate_position(session_data.position) then
-        config_module.DEFAULTS.position = session_data.position
-    end
+    apply_session_position(session_data)
     
     -- Prevent duplicate execution
     if _G._vbl_session_restore_in_progress then
@@ -1409,7 +1493,7 @@ local function setup_session_integration()
     local config_module = require('vertical-bufferline.config')
     
     -- Get session config with fallback defaults
-    local session_config = config_module.DEFAULTS.session or {
+    local session_config = config_module.settings.session or {
         mini_sessions_integration = true,
         auto_serialize = true,     -- Re-enable now that race condition is fixed
         auto_restore_prompt = false -- Keep this disabled for now
@@ -1550,16 +1634,16 @@ end
 -- Enable/disable auto restore prompt
 function M.enable_auto_restore_prompt()
     local config_module = require('vertical-bufferline.config')
-    if config_module.DEFAULTS.session then
-        config_module.DEFAULTS.session.auto_restore_prompt = true
+    if config_module.settings.session then
+        config_module.settings.session.auto_restore_prompt = true
         vim.notify("VBL auto-restore prompt enabled", vim.log.levels.INFO)
     end
 end
 
 function M.disable_auto_restore_prompt()
     local config_module = require('vertical-bufferline.config')
-    if config_module.DEFAULTS.session then
-        config_module.DEFAULTS.session.auto_restore_prompt = false
+    if config_module.settings.session then
+        config_module.settings.session.auto_restore_prompt = false
         vim.notify("VBL auto-restore prompt disabled", vim.log.levels.INFO)
     end
 end

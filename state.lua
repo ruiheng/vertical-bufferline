@@ -13,6 +13,7 @@ local state = {
     is_sidebar_open = false,
     last_width = nil, -- Remember the last width before closing sidebar
     last_height = nil, -- Remember the last height before closing sidebar (top/bottom)
+    current_position = nil, -- Track current sidebar position ("left"/"right"/"top"/"bottom")
     line_to_buffer_id = {}, -- Maps a line number in our window to a buffer ID
     hint_to_buffer_id = {}, -- Maps a hint character to a buffer ID
     line_group_context = {}, -- Maps a line number to the group ID it belongs to
@@ -135,6 +136,17 @@ function M.set_last_height(height)
         error("last_height must be a positive number, got: " .. tostring(height))
     end
     state.last_height = height
+end
+
+function M.get_current_position()
+    return state.current_position
+end
+
+function M.set_current_position(position)
+    if position ~= nil and type(position) ~= "string" then
+        error("current_position must be string or nil, got: " .. type(position))
+    end
+    state.current_position = position
 end
 
 -- Line to buffer mapping
@@ -373,6 +385,7 @@ function M.reset_state()
     state.is_sidebar_open = false
     state.last_width = nil
     state.last_height = nil
+    state.current_position = nil
     state.line_to_buffer_id = {}
     state.hint_to_buffer_id = {}
     state.line_buffer_ranges = {}
