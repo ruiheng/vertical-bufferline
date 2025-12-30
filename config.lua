@@ -81,6 +81,8 @@ M.HIGHLIGHTS = {
     GROUP_MARKER = "VBufferLineGroupMarker",
     GROUP_TAB_ACTIVE = "VBufferLineGroupTabActive",
     GROUP_TAB_INACTIVE = "VBufferLineGroupTabInactive",
+    SECTION_LABEL_ACTIVE = "VBufferLineSectionLabelActive",
+    SECTION_LABEL_INACTIVE = "VBufferLineSectionLabelInactive",
 
     -- Recent Files highlights
     RECENT_FILES_HEADER = "VBufferLineRecentFilesHeader",
@@ -110,6 +112,10 @@ M.HIGHLIGHTS = {
     NUMBER_GLOBAL = "VBufferLineNumberGlobal",  -- Global position (for <leader>b1 style)
     NUMBER_SEPARATOR = "VBufferLineNumberSep",  -- The "|" separator
     NUMBER_HIDDEN = "VBufferLineNumberHidden",  -- The "-" when not visible
+
+    HORIZONTAL_NUMBER = "VBufferLineHorizontalNumber",
+    HORIZONTAL_NUMBER_CURRENT = "VBufferLineHorizontalNumberCurrent",
+    HORIZONTAL_CURRENT = "VBufferLineHorizontalCurrent",
 }
 
 -- Event names for autocmds

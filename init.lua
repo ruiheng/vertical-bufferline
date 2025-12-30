@@ -121,6 +121,27 @@ local function setup_highlights()
         bg = pmenu_attrs.bg,
         default = true
     })
+    api.nvim_set_hl(0, config_module.HIGHLIGHTS.SECTION_LABEL_ACTIVE, {
+        fg = title_attrs.fg or config_module.COLORS.BLUE,
+        bold = true,
+        default = true
+    })
+    api.nvim_set_hl(0, config_module.HIGHLIGHTS.SECTION_LABEL_INACTIVE, {
+        fg = comment_attrs.fg or pmenu_attrs.fg,
+        default = true
+    })
+    api.nvim_set_hl(0, config_module.HIGHLIGHTS.HORIZONTAL_NUMBER, { link = "Number", default = true })
+    api.nvim_set_hl(0, config_module.HIGHLIGHTS.HORIZONTAL_NUMBER_CURRENT, {
+        fg = pmenusel_attrs.fg or title_attrs.fg,
+        bold = true,
+        default = true
+    })
+    api.nvim_set_hl(0, config_module.HIGHLIGHTS.HORIZONTAL_CURRENT, {
+        fg = pmenusel_attrs.fg or title_attrs.fg,
+        bg = pmenusel_attrs.bg,
+        bold = true,
+        default = true
+    })
 
     -- Recent Files header highlight removed - kept subtle without special highlighting
 end
@@ -1141,10 +1162,12 @@ local function build_horizontal_item_parts(component, number_index, max_digits, 
     local parts = {}
 
     if number_index then
-        local number_parts = components.create_simple_numbering(number_index, max_digits or 1, is_current, is_visible)
-        for _, part in ipairs(number_parts) do
-            table.insert(parts, part)
-        end
+        local num_str = tostring(number_index)
+        local padding = (max_digits or 1) - #num_str
+        local padded_num = string.rep(" ", padding) .. num_str
+        local num_hl = is_current and config_module.HIGHLIGHTS.HORIZONTAL_NUMBER_CURRENT
+            or config_module.HIGHLIGHTS.HORIZONTAL_NUMBER
+        table.insert(parts, renderer.create_part(padded_num, num_hl))
         table.insert(parts, renderer.create_part(" ", nil))
     end
 
@@ -1170,12 +1193,18 @@ local function build_horizontal_item_parts(component, number_index, max_digits, 
 
     local filename_parts = components.create_filename(prefix_info, final_name, is_current, is_visible)
     for _, part in ipairs(filename_parts) do
+        if is_current then
+            part.highlight = config_module.HIGHLIGHTS.HORIZONTAL_CURRENT
+        end
         table.insert(parts, part)
     end
 
     local is_modified = is_buffer_actually_modified(component.id)
     local modified_parts = components.create_modified_indicator(is_modified)
     for _, part in ipairs(modified_parts) do
+        if is_current then
+            part.highlight = config_module.HIGHLIGHTS.HORIZONTAL_CURRENT
+        end
         table.insert(parts, part)
     end
 
@@ -1732,7 +1761,7 @@ local function render_horizontal_layout(active_group, bufferline_components, cur
                 table.insert(history_entries, { component = component, index = i })
             end
             local max_digits = #tostring(#history_entries)
-            render_section("History:", config_module.HIGHLIGHTS.GROUP_INACTIVE, history_entries, active_group.id, true, current_buffer_id, max_digits)
+            render_section("History:", config_module.HIGHLIGHTS.SECTION_LABEL_INACTIVE, history_entries, active_group.id, true, current_buffer_id, max_digits)
         end
     end
 
@@ -1775,7 +1804,7 @@ local function render_horizontal_layout(active_group, bufferline_components, cur
         elseif active_group.current_buffer and vim.tbl_contains(active_group.buffers or {}, active_group.current_buffer) then
             group_current_id = active_group.current_buffer
         end
-        render_section(group_label, config_module.HIGHLIGHTS.GROUP_ACTIVE, active_group_entries, active_group.id, false, group_current_id, active_group_max_digits)
+        render_section(group_label, config_module.HIGHLIGHTS.SECTION_LABEL_INACTIVE, active_group_entries, active_group.id, false, group_current_id, active_group_max_digits)
     end
 
     -- Group list section
@@ -1801,7 +1830,7 @@ local function render_horizontal_layout(active_group, bufferline_components, cur
 
         local label_text = "Groups:"
         local label_parts = {
-            renderer.create_part(label_text, config_module.HIGHLIGHTS.GROUP_INACTIVE),
+            renderer.create_part(label_text, config_module.HIGHLIGHTS.SECTION_LABEL_INACTIVE),
             renderer.create_part(" ", nil)
         }
         local label_len = #label_text + 1
