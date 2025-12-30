@@ -455,6 +455,7 @@ The algorithm automatically determines the minimal path suffix needed to uniquel
     { "<leader>gp", "<cmd>lua require('vertical-bufferline').switch_to_prev_group()<cr>", desc = "Previous group" },
     { "<leader>bm", "<cmd>lua require('vertical-bufferline').open_buffer_menu()<cr>", desc = "Buffer menu" },
     { "<leader>gm", "<cmd>lua require('vertical-bufferline').open_group_menu()<cr>", desc = "Group menu" },
+    { "<leader>hm", "<cmd>lua require('vertical-bufferline').open_history_menu()<cr>", desc = "History menu" },
   }
 }
 ```
@@ -526,6 +527,7 @@ Add to your lazy.nvim configuration:
     { "<leader>gp", "<cmd>lua require('vertical-bufferline').switch_to_prev_group()<cr>", desc = "Previous group" },
     { "<leader>bm", "<cmd>lua require('vertical-bufferline').open_buffer_menu()<cr>", desc = "Buffer menu" },
     { "<leader>gm", "<cmd>lua require('vertical-bufferline').open_group_menu()<cr>", desc = "Group menu" },
+    { "<leader>hm", "<cmd>lua require('vertical-bufferline').open_history_menu()<cr>", desc = "History menu" },
   }
 }
 ```

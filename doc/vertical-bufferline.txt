@@ -374,6 +374,7 @@ Customize prefixes:
       group_prefix = "<leader>g",
       buffer_menu_key = "<leader>bm",
       group_menu_key = "<leader>gm",
+      history_menu_key = "<leader>hm",
     }))
 <
 
@@ -401,6 +402,7 @@ Group Buffer Quick Access:
 Popup Menus:
 <leader>bm                            Open popup menu for buffers in current group
 <leader>gm                            Open popup menu for group selection
+<leader>hm                            Open popup menu for current group history
 
 Recommended BufferLine Integration (optional):     *vertical-bufferline-bufferline-keymaps*
 

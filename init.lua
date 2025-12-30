@@ -1345,8 +1345,9 @@ local function build_menu_lines(items, include_hint)
     return lines
 end
 
-local function assign_menu_hints(items, buffer_hints)
-    local reserved = { j = true, k = true, q = true }
+local function assign_menu_hints(items, buffer_hints, opts)
+    opts = opts or {}
+    local reserved = opts.reserved or { j = true, k = true, q = true }
     local used = {}
 
     local function is_available_hint(hint)
@@ -1411,6 +1412,26 @@ local function assign_menu_hints(items, buffer_hints)
             next_index = next_index + 1
         end
     end
+end
+
+local function build_name_map(buffer_ids, window_width)
+    local name_map = {}
+    if #buffer_ids == 0 then
+        return name_map
+    end
+
+    local minimal_prefixes = filename_utils.generate_minimal_prefixes(buffer_ids, window_width)
+    for i, buf_id in ipairs(buffer_ids) do
+        local buf_name = api.nvim_buf_get_name(buf_id)
+        local filename = buf_name == "" and "[No Name]" or vim.fn.fnamemodify(buf_name, ":t")
+        local prefix_info = minimal_prefixes[i]
+        if prefix_info and prefix_info.prefix and prefix_info.prefix ~= "" then
+            filename = prefix_info.prefix .. prefix_info.filename
+        end
+        name_map[buf_id] = filename
+    end
+
+    return name_map
 end
 
 local function apply_menu_highlights(items, include_hint, title_offset)
@@ -2734,6 +2755,42 @@ function M.refresh(reason)
             not bufferline_integration.is_available()
         )
 
+        if not bufferline_integration.is_available() then
+            local unique_buffer_ids = {}
+            local seen_buffers = {}
+            for _, entry in ipairs(all_group_buffers) do
+                local buf_id = entry.buffer_id
+                if buf_id and not seen_buffers[buf_id] then
+                    table.insert(unique_buffer_ids, buf_id)
+                    seen_buffers[buf_id] = true
+                end
+            end
+
+            local win_id = state_module.get_win_id()
+            local window_width = 40
+            if win_id and api.nvim_win_is_valid(win_id) then
+                window_width = api.nvim_win_get_width(win_id)
+            end
+
+            local name_map = build_name_map(unique_buffer_ids, window_width)
+            local hint_items = {}
+            for _, buf_id in ipairs(unique_buffer_ids) do
+                table.insert(hint_items, {
+                    id = buf_id,
+                    name = name_map[buf_id] or "",
+                })
+            end
+
+            assign_menu_hints(hint_items, buffer_hints)
+            local remapped_hints = {}
+            for _, item in ipairs(hint_items) do
+                if item.hint then
+                    remapped_hints[item.id] = item.hint
+                end
+            end
+            buffer_hints = remapped_hints
+        end
+
         -- Generate reverse mapping: letter -> buffer_id
         local hint_to_buffer = {}
         for buf_id, letter in pairs(buffer_hints) do
@@ -3221,6 +3278,106 @@ function M.open_group_menu()
                 end
                 break
             end
+        end
+    end
+end
+
+function M.open_history_menu()
+    local active_group = groups.get_active_group()
+    if not active_group then
+        return
+    end
+
+    local ordered_buffer_ids = {}
+    local seen = {}
+
+    local history = groups.get_group_history(active_group.id)
+    for _, buf_id in ipairs(history or {}) do
+        if api.nvim_buf_is_valid(buf_id) and not utils.is_special_buffer(buf_id) then
+            table.insert(ordered_buffer_ids, buf_id)
+            seen[buf_id] = true
+        end
+    end
+
+    local stable_buffer_ids = {}
+    for _, buf_id in ipairs(active_group.buffers or {}) do
+        if api.nvim_buf_is_valid(buf_id) and not utils.is_special_buffer(buf_id) and not seen[buf_id] then
+            table.insert(ordered_buffer_ids, buf_id)
+            seen[buf_id] = true
+        end
+    end
+
+    if #ordered_buffer_ids == 0 then
+        vim.notify("No buffers in current group history", vim.log.levels.INFO)
+        return
+    end
+
+    local win_id = state_module.get_win_id()
+    local window_width = 40
+    if win_id and api.nvim_win_is_valid(win_id) then
+        window_width = api.nvim_win_get_width(win_id)
+    end
+
+    for _, buf_id in ipairs(active_group.buffers or {}) do
+        if api.nvim_buf_is_valid(buf_id) and not utils.is_special_buffer(buf_id) then
+            table.insert(stable_buffer_ids, buf_id)
+        end
+    end
+
+    local name_map = build_name_map(stable_buffer_ids, window_width)
+
+    local items = {}
+    for i, buf_id in ipairs(ordered_buffer_ids) do
+        local filename = name_map[buf_id]
+        if not filename then
+            local buf_name = api.nvim_buf_get_name(buf_id)
+            filename = buf_name == "" and "[No Name]" or vim.fn.fnamemodify(buf_name, ":t")
+        end
+        table.insert(items, {
+            id = buf_id,
+            name = filename,
+        })
+    end
+
+    local all_group_buffers = {}
+    for _, buf_id in ipairs(stable_buffer_ids) do
+        table.insert(all_group_buffers, { buffer_id = buf_id, group_id = active_group.id })
+    end
+    local buffer_hints = generate_buffer_hints(all_group_buffers, {}, active_group.id, true)
+    local stable_items = {}
+    for _, buf_id in ipairs(stable_buffer_ids) do
+        table.insert(stable_items, {
+            id = buf_id,
+            name = name_map[buf_id] or "",
+        })
+    end
+    assign_menu_hints(stable_items, buffer_hints)
+
+    local hint_map = {}
+    for _, item in ipairs(stable_items) do
+        if item.hint then
+            hint_map[item.id] = item.hint
+        end
+    end
+    for _, item in ipairs(items) do
+        item.hint = hint_map[item.id]
+    end
+
+    local lines = build_menu_lines(items, true)
+    open_menu(lines, "History")
+    setup_menu_mappings(items, function(item)
+        switch_to_buffer_in_main_window(item.id, "Error switching buffer")
+    end, true, 1)
+    apply_menu_highlights(items, true, 1)
+
+    local current_buffer_id = get_main_window_current_buffer()
+    for i, item in ipairs(items) do
+        if item.id == current_buffer_id then
+            local menu_win_id = menu_state.win_id
+            if menu_win_id and api.nvim_win_is_valid(menu_win_id) then
+                api.nvim_win_set_cursor(menu_win_id, { i + 1, 0 })
+            end
+            break
         end
     end
 end
@@ -4560,6 +4717,7 @@ function M.keymap_preset(opts)
     local pick_close_key = opts.pick_close_key or (leader .. "P")
     local buffer_menu_key = opts.buffer_menu_key or (leader .. "bm")
     local group_menu_key = opts.group_menu_key or (leader .. "gm")
+    local history_menu_key = opts.history_menu_key or (leader .. "hm")
     local include = opts.include or {}
 
     local function include_section(name)
@@ -4622,6 +4780,7 @@ function M.keymap_preset(opts)
     if include_section("menus") then
         add(buffer_menu_key, function() M.open_buffer_menu() end, "Open buffer menu (VBL)")
         add(group_menu_key, function() M.open_group_menu() end, "Open group menu (VBL)")
+        add(history_menu_key, function() M.open_history_menu() end, "Open history menu (VBL)")
     end
 
     return preset
