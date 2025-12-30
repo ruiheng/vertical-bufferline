@@ -3585,6 +3585,23 @@ function M.switch_to_prev_buffer()
     return M.switch_to_group_buffer(prev_idx)
 end
 
+--- Switch to last buffer in current group
+--- @return boolean success
+function M.switch_to_last_buffer()
+    local active_group = groups.get_active_group()
+    if not active_group then
+        return false
+    end
+
+    local buffers = groups.get_group_buffers(active_group.id)
+    if not buffers or #buffers == 0 then
+        return false
+    end
+
+    -- Last buffer is at position #buffers
+    return M.switch_to_group_buffer(#buffers)
+end
+
 --- Build a keymap preset table (opt-in)
 --- @param opts? table
 --- @return table
@@ -3644,6 +3661,7 @@ function M.keymap_preset(opts)
     if include_section("buffer_navigation") then
         add(leader .. "bn", function() M.switch_to_next_buffer() end, "Switch to next buffer")
         add(leader .. "bp", function() M.switch_to_prev_buffer() end, "Switch to previous buffer")
+        add(leader .. "b$", function() M.switch_to_last_buffer() end, "Switch to last buffer")
     end
 
     if include_section("buffer_management") then
