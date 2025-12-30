@@ -45,6 +45,13 @@ M.UI = {
     GROUP_SEPARATOR = "────────────────────────────────────",
     ACTIVE_GROUP_SEPARATOR = "════════════════════════════════════",  -- Different separator for active group
     UNNAMED_GROUP_DISPLAY = "(unnamed)",
+
+    -- Horizontal layout labels
+    HORIZONTAL_LABEL_HISTORY = "🕘",
+    HORIZONTAL_LABEL_FILES = "📄",
+    HORIZONTAL_LABEL_GROUPS = "🗂",
+    VERTICAL_LABEL_RECENT = "🕘",
+    VERTICAL_RECENT_TEXT = "Recent",
 }
 
 -- Color scheme (One Dark theme colors)

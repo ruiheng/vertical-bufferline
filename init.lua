@@ -1986,7 +1986,7 @@ local function render_horizontal_layout(active_group, bufferline_components, cur
                 table.insert(history_entries, { component = component, index = i })
             end
             local max_digits = #tostring(#history_entries)
-            render_section("History:", config_module.HIGHLIGHTS.SECTION_LABEL_INACTIVE, history_entries, active_group.id, true, current_buffer_id, max_digits)
+            render_section(config_module.UI.HORIZONTAL_LABEL_HISTORY, config_module.HIGHLIGHTS.SECTION_LABEL_INACTIVE, history_entries, active_group.id, true, current_buffer_id, max_digits)
         end
     end
 
@@ -2022,7 +2022,7 @@ local function render_horizontal_layout(active_group, bufferline_components, cur
             active_group_max_digits = #tostring(#active_group_entries)
         end
 
-        local group_label = "Files:"
+        local group_label = config_module.UI.HORIZONTAL_LABEL_FILES
         local group_current_id = nil
         if current_buffer_id and vim.tbl_contains(active_group.buffers or {}, current_buffer_id) then
             group_current_id = current_buffer_id
@@ -2053,7 +2053,7 @@ local function render_horizontal_layout(active_group, bufferline_components, cur
             flush_line()
         end
 
-        local label_text = "Groups:"
+        local label_text = config_module.UI.HORIZONTAL_LABEL_GROUPS
         local label_parts = {
             renderer.create_part(label_text, config_module.HIGHLIGHTS.SECTION_LABEL_INACTIVE),
             renderer.create_part(" ", nil)
@@ -2111,7 +2111,7 @@ local function render_current_group_history(active_group, current_buffer_id, is_
     -- Only render if we have valid history items
     if #valid_history > 0 then
         -- Render history group header with enhanced styling
-        local header_text = string.format(" 📋 Recent Files (%d)", math.min(#valid_history, config_module.settings.history_display_count))
+        local header_text = string.format(" %s %s (%d)", config_module.UI.VERTICAL_LABEL_RECENT, config_module.UI.VERTICAL_RECENT_TEXT, math.min(#valid_history, config_module.settings.history_display_count))
         table.insert(lines_text, header_text)
         local header_line_num = #lines_text
         group_header_lines[header_line_num] = {
