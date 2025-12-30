@@ -76,7 +76,8 @@ local function format_buffer_line(buf_id)
         return string.format("buf:%d%s  # %s", buf_id, pin_suffix, label)
     end
 
-    return vim.fn.fnamemodify(name, ":p") .. pin_suffix
+    -- Use relative path (to current directory) for better readability
+    return vim.fn.fnamemodify(name, ":.") .. pin_suffix
 end
 
 local function add_missing_modified_buffers(group_list)
