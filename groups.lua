@@ -1007,6 +1007,42 @@ function M.setup(opts)
         desc = "Auto-add new buffers to active group (VBL standalone)"
     })
 
+    -- Track history on every buffer enter in standalone mode
+    vim.api.nvim_create_autocmd("BufEnter", {
+        pattern = "*",
+        callback = function(args)
+            local bufferline_integration = require('vertical-bufferline.bufferline-integration')
+            if bufferline_integration.is_available() then
+                return -- bufferline handles history sync
+            end
+
+            local buf_id = tonumber(args.buf)
+            if not buf_id or not vim.api.nvim_buf_is_valid(buf_id) then
+                return
+            end
+
+            local buftype = vim.api.nvim_buf_get_option(buf_id, 'buftype')
+            if buftype ~= '' then
+                return
+            end
+
+            local bufname = vim.api.nvim_buf_get_name(buf_id)
+            if bufname == '' then
+                return
+            end
+
+            local active_group = M.get_active_group()
+            if not active_group then
+                return
+            end
+
+            if vim.tbl_contains(active_group.buffers, buf_id) then
+                M.sync_group_history_with_current(active_group.id, buf_id)
+            end
+        end,
+        desc = "Sync history on BufEnter (VBL standalone)"
+    })
+
     -- Periodically clean up invalid buffers and buffer states
     vim.defer_fn(function()
         M.cleanup_invalid_buffers()
