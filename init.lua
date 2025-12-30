@@ -45,6 +45,8 @@ local logger = require('vertical-bufferline.logger')
 -- Namespace for our highlights
 local ns_id = api.nvim_create_namespace("VerticalBufferline")
 
+local switch_to_buffer_in_main_window
+
 -- Extended picking mode state
 local extended_picking_state = {
     active = false,
@@ -58,6 +60,27 @@ local extended_picking_state = {
 local function is_horizontal_position()
     local position = config_module.settings.position
     return position == "top" or position == "bottom"
+end
+
+local menu_state = {
+    win_id = nil,
+    buf_id = nil,
+    prev_win_id = nil,
+}
+
+local function close_menu()
+    if menu_state.win_id and api.nvim_win_is_valid(menu_state.win_id) then
+        api.nvim_win_close(menu_state.win_id, true)
+    end
+    if menu_state.buf_id and api.nvim_buf_is_valid(menu_state.buf_id) then
+        api.nvim_buf_delete(menu_state.buf_id, { force = true })
+    end
+    if menu_state.prev_win_id and api.nvim_win_is_valid(menu_state.prev_win_id) then
+        api.nvim_set_current_win(menu_state.prev_win_id)
+    end
+    menu_state.win_id = nil
+    menu_state.buf_id = nil
+    menu_state.prev_win_id = nil
 end
 
 -- Setup highlight groups function
@@ -1237,6 +1260,175 @@ local function build_horizontal_group_parts(group, number_index, max_digits, is_
         renderer.create_part(label, tab_hl),
         renderer.create_part("]", tab_hl)
     }
+end
+
+local function open_menu(lines, title)
+    close_menu()
+
+    local width = 0
+    for _, line in ipairs(lines) do
+        local w = vim.fn.strdisplaywidth(line)
+        if w > width then
+            width = w
+        end
+    end
+    if title and title ~= "" then
+        width = math.max(width, vim.fn.strdisplaywidth(title))
+    end
+    width = math.max(10, width)
+
+    local height = #lines
+    if title and title ~= "" then
+        height = height + 1
+    end
+
+    local buf_id = api.nvim_create_buf(false, true)
+    api.nvim_buf_set_option(buf_id, 'bufhidden', 'wipe')
+    api.nvim_buf_set_option(buf_id, 'filetype', 'vertical-bufferline-menu')
+    api.nvim_buf_set_option(buf_id, 'modifiable', true)
+
+    local final_lines = {}
+    if title and title ~= "" then
+        table.insert(final_lines, title)
+    end
+    for _, line in ipairs(lines) do
+        table.insert(final_lines, line)
+    end
+    api.nvim_buf_set_lines(buf_id, 0, -1, false, final_lines)
+    api.nvim_buf_set_option(buf_id, 'modifiable', false)
+
+    local win_id = api.nvim_open_win(buf_id, false, {
+        relative = 'cursor',
+        row = 1,
+        col = 0,
+        width = width + 2,
+        height = height,
+        style = 'minimal',
+        border = 'single',
+        focusable = true,
+    })
+
+    api.nvim_win_set_option(win_id, 'number', false)
+    api.nvim_win_set_option(win_id, 'relativenumber', false)
+    api.nvim_win_set_option(win_id, 'cursorline', true)
+    api.nvim_win_set_option(win_id, 'winhl', 'Normal:Pmenu,CursorLine:PmenuSel')
+    api.nvim_win_set_option(win_id, 'wrap', false)
+
+    menu_state.prev_win_id = api.nvim_get_current_win()
+    menu_state.win_id = win_id
+    menu_state.buf_id = buf_id
+
+    local keymap_opts = { noremap = true, silent = true, nowait = true }
+    api.nvim_buf_set_keymap(buf_id, "n", "<Esc>", ":lua require('vertical-bufferline').close_menu()<CR>", keymap_opts)
+    api.nvim_buf_set_keymap(buf_id, "n", "q", ":lua require('vertical-bufferline').close_menu()<CR>", keymap_opts)
+    api.nvim_buf_set_keymap(buf_id, "n", "<CR>", ":lua require('vertical-bufferline').menu_select_current_line()<CR>", keymap_opts)
+    api.nvim_buf_set_keymap(buf_id, "n", "j", "j", keymap_opts)
+    api.nvim_buf_set_keymap(buf_id, "n", "k", "k", keymap_opts)
+
+    if title and title ~= "" then
+        api.nvim_buf_add_highlight(buf_id, 0, "Title", 0, 0, -1)
+    end
+
+    api.nvim_set_current_win(win_id)
+end
+
+local function build_menu_lines(items, include_hint)
+    local lines = {}
+    local max_digits = #tostring(#items)
+    for i, item in ipairs(items) do
+        local num = tostring(i)
+        local padding = string.rep(" ", max_digits - #num)
+        local hint = include_hint and item.hint and (item.hint .. " ") or ""
+        local name = item.name or "[No Name]"
+        table.insert(lines, string.format("%s%s %s%s", padding, num, hint, name))
+    end
+    return lines
+end
+
+local function remap_menu_hints(buffer_ids, buffer_hints)
+    local reserved = { j = true, k = true, q = true }
+    local used = {}
+
+    for _, hint in pairs(buffer_hints or {}) do
+        if hint and #hint == 1 and not reserved[hint] then
+            used[hint] = true
+        end
+    end
+
+    local available = {}
+    for i = 1, #PICK_ALPHABET do
+        local char = PICK_ALPHABET:sub(i, i)
+        if not reserved[char] and not used[char] then
+            table.insert(available, char)
+        end
+    end
+
+    local new_hints = {}
+    local next_index = 1
+    for _, buf_id in ipairs(buffer_ids) do
+        local hint = buffer_hints and buffer_hints[buf_id] or nil
+        if hint and (#hint > 1 or reserved[hint]) then
+            hint = nil
+        end
+        if not hint then
+            hint = available[next_index]
+            next_index = next_index + 1
+        end
+        new_hints[buf_id] = hint
+    end
+
+    return new_hints
+end
+
+local function apply_menu_highlights(items, include_hint, title_offset)
+    local buf_id = menu_state.buf_id
+    if not buf_id or not api.nvim_buf_is_valid(buf_id) then
+        return
+    end
+
+    local max_digits = #tostring(#items)
+    local line_offset = title_offset or 0
+    for i, item in ipairs(items) do
+        local num = tostring(i)
+        local padding = max_digits - #num
+        local line = line_offset + (i - 1)
+        local num_start = padding
+        local num_end = padding + #num
+        api.nvim_buf_add_highlight(buf_id, 0, "Number", line, num_start, num_end)
+
+        if include_hint and item.hint then
+            local hint_start = padding + #num + 1
+            local hint_end = hint_start + #item.hint
+            api.nvim_buf_add_highlight(buf_id, 0, "Special", line, hint_start, hint_end)
+        end
+    end
+end
+
+local function setup_menu_mappings(items, on_select_item, include_hint, title_offset)
+    local buf_id = menu_state.buf_id
+    if not buf_id or not api.nvim_buf_is_valid(buf_id) then
+        return
+    end
+
+    local keymap_opts = { noremap = true, silent = true, nowait = true }
+
+    local allow_direct_digits = #items <= 9
+    for i, item in ipairs(items) do
+        if allow_direct_digits and i <= 9 then
+            api.nvim_buf_set_keymap(buf_id, "n", tostring(i),
+                string.format(":lua require('vertical-bufferline').menu_select_by_index(%d)<CR>", i),
+                keymap_opts)
+        end
+        if include_hint and item.hint then
+            api.nvim_buf_set_keymap(buf_id, "n", item.hint,
+                string.format(":lua require('vertical-bufferline').menu_select_by_hint('%s')<CR>", item.hint),
+                keymap_opts)
+        end
+    end
+
+    M._menu_items = items
+    M._menu_on_select_item = on_select_item
+    M._menu_title_offset = title_offset or 0
 end
 
 -- Create individual buffer line with proper formatting and highlights
@@ -2853,6 +3045,155 @@ function M.apply_picking_highlights()
     vim.cmd("redraw!")
 end
 
+function M.close_menu()
+    close_menu()
+end
+
+function M.menu_select_by_index(index)
+    local items = M._menu_items or {}
+    local item = items[index]
+    if not item then
+        close_menu()
+        return
+    end
+    if M._menu_on_select_item then
+        M._menu_on_select_item(item)
+    end
+    close_menu()
+end
+
+function M.menu_select_by_hint(hint)
+    local items = M._menu_items or {}
+    for _, item in ipairs(items) do
+        if item.hint == hint then
+            if M._menu_on_select_item then
+                M._menu_on_select_item(item)
+            end
+            close_menu()
+            return
+        end
+    end
+    close_menu()
+end
+
+function M.menu_select_current_line()
+    local win_id = menu_state.win_id
+    local buf_id = menu_state.buf_id
+    if not win_id or not buf_id then
+        close_menu()
+        return
+    end
+    local count = vim.v.count
+    if count and count > 0 then
+        M.menu_select_by_index(count)
+        return
+    end
+    local cursor = api.nvim_win_get_cursor(win_id)
+    local line_index = cursor[1] - (M._menu_title_offset or 0)
+    M.menu_select_by_index(line_index)
+end
+
+function M.open_buffer_menu()
+    local active_group = groups.get_active_group()
+    if not active_group then
+        return
+    end
+
+    local buffer_ids = {}
+    for _, buf_id in ipairs(active_group.buffers or {}) do
+        if api.nvim_buf_is_valid(buf_id) and not utils.is_special_buffer(buf_id) then
+            table.insert(buffer_ids, buf_id)
+        end
+    end
+
+    if #buffer_ids == 0 then
+        vim.notify("No buffers in current group", vim.log.levels.INFO)
+        return
+    end
+
+    local win_id = state_module.get_win_id()
+    local window_width = 40
+    if win_id and api.nvim_win_is_valid(win_id) then
+        window_width = api.nvim_win_get_width(win_id)
+    end
+
+    local minimal_prefixes = filename_utils.generate_minimal_prefixes(buffer_ids, window_width)
+
+    local all_group_buffers = {}
+    for _, buf_id in ipairs(buffer_ids) do
+        table.insert(all_group_buffers, { buffer_id = buf_id, group_id = active_group.id })
+    end
+    local buffer_hints = generate_buffer_hints(all_group_buffers, {}, active_group.id, true)
+    local menu_hints = remap_menu_hints(buffer_ids, buffer_hints)
+
+    local items = {}
+    for i, buf_id in ipairs(buffer_ids) do
+        local buf_name = api.nvim_buf_get_name(buf_id)
+        local filename = buf_name == "" and "[No Name]" or vim.fn.fnamemodify(buf_name, ":t")
+        local prefix_info = minimal_prefixes[i]
+        if prefix_info and prefix_info.prefix and prefix_info.prefix ~= "" then
+            filename = prefix_info.prefix .. prefix_info.filename
+        end
+        local hint = menu_hints[buf_id]
+        table.insert(items, {
+            id = buf_id,
+            name = filename,
+            hint = hint,
+        })
+    end
+
+    local lines = build_menu_lines(items, true)
+    open_menu(lines, "Buffers")
+    setup_menu_mappings(items, function(item)
+        switch_to_buffer_in_main_window(item.id, "Error switching buffer")
+    end, true, 1)
+    apply_menu_highlights(items, true, 1)
+
+    local current_buffer_id = get_main_window_current_buffer()
+    for i, item in ipairs(items) do
+        if item.id == current_buffer_id then
+            local win_id = menu_state.win_id
+            if win_id and api.nvim_win_is_valid(win_id) then
+                api.nvim_win_set_cursor(win_id, { i + 1, 0 })
+            end
+            break
+        end
+    end
+end
+
+function M.open_group_menu()
+    local all_groups = groups.get_all_groups()
+    if #all_groups == 0 then
+        return
+    end
+
+    local items = {}
+    for _, group in ipairs(all_groups) do
+        local name = group.name ~= "" and group.name or ""
+        table.insert(items, { id = group.id, name = name })
+    end
+
+    local lines = build_menu_lines(items, false)
+    open_menu(lines, "Groups")
+    setup_menu_mappings(items, function(item)
+        groups.set_active_group(item.id)
+    end, false, 1)
+    apply_menu_highlights(items, false, 1)
+
+    local active_group = groups.get_active_group()
+    if active_group then
+        for i, item in ipairs(items) do
+            if item.id == active_group.id then
+                local win_id = menu_state.win_id
+                if win_id and api.nvim_win_is_valid(win_id) then
+                    api.nvim_win_set_cursor(win_id, { i + 1, 0 })
+                end
+                break
+            end
+        end
+    end
+end
+
 
 
 --- Closes the sidebar window.
@@ -3972,7 +4313,7 @@ function M.setup(user_config)
     setup_pick_highlights()
 end
 
-local function switch_to_buffer_in_main_window(buffer_id, error_prefix)
+switch_to_buffer_in_main_window = function(buffer_id, error_prefix)
     local main_win_id = nil
     for _, win_id in ipairs(api.nvim_list_wins()) do
         if win_id ~= state_module.get_win_id() and api.nvim_win_is_valid(win_id) then
@@ -4186,6 +4527,8 @@ function M.keymap_preset(opts)
     local buffer_prefix = opts.buffer_prefix or leader
     local pick_key = opts.pick_key or (leader .. "p")
     local pick_close_key = opts.pick_close_key or (leader .. "P")
+    local buffer_menu_key = opts.buffer_menu_key or (leader .. "bm")
+    local group_menu_key = opts.group_menu_key or (leader .. "gm")
     local include = opts.include or {}
 
     local function include_section(name)
@@ -4243,6 +4586,11 @@ function M.keymap_preset(opts)
     if include_section("pick") then
         add(pick_key, function() M.pick_buffer() end, "Pick buffer (VBL)")
         add(pick_close_key, function() M.pick_close_buffer() end, "Pick and close buffer (VBL)")
+    end
+
+    if include_section("menus") then
+        add(buffer_menu_key, function() M.open_buffer_menu() end, "Open buffer menu (VBL)")
+        add(group_menu_key, function() M.open_group_menu() end, "Open group menu (VBL)")
     end
 
     return preset

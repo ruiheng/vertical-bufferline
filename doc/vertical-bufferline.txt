@@ -335,7 +335,6 @@ Utilities:
 :VBufferLineToggleCursorAlign         Toggle cursor alignment feature
 :VBufferLineToggleAdaptiveWidth       Toggle adaptive width on/off
 :VBufferLineSetPosition <pos>         Set sidebar position: left/right/top/bottom
-
 Debug Commands:                                *vertical-bufferline-debug-commands*
 :VBufferLineDebugEnable [file] [level] Enable debug logging to file
 :VBufferLineDebugDisable              Disable debug logging
@@ -373,6 +372,8 @@ Customize prefixes:
       history_prefix = "<leader>h",
       buffer_prefix = "<leader>",
       group_prefix = "<leader>g",
+      buffer_menu_key = "<leader>bm",
+      group_menu_key = "<leader>gm",
     }))
 <
 
@@ -396,6 +397,10 @@ History Quick Access:                          *vertical-bufferline-history-keym
 
 Group Buffer Quick Access:
 <leader>1 to <leader>9                Switch to buffers 1-9 in current group
+
+Popup Menus:
+<leader>bm                            Open popup menu for buffers in current group
+<leader>gm                            Open popup menu for group selection
 
 Recommended BufferLine Integration (optional):     *vertical-bufferline-bufferline-keymaps*
 
