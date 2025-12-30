@@ -303,7 +303,7 @@ local function get_pin_icon()
 end
 
 -- Extended picking mode implementation
-local PICK_ALPHABET = "asdfjklghqwertyuiopzxcvbnm1234567890ASDFJKLGHQWERTYUIOPZXCVBNM"
+local PICK_ALPHABET = "asdfjklghqwertyuiopzxcvbnmASDFJKLGHQWERTYUIOPZXCVBNM"
 
 -- Generate multi-character hint for overflow cases
 local function generate_multi_char_hint(overflow_index)
