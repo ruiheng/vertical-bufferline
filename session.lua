@@ -1283,6 +1283,10 @@ function M.setup(opts)
             pattern = "*",
             callback = function()
                 M.save_session()
+                local state_module = require('vertical-bufferline.state')
+                if state_module.is_sidebar_open() then
+                    require('vertical-bufferline').close_sidebar()
+                end
             end,
             desc = "Auto-save vertical-bufferline session on exit"
         })
