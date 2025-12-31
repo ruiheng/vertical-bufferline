@@ -42,6 +42,12 @@ local session = require('vertical-bufferline.session')
 local filename_utils = require('vertical-bufferline.filename_utils')
 local logger = require('vertical-bufferline.logger')
 
+if not package.preload["telescope._extensions.vertical_bufferline"] then
+    package.preload["telescope._extensions.vertical_bufferline"] = function()
+        return require('vertical-bufferline.telescope_extension')
+    end
+end
+
 -- Namespace for our highlights
 local ns_id = api.nvim_create_namespace("VerticalBufferline")
 
