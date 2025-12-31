@@ -15,6 +15,11 @@ local function create_group_command(args)
     end
 
     local group_id = groups.create_group(name)
+    local new_buffer = vim.api.nvim_create_buf(true, false)
+    if new_buffer then
+        groups.add_buffer_to_group(new_buffer, group_id)
+        pcall(vim.api.nvim_set_current_buf, new_buffer)
+    end
     local all_groups = groups.get_all_groups()
 
     for _, g in ipairs(all_groups) do
