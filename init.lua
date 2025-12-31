@@ -66,16 +66,23 @@ local menu_state = {
     win_id = nil,
     buf_id = nil,
     prev_win_id = nil,
+    augroup = nil,
 }
 
-local function close_menu()
+local function close_menu(opts)
+    opts = opts or {}
+    local restore_prev = opts.restore_prev ~= false
+    if menu_state.augroup then
+        pcall(api.nvim_del_augroup_by_id, menu_state.augroup)
+        menu_state.augroup = nil
+    end
     if menu_state.win_id and api.nvim_win_is_valid(menu_state.win_id) then
         api.nvim_win_close(menu_state.win_id, true)
     end
     if menu_state.buf_id and api.nvim_buf_is_valid(menu_state.buf_id) then
         api.nvim_buf_delete(menu_state.buf_id, { force = true })
     end
-    if menu_state.prev_win_id and api.nvim_win_is_valid(menu_state.prev_win_id) then
+    if restore_prev and menu_state.prev_win_id and api.nvim_win_is_valid(menu_state.prev_win_id) then
         api.nvim_set_current_win(menu_state.prev_win_id)
     end
     menu_state.win_id = nil
@@ -1317,6 +1324,16 @@ local function open_menu(lines, title)
     menu_state.prev_win_id = api.nvim_get_current_win()
     menu_state.win_id = win_id
     menu_state.buf_id = buf_id
+    menu_state.augroup = api.nvim_create_augroup("VerticalBufferlineMenu", { clear = true })
+
+    api.nvim_create_autocmd({ "WinLeave", "BufLeave", "BufHidden" }, {
+        group = menu_state.augroup,
+        buffer = buf_id,
+        callback = function()
+            close_menu({ restore_prev = false })
+        end,
+        desc = "Close vertical-bufferline menu when focus leaves",
+    })
 
     local keymap_opts = { noremap = true, silent = true, nowait = true }
     api.nvim_buf_set_keymap(buf_id, "n", "<Esc>", ":lua require('vertical-bufferline').close_menu()<CR>", keymap_opts)
