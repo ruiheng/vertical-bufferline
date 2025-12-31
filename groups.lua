@@ -509,12 +509,16 @@ function M.set_active_group(group_id, target_buffer_id)
         if target_buffer_id and vim.api.nvim_buf_is_valid(target_buffer_id) 
            and vim.tbl_contains(group.buffers, target_buffer_id) then
             target_buffer = target_buffer_id
-        -- First priority: use first item in history (current buffer) if valid
-        elseif #group.history > 0 and vim.api.nvim_buf_is_valid(group.history[1]) 
+        -- First priority: use group's remembered current buffer if valid
+        elseif group.current_buffer and vim.api.nvim_buf_is_valid(group.current_buffer)
+               and vim.tbl_contains(group.buffers, group.current_buffer) then
+            target_buffer = group.current_buffer
+        -- Second priority: use first item in history (current buffer) if valid
+        elseif #group.history > 0 and vim.api.nvim_buf_is_valid(group.history[1])
                and vim.tbl_contains(group.buffers, group.history[1]) then
             target_buffer = group.history[1]
         else
-            -- Second priority: keep current buffer if it's in the group
+        -- Third priority: keep current buffer if it's in the group
             local current_buf = vim.api.nvim_get_current_buf()
             if vim.api.nvim_buf_is_valid(current_buf) and vim.tbl_contains(group.buffers, current_buf) then
                 target_buffer = current_buf
@@ -532,7 +536,9 @@ function M.set_active_group(group_id, target_buffer_id)
         -- Switch to the determined buffer (suppress auto-add during programmatic switch)
         if target_buffer then
             M.set_auto_add_disabled(true)
+            M.set_history_sync_disabled(true)
             local ok = pcall(vim.api.nvim_set_current_buf, target_buffer)
+            M.set_history_sync_disabled(false)
             if ok then
                 -- Update history with current buffer (ensure it's at the front)
                 M.sync_group_history_with_current(group.id, target_buffer)
@@ -1137,11 +1143,14 @@ function M.sync_group_history_with_current(group_id, current_buffer_id)
         group.history = {}
     end
     
-    -- If no current buffer, clear history
+    -- If no current buffer, clear history and current buffer
     if not current_buffer_id then
         group.history = {}
+        group.current_buffer = nil
         return
     end
+
+    group.current_buffer = current_buffer_id
     
     -- Remove current buffer from any other position in history
     for i, hist_buf_id in ipairs(group.history) do
