@@ -1075,7 +1075,30 @@ function M.switch_to_group_by_display_number(display_number)
     if not group then
         return false
     end
-    return M.set_active_group(group.id)
+    local function format_group_switch_label(target_group, fallback_number)
+        local name = target_group and target_group.name or ""
+        local number = fallback_number or (target_group and target_group.display_number) or target_group and target_group.id
+        if number ~= nil then
+            local label = "[" .. tostring(number) .. "]"
+            if name ~= "" then
+                label = label .. " " .. name
+            end
+            return label
+        end
+
+        if name ~= "" then
+            return name
+        end
+
+        return "Group"
+    end
+
+    local switched = M.set_active_group(group.id)
+    if switched then
+        local label = format_group_switch_label(group, display_number)
+        vim.notify("Switched to group: " .. label, vim.log.levels.INFO)
+    end
+    return switched
 end
 
 --- Save current buffer state for active group (call before switching buffers within group)

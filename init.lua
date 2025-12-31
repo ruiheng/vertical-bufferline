@@ -3809,6 +3809,32 @@ function M.cycle_show_history_setting()
 end
 
 --- Handle buffer selection from sidebar
+local function format_group_switch_label(group, fallback_number)
+    local name = ""
+    local display_number = fallback_number
+
+    if group then
+        name = group.name or ""
+        if display_number == nil then
+            display_number = group.display_number or group.id
+        end
+    end
+
+    if display_number ~= nil then
+        local label = "[" .. tostring(display_number) .. "]"
+        if name ~= "" then
+            label = label .. " " .. name
+        end
+        return label
+    end
+
+    if name ~= "" then
+        return name
+    end
+
+    return "Group"
+end
+
 function M.handle_selection(captured_buffer_id, captured_line_number, captured_col)
     if not state_module.is_sidebar_open() then 
         return 
@@ -3834,8 +3860,7 @@ function M.handle_selection(captured_buffer_id, captured_line_number, captured_c
                         local target_group = groups.find_group_by_id(range.group_id)
                         if target_group then
                             groups.set_active_group(range.group_id)
-                            local label = target_group.name and target_group.name ~= "" and target_group.name
-                                or ("Group " .. tostring(target_group.display_number or ""))
+                            local label = format_group_switch_label(target_group, range.group_id)
                             vim.notify("Switched to group: " .. label, vim.log.levels.INFO)
                         end
                         return
@@ -3857,7 +3882,7 @@ function M.handle_selection(captured_buffer_id, captured_line_number, captured_c
         if header_info and header_info.line == line_number - 1 then  -- Convert to 0-based
             if header_info.group_id then
                 local target_group = groups.find_group_by_id(header_info.group_id)
-                local group_name = target_group and target_group.name or "Unknown"
+                local group_name = format_group_switch_label(target_group, header_info.group_number or header_info.group_id)
                 
                 groups.set_active_group(header_info.group_id)
                 vim.notify("Switched to group: " .. group_name, vim.log.levels.INFO)
