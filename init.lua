@@ -4277,6 +4277,9 @@ local function initialize_plugin()
 
     if not bufferline_integration.is_available() then
         vim.schedule(function()
+            if vim.v.this_session and vim.v.this_session ~= "" then
+                return
+            end
             open_sidebar()
             if not (config_module.settings.auto_load and session.has_session()) then
                 populate_startup_buffers()
