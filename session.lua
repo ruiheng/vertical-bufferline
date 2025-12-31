@@ -32,6 +32,20 @@ local function apply_session_position(session_data)
     end
 end
 
+local function apply_session_sidebar_state(session_data)
+    if not session_data then
+        return
+    end
+
+    local state_module = require('vertical-bufferline.state')
+    if session_data.last_width then
+        state_module.set_last_width(session_data.last_width)
+    end
+    if session_data.last_height then
+        state_module.set_last_height(session_data.last_height)
+    end
+end
+
 local function detect_sidebar_position(win_id)
     if not win_id or not vim.api.nvim_win_is_valid(win_id) then
         return nil
@@ -51,61 +65,155 @@ local function detect_sidebar_position(win_id)
     return col == 0 and "left" or "right"
 end
 
-local function reopen_sidebar_for_position(session_data)
+local function get_sidebar_windows()
+    local windows = {}
+    for _, win in ipairs(vim.api.nvim_list_wins()) do
+        if vim.api.nvim_win_is_valid(win) then
+            local buf = vim.api.nvim_win_get_buf(win)
+            if vim.api.nvim_buf_is_valid(buf)
+                and vim.api.nvim_buf_get_option(buf, 'filetype') == 'vertical-bufferline' then
+                table.insert(windows, {
+                    win_id = win,
+                    buf_id = buf,
+                    position = detect_sidebar_position(win)
+                })
+            end
+        end
+    end
+    return windows
+end
+
+local function pre_reconcile_sidebar_layout(session_data)
     if not session_data then
         return
     end
 
-    if not session_data.position then
+    local desired_position = session_data.position or config_module.settings.position
+    local desired_open = session_data.sidebar_open ~= false
+
+    local existing = get_sidebar_windows()
+    if #existing == 0 then
         return
     end
 
+    if not desired_open then
+        for _, info in ipairs(existing) do
+            pcall(vim.api.nvim_win_close, info.win_id, false)
+        end
+        return
+    end
+
+    local keep_win = nil
+    for _, info in ipairs(existing) do
+        if info.position == desired_position then
+            keep_win = info.win_id
+            break
+        end
+    end
+
+    if not keep_win then
+        local target = existing[1].win_id
+        local current_win = vim.api.nvim_get_current_win()
+        local ok = pcall(vim.api.nvim_set_current_win, target)
+        if ok then
+            local cmd = nil
+            if desired_position == "top" then
+                cmd = "wincmd K"
+            elseif desired_position == "bottom" then
+                cmd = "wincmd J"
+            elseif desired_position == "left" then
+                cmd = "wincmd H"
+            elseif desired_position == "right" then
+                cmd = "wincmd L"
+            end
+            if cmd then
+                pcall(vim.cmd, cmd)
+            end
+        end
+        if vim.api.nvim_win_is_valid(current_win) then
+            pcall(vim.api.nvim_set_current_win, current_win)
+        end
+        keep_win = target
+    end
+
+    for _, info in ipairs(existing) do
+        if info.win_id ~= keep_win then
+            pcall(vim.api.nvim_win_close, info.win_id, false)
+        end
+    end
+end
+
+local function reconcile_sidebar_layout(session_data)
+    if not session_data then
+        return
+    end
+
+    local desired_position = session_data.position or config_module.settings.position
+    local desired_open = session_data.sidebar_open ~= false
+
     local state_module = require('vertical-bufferline.state')
-    local win_id = nil
-    local sidebar_open = state_module.is_sidebar_open()
-    if sidebar_open then
-        win_id = state_module.get_win_id()
-    else
-        for _, win in ipairs(vim.api.nvim_list_wins()) do
-            if vim.api.nvim_win_is_valid(win) then
-                local buf = vim.api.nvim_win_get_buf(win)
-                if vim.api.nvim_buf_is_valid(buf) and vim.api.nvim_buf_get_option(buf, 'filetype') == 'vertical-bufferline' then
-                    win_id = win
-                    break
-                end
+    local vbl = require('vertical-bufferline')
+    local existing = get_sidebar_windows()
+    local state_win = state_module.is_sidebar_open() and state_module.get_win_id() or nil
+    local state_win_valid = state_win and vim.api.nvim_win_is_valid(state_win)
+
+    if not desired_open then
+        if state_win_valid then
+            vbl.close_sidebar()
+        end
+        for _, info in ipairs(existing) do
+            if not state_win_valid or info.win_id ~= state_win then
+                pcall(vim.api.nvim_win_close, info.win_id, false)
+            end
+        end
+        state_module.set_current_position(nil)
+        return
+    end
+
+    local keep_win = nil
+    if state_win_valid then
+        local state_pos = detect_sidebar_position(state_win)
+        if state_pos == desired_position then
+            keep_win = state_win
+        end
+    end
+
+    if not keep_win then
+        for _, info in ipairs(existing) do
+            if info.position == desired_position then
+                keep_win = info.win_id
+                break
             end
         end
     end
 
-    if not win_id then
-        return
-    end
-
-    local current_position = state_module.get_current_position()
-    if current_position == session_data.position then
-        return
-    end
-
-    local actual_position = detect_sidebar_position(win_id)
-    if actual_position == session_data.position then
-        state_module.set_current_position(actual_position)
-        return
-    end
-
-    vim.defer_fn(function()
-        local vbl = require('vertical-bufferline')
-        if sidebar_open then
-            vbl.close_sidebar()
-            vim.schedule(function()
-                vbl.toggle()
-            end)
-        else
-            pcall(vim.api.nvim_win_close, win_id, false)
-            vim.schedule(function()
-                vbl.toggle()
-            end)
+    if keep_win then
+        for _, info in ipairs(existing) do
+            if info.win_id ~= keep_win then
+                pcall(vim.api.nvim_win_close, info.win_id, false)
+            end
         end
-    end, 30)
+
+        local buf_id = vim.api.nvim_win_get_buf(keep_win)
+        local buf_ft = vim.api.nvim_buf_get_option(buf_id, 'filetype')
+        if buf_ft == 'vertical-bufferline' then
+            state_module.set_win_id(keep_win)
+            state_module.set_buf_id(buf_id)
+            state_module.set_sidebar_open(true)
+            state_module.set_current_position(desired_position)
+            return
+        end
+
+        pcall(vim.api.nvim_win_close, keep_win, false)
+    else
+        for _, info in ipairs(existing) do
+            pcall(vim.api.nvim_win_close, info.win_id, false)
+        end
+    end
+
+    vim.schedule(function()
+        vbl.toggle()
+    end)
 end
 
 -- Common session restore finalization
@@ -235,11 +343,6 @@ local function finalize_session_restore(session_data, opened_count, total_groups
 
     -- Refresh UI
     vim.schedule(function()
-        local vbl = require('vertical-bufferline')
-        if vbl.state and vbl.state.is_sidebar_open then
-            vbl.refresh()
-        end
-
         -- Clean up extra windows that vim session may have created
         -- Native vim session saves all windows including VBL sidebar,
         -- so we might end up with duplicate windows after restoration
@@ -328,10 +431,15 @@ local function finalize_session_restore(session_data, opened_count, total_groups
                     end
                 end
             end
-        end, 100) -- Delay a bit more to ensure VBL sidebar is fully opened
-    end)
 
-    reopen_sidebar_for_position(session_data)
+            reconcile_sidebar_layout(session_data)
+
+            local vbl = require('vertical-bufferline')
+            if vbl.state and vbl.state.is_sidebar_open then
+                vbl.refresh()
+            end
+        end, 100) -- Delay to allow session windows to settle
+    end)
 
     if saved_cmdheight ~= nil then
         vim.defer_fn(function()
@@ -432,6 +540,7 @@ function M.save_session(filename)
     ensure_session_dir()
 
     local groups = require('vertical-bufferline.groups')
+    local state_module = require('vertical-bufferline.state')
     local all_groups = groups.get_all_groups()
     local active_group_id = groups.get_active_group_id()
 
@@ -442,6 +551,9 @@ function M.save_session(filename)
         working_directory = vim.fn.getcwd(),
         active_group_id = active_group_id,
         position = config_module.settings.position,
+        sidebar_open = state_module.is_sidebar_open(),
+        last_width = state_module.get_last_width(),
+        last_height = state_module.get_last_height(),
         groups = {},
         pinned_buffers = {}
     }
@@ -1037,6 +1149,7 @@ function M.load_session(filename)
     end
 
     apply_session_position(session_data)
+    apply_session_sidebar_state(session_data)
 
     local state_module = require('vertical-bufferline.state')
     saved_cmdheight = vim.o.cmdheight
@@ -1262,6 +1375,9 @@ local function collect_current_state()
         timestamp = os.time(),
         active_group_id = active_group_id,
         position = config_module.settings.position,
+        sidebar_open = state_module.is_sidebar_open(),
+        last_width = state_module.get_last_width(),
+        last_height = state_module.get_last_height(),
         groups = {},
         pinned_buffers = {}
     }
@@ -1359,6 +1475,7 @@ local function restore_state_from_global()
     end
 
     apply_session_position(session_data)
+    apply_session_sidebar_state(session_data)
     
     -- Prevent duplicate execution
     if _G._vbl_session_restore_in_progress then
@@ -1569,6 +1686,13 @@ local function setup_session_integration()
 
                 -- IMPORTANT: Stop any running auto-serialization timer IMMEDIATELY
                 stop_auto_serialize()
+
+                if original_session_data then
+                    local ok, decoded = pcall(vim.json.decode, original_session_data)
+                    if ok and decoded then
+                        pre_reconcile_sidebar_layout(decoded)
+                    end
+                end
 
                 vim.defer_fn(function()
                     -- Restore the original data in case it was overwritten
