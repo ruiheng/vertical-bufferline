@@ -3563,6 +3563,7 @@ local function open_sidebar()
     api.nvim_win_set_option(new_win_id, 'cursorline', false)
     api.nvim_win_set_option(new_win_id, 'cursorcolumn', false)
     api.nvim_win_set_option(new_win_id, 'statuscolumn', '')  -- Disable statuscolumn to prevent column usage
+    api.nvim_win_set_option(new_win_id, 'statusline', ' ')  -- Hide statusline without affecting global laststatus
     
     -- Ensure mouse support is enabled for this window
     if vim.o.mouse == '' then

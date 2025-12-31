@@ -4,7 +4,7 @@ These rules apply to all work in this repository.
 
 ## Approval Required
 - Propose a plan or approach and wait for explicit approval before making code changes.
-- Ask for explicit approval before running `git commit`.
+- Treat a user message of `git commit` as explicit approval to commit, and write an appropriate commit message.
 - If unsure whether a change needs approval, ask first.
 
 ## Safety

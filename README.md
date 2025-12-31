@@ -412,6 +412,7 @@ The algorithm automatically determines the minimal path suffix needed to uniquel
     show_icons = false,             -- Show file type emoji icons
     position = "left",              -- Sidebar position: "left", "right", "top", "bottom"
     show_tree_lines = false,        -- Show tree-style connection lines
+    floating = false,               -- Use floating window (right side, focusable=false) instead of split
     
     -- Group management  
     auto_create_groups = true,      -- Enable automatic group creation
@@ -428,8 +429,8 @@ The algorithm automatically determines the minimal path suffix needed to uniquel
     -- History settings
     show_history = "auto",          -- "yes", "no", "auto" - show recent files history per group
     history_size = 10,              -- Maximum number of recent files to track per group
-    history_auto_threshold = 3,     -- Minimum files needed for auto mode to show history
-    history_display_count = 5,      -- Maximum number of history items to display
+    history_auto_threshold = 2,     -- Minimum files needed for auto mode to show history
+    history_display_count = 7,      -- Maximum number of history items to display
     
     -- Session persistence settings
     auto_save = false,              -- Auto-save session on Neovim exit
@@ -477,6 +478,10 @@ For a minimal setup, `require("vertical-bufferline").setup()` is enough.
 ### Scope.nvim
 - Compatible with tabpage-scoped buffer management
 - Buffer deletion respects scope.nvim's buffer handling
+
+### Telescope.nvim
+- Provides a picker for buffers in the current group
+- Use `:Telescope vertical-bufferline current_group` to open the picker
 
 ### Filetype Support
 The sidebar buffer uses the `vertical-bufferline` filetype, making it easy to:
