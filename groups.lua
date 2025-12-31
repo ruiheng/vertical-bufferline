@@ -216,6 +216,45 @@ local function cleanup_buffer_states(group, max_age_seconds)
     end
 end
 
+local function get_or_create_empty_group_buffer()
+    local all_buffers = api.nvim_list_bufs()
+    for _, buf_id in ipairs(all_buffers) do
+        if api.nvim_buf_is_valid(buf_id) then
+            local buftype = api.nvim_buf_get_option(buf_id, 'buftype')
+            local buf_name = api.nvim_buf_get_name(buf_id)
+            if buftype == 'nofile' and buf_name:match('%[Empty Group%]') then
+                return buf_id
+            end
+        end
+    end
+
+    local empty_group_buffer = api.nvim_create_buf(false, true)
+    api.nvim_buf_set_name(empty_group_buffer, '[Empty Group]')
+    api.nvim_buf_set_option(empty_group_buffer, 'buftype', 'nofile')
+    api.nvim_buf_set_option(empty_group_buffer, 'swapfile', false)
+    api.nvim_buf_set_option(empty_group_buffer, 'buflisted', false)
+
+    local lines = {
+        "# Empty Group",
+        "",
+        "This group currently has no files.",
+        "",
+        "To add files to this group:",
+        "- Open files in other groups and switch back",
+        "- Or use :VBufferLineAddCurrentToGroup",
+    }
+    api.nvim_buf_set_lines(empty_group_buffer, 0, -1, false, lines)
+    api.nvim_buf_set_option(empty_group_buffer, 'modifiable', false)
+
+    return empty_group_buffer
+end
+
+function M.switch_to_empty_group_buffer()
+    local empty_group_buffer = get_or_create_empty_group_buffer()
+    pcall(api.nvim_set_current_buf, empty_group_buffer)
+    return empty_group_buffer
+end
+
 -- Find group index
 local function find_group_index_by_id(group_id)
     for i, group in ipairs(groups_data.groups) do
@@ -555,7 +594,11 @@ function M.set_active_group(group_id, target_buffer_id)
             end)
         end
     end
-    -- If group is empty, keep current buffer unchanged, let bufferline show empty list
+    -- If group is empty, switch to dedicated empty buffer to avoid carrying old context
+    if #group.buffers == 0 then
+        group.current_buffer = nil
+        M.switch_to_empty_group_buffer()
+    end
 
     -- Restore sync pointer to new group (step 3 of atomic operation)
     -- First update active group ID

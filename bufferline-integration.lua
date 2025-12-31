@@ -350,57 +350,8 @@ end
 
 --- Handle empty group display: create or switch to an empty temporary buffer
 function M.handle_empty_group_display()
-    -- First hide all currently listed normal buffers (keep special buffers)
-    local all_buffers = vim.api.nvim_list_bufs()
-    for _, buf_id in ipairs(all_buffers) do
-        if vim.api.nvim_buf_is_valid(buf_id) then
-            local buftype = vim.api.nvim_buf_get_option(buf_id, 'buftype')
-            local buflisted = vim.api.nvim_buf_get_option(buf_id, 'buflisted')
-            local buf_name = vim.api.nvim_buf_get_name(buf_id)
-
-            -- VBL should not hide unnamed buffers - users might be editing them
-        end
-    end
-
-    -- Find or create a dedicated empty group buffer
-    local empty_group_buffer = nil
-
-    -- Find existing empty group buffer (using buftype check)
-    for _, buf_id in ipairs(all_buffers) do
-        if vim.api.nvim_buf_is_valid(buf_id) then
-            local buftype = vim.api.nvim_buf_get_option(buf_id, 'buftype')
-            local buf_name = vim.api.nvim_buf_get_name(buf_id)
-            if buftype == 'nofile' and buf_name:match('%[Empty Group%]') then
-                empty_group_buffer = buf_id
-                break
-            end
-        end
-    end
-
-    -- If not found, create a new empty buffer
-    if not empty_group_buffer then
-        empty_group_buffer = vim.api.nvim_create_buf(false, true)
-        vim.api.nvim_buf_set_name(empty_group_buffer, '[Empty Group]')
-        vim.api.nvim_buf_set_option(empty_group_buffer, 'buftype', 'nofile')
-        vim.api.nvim_buf_set_option(empty_group_buffer, 'swapfile', false)
-        vim.api.nvim_buf_set_option(empty_group_buffer, 'buflisted', false)
-
-        -- Set some help text
-        local lines = {
-            "# Empty Group",
-            "",
-            "This group currently has no files.",
-            "",
-            "To add files to this group:",
-            "• Open files in other groups and switch back",
-            "• Or use :VBufferLineAddCurrentToGroup",
-        }
-        vim.api.nvim_buf_set_lines(empty_group_buffer, 0, -1, false, lines)
-        vim.api.nvim_buf_set_option(empty_group_buffer, 'modifiable', false)
-    end
-
-    -- Switch to empty buffer
-    pcall(vim.api.nvim_set_current_buf, empty_group_buffer)
+    -- Delegate to group-level empty buffer handling for consistent behavior
+    groups.switch_to_empty_group_buffer()
 end
 
 --- Set sync target group (step 3 of atomic operation)
