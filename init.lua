@@ -4236,6 +4236,7 @@ local function initialize_plugin()
     -- Add cursor alignment triggers (only for VBL-managed file buffers)
     -- WinScrolled is needed to catch viewport changes from zz, zt, zb, etc.
     api.nvim_command("autocmd CursorMoved,CursorMovedI,WinScrolled * lua require('vertical-bufferline').refresh_cursor_alignment()")
+    api.nvim_command("autocmd User " .. config_module.EVENTS.GROUP_CHANGED .. " lua require('vertical-bufferline').refresh_if_open()")
 
     api.nvim_command("augroup END")
 
@@ -4732,9 +4733,9 @@ function M.keymap_preset(opts)
     local buffer_prefix = opts.buffer_prefix or leader
     local pick_key = opts.pick_key or (leader .. "p")
     local pick_close_key = opts.pick_close_key or (leader .. "P")
-    local buffer_menu_key = opts.buffer_menu_key or (leader .. "bm")
-    local group_menu_key = opts.group_menu_key or (leader .. "gm")
-    local history_menu_key = opts.history_menu_key or (leader .. "hm")
+    local buffer_menu_key = opts.buffer_menu_key or (leader .. "bb")
+    local group_menu_key = opts.group_menu_key or (leader .. "gg")
+    local history_menu_key = opts.history_menu_key or (leader .. "hh")
     local include = opts.include or {}
 
     local function include_section(name)
@@ -4752,6 +4753,7 @@ function M.keymap_preset(opts)
         add(leader .. "vi", function() require('vertical-bufferline.edit_mode').open() end, "Edit buffer groups")
         add(leader .. "gn", function() M.switch_to_next_group() end, "Switch to next group")
         add(leader .. "gp", function() M.switch_to_prev_group() end, "Switch to previous group")
+        add(leader .. "G", function() require('vertical-bufferline.groups').switch_to_previous_group() end, "Switch to last-used group")
         add(leader .. "gc", function() M.create_group() end, "Create new group")
     end
 
@@ -4786,7 +4788,8 @@ function M.keymap_preset(opts)
     end
 
     if include_section("buffer_management") then
-        add(leader .. "bo", function() M.close_other_buffers_in_group() end, "Close other buffers in group")
+        add(leader .. "Bo", function() M.close_other_buffers_in_group() end, "Close other buffers in group")
+        add(leader .. "BO", function() M.close_other_buffers_in_group() end, "Close other buffers in group")
     end
 
     if include_section("pick") then
