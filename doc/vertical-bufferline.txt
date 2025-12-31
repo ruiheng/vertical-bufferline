@@ -372,9 +372,9 @@ Customize prefixes:
       history_prefix = "<leader>h",
       buffer_prefix = "<leader>",
       group_prefix = "<leader>g",
-      buffer_menu_key = "<leader>bm",
-      group_menu_key = "<leader>gm",
-      history_menu_key = "<leader>hm",
+      buffer_menu_key = "<leader>bb",
+      group_menu_key = "<leader>gg",
+      history_menu_key = "<leader>hh",
     }))
 <
 
@@ -388,6 +388,7 @@ Group Management:
 <leader>gr                            Rename current group
 <leader>gn                            Switch to next group
 <leader>gp                            Switch to previous group
+<leader>G                             Switch to last-used group
 <leader>g1 to <leader>g9              Switch directly to group 1-9
 <leader>gU                            Move current group up in the list
 <leader>gD                            Move current group down in the list
@@ -398,11 +399,13 @@ History Quick Access:                          *vertical-bufferline-history-keym
 
 Group Buffer Quick Access:
 <leader>1 to <leader>9                Switch to buffers 1-9 in current group
+<leader>Bo                            Close other buffers in current group
+<leader>BO                            Close other buffers in current group
 
 Popup Menus:
-<leader>bm                            Open popup menu for buffers in current group
-<leader>gm                            Open popup menu for group selection
-<leader>hm                            Open popup menu for current group history
+<leader>bb                            Open popup menu for buffers in current group
+<leader>gg                            Open popup menu for group selection
+<leader>hh                            Open popup menu for current group history
 
 Recommended BufferLine Integration (optional):     *vertical-bufferline-bufferline-keymaps*
 

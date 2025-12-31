@@ -453,9 +453,12 @@ The algorithm automatically determines the minimal path suffix needed to uniquel
     { "<leader>gc", "<cmd>lua require('vertical-bufferline').create_group()<cr>", desc = "Create new group" },
     { "<leader>gn", "<cmd>lua require('vertical-bufferline').switch_to_next_group()<cr>", desc = "Next group" },
     { "<leader>gp", "<cmd>lua require('vertical-bufferline').switch_to_prev_group()<cr>", desc = "Previous group" },
-    { "<leader>bm", "<cmd>lua require('vertical-bufferline').open_buffer_menu()<cr>", desc = "Buffer menu" },
-    { "<leader>gm", "<cmd>lua require('vertical-bufferline').open_group_menu()<cr>", desc = "Group menu" },
-    { "<leader>hm", "<cmd>lua require('vertical-bufferline').open_history_menu()<cr>", desc = "History menu" },
+    { "<leader>G", "<cmd>lua require('vertical-bufferline.groups').switch_to_previous_group()<cr>", desc = "Last-used group" },
+    { "<leader>Bo", "<cmd>lua require('vertical-bufferline').close_other_buffers_in_group()<cr>", desc = "Close other buffers in group" },
+    { "<leader>BO", "<cmd>lua require('vertical-bufferline').close_other_buffers_in_group()<cr>", desc = "Close other buffers in group" },
+    { "<leader>bb", "<cmd>lua require('vertical-bufferline').open_buffer_menu()<cr>", desc = "Buffer menu" },
+    { "<leader>gg", "<cmd>lua require('vertical-bufferline').open_group_menu()<cr>", desc = "Group menu" },
+    { "<leader>hh", "<cmd>lua require('vertical-bufferline').open_history_menu()<cr>", desc = "History menu" },
   }
 }
 ```
@@ -525,9 +528,12 @@ Add to your lazy.nvim configuration:
     { "<leader>gc", "<cmd>lua require('vertical-bufferline').create_group()<cr>", desc = "Create new group" },
     { "<leader>gn", "<cmd>lua require('vertical-bufferline').switch_to_next_group()<cr>", desc = "Next group" },
     { "<leader>gp", "<cmd>lua require('vertical-bufferline').switch_to_prev_group()<cr>", desc = "Previous group" },
-    { "<leader>bm", "<cmd>lua require('vertical-bufferline').open_buffer_menu()<cr>", desc = "Buffer menu" },
-    { "<leader>gm", "<cmd>lua require('vertical-bufferline').open_group_menu()<cr>", desc = "Group menu" },
-    { "<leader>hm", "<cmd>lua require('vertical-bufferline').open_history_menu()<cr>", desc = "History menu" },
+    { "<leader>G", "<cmd>lua require('vertical-bufferline.groups').switch_to_previous_group()<cr>", desc = "Last-used group" },
+    { "<leader>Bo", "<cmd>lua require('vertical-bufferline').close_other_buffers_in_group()<cr>", desc = "Close other buffers in group" },
+    { "<leader>BO", "<cmd>lua require('vertical-bufferline').close_other_buffers_in_group()<cr>", desc = "Close other buffers in group" },
+    { "<leader>bb", "<cmd>lua require('vertical-bufferline').open_buffer_menu()<cr>", desc = "Buffer menu" },
+    { "<leader>gg", "<cmd>lua require('vertical-bufferline').open_group_menu()<cr>", desc = "Group menu" },
+    { "<leader>hh", "<cmd>lua require('vertical-bufferline').open_history_menu()<cr>", desc = "History menu" },
   }
 }
 ```
