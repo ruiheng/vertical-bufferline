@@ -177,6 +177,39 @@ local function ensure_window_context(winid, opts)
     return group_contexts[context_id]
 end
 
+local function is_eligible_window(winid)
+    if not winid or not api.nvim_win_is_valid(winid) then
+        return false
+    end
+
+    local state_module = require('vertical-bufferline.state')
+    if state_module.get_win_id and winid == state_module.get_win_id() then
+        return false
+    end
+
+    local win_config = api.nvim_win_get_config(winid)
+    if win_config.relative ~= "" then
+        return false
+    end
+
+    return true
+end
+
+local function find_primary_window()
+    local current_win = api.nvim_get_current_win()
+    if is_eligible_window(current_win) then
+        return current_win
+    end
+
+    for _, win_id in ipairs(api.nvim_list_wins()) do
+        if is_eligible_window(win_id) then
+            return win_id
+        end
+    end
+
+    return nil
+end
+
 function M.activate_window_context(winid)
     if not is_window_scope_enabled() then
         groups_data = global_groups_data
@@ -184,6 +217,14 @@ function M.activate_window_context(winid)
     end
 
     local target_win = winid or api.nvim_get_current_win()
+    if not is_eligible_window(target_win) then
+        target_win = find_primary_window()
+    end
+
+    if not target_win then
+        return groups_data
+    end
+
     local context = ensure_window_context(target_win, {
         inherit = config_module.settings.inherit_on_new_window,
         source_data = groups_data,
@@ -200,6 +241,14 @@ function M.get_vbl_groups_by_window(winid)
     end
 
     local target_win = winid or api.nvim_get_current_win()
+    if not is_eligible_window(target_win) then
+        target_win = find_primary_window()
+    end
+
+    if not target_win then
+        return groups_data
+    end
+
     return ensure_window_context(target_win, {
         seed_buffer_id = api.nvim_win_get_buf(target_win),
     })

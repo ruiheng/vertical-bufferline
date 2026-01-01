@@ -75,5 +75,25 @@ assert_ok(not contains(default1.buffers, buf2), "win1 default group unexpectedly
 assert_ok(contains(default2.buffers, buf2), "win2 default group missing buf2")
 assert_ok(not contains(default2.buffers, buf1), "win2 default group unexpectedly has buf1")
 
-print("OK: window-scoped groups are isolated")
+vbl.toggle()
+local state = require('vertical-bufferline.state')
+local sidebar_win = state.get_win_id()
+assert_ok(sidebar_win and vim.api.nvim_win_is_valid(sidebar_win), "sidebar window not created")
+local sidebar_data = groups.get_vbl_groups_by_window(sidebar_win)
+local current_data = groups.get_vbl_groups_by_window(win2)
+assert_ok(sidebar_data == current_data, "sidebar window should not create a separate context")
+
+vim.api.nvim_set_current_win(win1)
+vbl.refresh("window_scope_check_win1")
+local active_after_win1 = groups.get_active_group()
+assert_ok(active_after_win1 and contains(active_after_win1.buffers, buf1), "win1 active group missing buf1 after refresh")
+assert_ok(not contains(active_after_win1.buffers, buf2), "win1 active group unexpectedly has buf2 after refresh")
+
+vim.api.nvim_set_current_win(win2)
+vbl.refresh("window_scope_check_win2")
+local active_after_win2 = groups.get_active_group()
+assert_ok(active_after_win2 and contains(active_after_win2.buffers, buf2), "win2 active group missing buf2 after refresh")
+assert_ok(not contains(active_after_win2.buffers, buf1), "win2 active group unexpectedly has buf1 after refresh")
+
+print("OK: window-scoped groups are isolated and sidebar refresh stays in main window context")
 vim.cmd("qa")

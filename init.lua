@@ -855,16 +855,15 @@ local utils = require('vertical-bufferline.utils')
 -- State is now managed by the state_module, no direct state object needed
 
 -- Helper function to get the current buffer from main window, not sidebar
-local function get_main_window_current_buffer()
+local function get_main_window_id()
     local current_win = api.nvim_get_current_win()
     local sidebar_win = state_module.get_win_id()
     
-    -- If current window is not the sidebar, use its buffer directly
+    -- If current window is not the sidebar, use it directly
     if current_win ~= sidebar_win then
         local win_config = api.nvim_win_get_config(current_win)
         if win_config.relative == "" then  -- Not a floating window
-            local buf_id = api.nvim_win_get_buf(current_win)
-            return buf_id
+            return current_win
         end
     end
     
@@ -886,19 +885,26 @@ local function get_main_window_current_buffer()
     -- Try to find a window that has a real file (not fugitive, etc.)
     for _, win_info in ipairs(main_windows) do
         if not win_info.buf_name:match("^fugitive://") and win_info.buf_name ~= "" then
-            return win_info.buf_id
+            return win_info.id
         end
     end
     
     -- If no real file window found, use the first main window
     if #main_windows > 0 then
         local win_info = main_windows[1]
-        return win_info.buf_id
+        return win_info.id
     end
 
-    -- Fallback to global current buffer if no main window found
-    local fallback_buf = api.nvim_get_current_buf()
-    return fallback_buf
+    return current_win
+end
+
+local function get_main_window_current_buffer()
+    local main_win = get_main_window_id()
+    if main_win and api.nvim_win_is_valid(main_win) then
+        return api.nvim_win_get_buf(main_win)
+    end
+
+    return api.nvim_get_current_buf()
 end
 
 local function build_components_from_group(group, current_buffer_id)
@@ -951,6 +957,10 @@ local function validate_and_initialize_refresh()
     -- Ensure buf_id is valid
     if not state_module.get_buf_id() or not api.nvim_buf_is_valid(state_module.get_buf_id()) then
         return nil
+    end
+
+    if groups.is_window_scope_enabled() then
+        groups.activate_window_context(get_main_window_id())
     end
 
     local bufferline_state = nil
