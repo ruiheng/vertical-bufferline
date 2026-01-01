@@ -577,7 +577,13 @@ end
 function M.copy_to_register(register)
     local target_register = register and register ~= "" and register or '"'
     local lines = build_edit_lines()
-    vim.fn.setreg(target_register, table.concat(lines, "\n"))
+    local filtered = {}
+    for _, line in ipairs(lines) do
+        if not line:match("^%s*#") then
+            table.insert(filtered, line)
+        end
+    end
+    vim.fn.setreg(target_register, table.concat(filtered, "\n"))
 end
 
 M.apply = apply_edit_buffer
