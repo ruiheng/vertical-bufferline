@@ -1933,7 +1933,7 @@ local function apply_path_highlighting(component, path_line_number, current_buff
 end
 
 -- Render buffers within a single group
-local function render_group_buffers(group_components, current_buffer_id, is_picking, lines_text, new_line_map, line_types, line_components, line_group_context, line_infos)
+local function render_group_buffers(group_components, current_buffer_id, is_picking, lines_text, new_line_map, line_types, line_components, line_group_context, line_infos, target_buffer_id)
     
     -- Calculate max digits for alignment
     local max_global_digits = string.len(tostring(#group_components))
@@ -1967,6 +1967,7 @@ local function render_group_buffers(group_components, current_buffer_id, is_pick
         end
     end
     
+    local target_line = nil
     for j, component in ipairs(group_components) do
         if component.id and component.name and api.nvim_buf_is_valid(component.id) then
             -- Calculate the line number this buffer will be on
@@ -1980,6 +1981,10 @@ local function render_group_buffers(group_components, current_buffer_id, is_pick
             line_components[main_line_number] = component  -- Store specific component for this line
             line_infos[main_line_number] = line_info  -- Store complete line_info for highlighting
             line_group_context[main_line_number] = line_group_context.current_group_id  -- Store which group this line belongs to
+
+            if target_buffer_id and component.id == target_buffer_id and not target_line then
+                target_line = main_line_number
+            end
 
             -- Note: Buffer highlighting will be applied later in the main refresh loop
             
@@ -1998,6 +2003,8 @@ local function render_group_buffers(group_components, current_buffer_id, is_pick
             end
         end
     end
+
+    return target_line
 end
 
 -- Render header for a single group
@@ -2370,12 +2377,13 @@ end
 -- Render all groups with their buffers
 local function render_all_groups(active_group, components, current_buffer_id, is_picking, lines_text, new_line_map, group_header_lines, line_types, all_components, line_components, line_group_context, line_infos, buffer_hints)
     if not active_group then
-        return components
+        return components, nil
     end
 
     local compact_mode = state_module.get_layout_mode() == "horizontal"
     local all_groups = groups.get_all_groups()
     local remaining_components = components
+    local active_buffer_line = nil
 
     for i, group in ipairs(all_groups) do
         local is_active = group.id == active_group.id
@@ -2509,7 +2517,17 @@ local function render_all_groups(active_group, components, current_buffer_id, is
                 end
             end
             
-            render_group_buffers(group_components, group_current_buffer_id, is_picking, lines_text, new_line_map, line_types, line_components, line_group_context, line_infos)
+            local target_buffer_id = nil
+            if is_active then
+                target_buffer_id = group_current_buffer_id
+                if not target_buffer_id and current_buffer_id then
+                    target_buffer_id = current_buffer_id
+                end
+            end
+            local group_target_line = render_group_buffers(group_components, group_current_buffer_id, is_picking, lines_text, new_line_map, line_types, line_components, line_group_context, line_infos, target_buffer_id)
+            if is_active and group_target_line then
+                active_buffer_line = group_target_line
+            end
             
             -- Collect all components for highlighting
             for _, comp in ipairs(group_components) do
@@ -2525,7 +2543,7 @@ local function render_all_groups(active_group, components, current_buffer_id, is
         ::continue::
     end
 
-    return remaining_components
+    return remaining_components, active_buffer_line
 end
 
 -- Apply group header highlights
@@ -2551,7 +2569,7 @@ local function apply_group_highlights(group_header_lines, lines_text)
 end
 
 -- Calculate vertical offset to align VBL content with main window cursor
-local function calculate_cursor_based_offset(content_length)
+local function calculate_cursor_based_offset(content_length, target_line)
     -- Check if cursor alignment is enabled
     if not config_module.settings.align_with_cursor then
         return 0
@@ -2615,12 +2633,22 @@ local function calculate_cursor_based_offset(content_length)
     local cursor_relative_to_window = cursor_line - topline + 1
 
     -- Calculate desired offset with conservative bounds
-    local desired_offset = math.max(0, cursor_relative_to_window - 5)  -- More space above
+    local desired_offset = nil
+    if target_line and target_line > 0 then
+        desired_offset = cursor_relative_to_window - target_line
+    else
+        desired_offset = cursor_relative_to_window - 5  -- Fallback: more space above
+    end
+    desired_offset = math.max(0, desired_offset)
 
-    -- Ensure we don't push content out of the visible area
-    -- Reserve space for content to be fully visible
-    local content_len = content_length or 0
-    local max_offset = math.max(0, sidebar_height - content_len - 2)  -- Reserve 2 lines buffer
+    -- Ensure we don't push the target line below the visible window
+    local max_offset = nil
+    if target_line and target_line > 0 then
+        max_offset = math.max(0, sidebar_height - target_line)
+    else
+        local content_len = content_length or 0
+        max_offset = math.max(0, sidebar_height - content_len - 2)  -- Reserve 2 lines buffer
+    end
 
     return math.min(desired_offset, max_offset)
 end
@@ -2785,17 +2813,48 @@ local function apply_horizontal_height(content_height)
 end
 
 -- Finalize buffer display with lines and mapping
-local function finalize_buffer_display(lines_text, new_line_map, line_group_context, group_header_lines, line_infos, line_types, line_components, line_buffer_ranges, position)
+local function finalize_buffer_display(lines_text, new_line_map, line_group_context, group_header_lines, line_infos, line_types, line_components, line_buffer_ranges, position, target_line, current_buffer_id, active_group_id)
     api.nvim_buf_set_option(state_module.get_buf_id(), "modifiable", true)
 
-    -- Calculate vertical offset to align with cursor
-    local content_length = #lines_text
-    local offset = calculate_cursor_based_offset(content_length)
-    if is_horizontal_position(position) then
-        offset = 0
+    if (not target_line or target_line == 0) and current_buffer_id and active_group_id then
+        for line_num, buffer_id in pairs(new_line_map or {}) do
+            if buffer_id == current_buffer_id
+                and line_group_context[line_num] == active_group_id
+                and line_types[line_num] == "buffer" then
+                target_line = line_num
+                break
+            end
+        end
     end
 
-    -- Add empty lines at the beginning if offset is needed
+    local offset = 0
+    if config_module.settings.align_with_cursor
+        and state_module.get_layout_mode() ~= "horizontal"
+        and target_line
+        and not extended_picking_state.active then
+        local main_win = get_main_window_id()
+        if main_win and api.nvim_win_is_valid(main_win) then
+            local ok, cursor_line, topline = pcall(function()
+                local cursor_pos = api.nvim_win_get_cursor(main_win)
+                local view = vim.api.nvim_win_call(main_win, vim.fn.winsaveview)
+                return cursor_pos[1], (view.topline or 1)
+            end)
+            if ok then
+                local cursor_relative = cursor_line - topline + 1
+                offset = math.max(0, cursor_relative - target_line)
+                local win_id = state_module.get_win_id()
+                if win_id and api.nvim_win_is_valid(win_id) then
+                    local sidebar_height = api.nvim_win_get_height(win_id)
+                    local content_length = #lines_text
+                    local max_offset = math.max(0, sidebar_height - content_length)
+                    if offset > max_offset then
+                        offset = max_offset
+                    end
+                end
+            end
+        end
+    end
+
     local final_lines = {}
     local adjusted_line_map = {}
     local adjusted_group_context = {}
@@ -2831,6 +2890,7 @@ local function finalize_buffer_display(lines_text, new_line_map, line_group_cont
     for i, line in ipairs(lines_text) do
         table.insert(final_lines, line)
     end
+
 
     -- Adjust line mappings to account for offset
     for line_num, buffer_id in pairs(new_line_map or {}) do
@@ -2891,20 +2951,15 @@ local function finalize_buffer_display(lines_text, new_line_map, line_group_cont
         apply_adaptive_width(content_width)
     end
 
-    -- Reset horizontal scroll to avoid left-shifted glyphs (e.g., emoji headers)
+    -- Reset horizontal scroll and keep topline anchored to avoid truncation.
     local win_id = state_module.get_win_id()
     if win_id and api.nvim_win_is_valid(win_id) then
-        local view = vim.api.nvim_win_call(win_id, vim.fn.winsaveview)
-        if view and view.leftcol and view.leftcol ~= 0 then
+        vim.api.nvim_win_call(win_id, function()
+            local view = vim.fn.winsaveview()
+            view.topline = 1
             view.leftcol = 0
-            vim.api.nvim_win_call(win_id, function()
-                vim.fn.winrestview(view)
-            end)
-        end
-        local cursor = api.nvim_win_get_cursor(win_id)
-        if cursor and cursor[2] ~= 0 then
-            pcall(api.nvim_win_set_cursor, win_id, { cursor[1], 0 })
-        end
+            vim.fn.winrestview(view)
+        end)
     end
 
     state_module.set_line_offset(offset)
@@ -2915,6 +2970,86 @@ local function finalize_buffer_display(lines_text, new_line_map, line_group_cont
 
     -- Return adjusted data so the caller can use it for highlighting
     return adjusted_line_infos, adjusted_line_map, adjusted_line_types, adjusted_line_components, adjusted_header_lines, adjusted_line_buffer_ranges
+end
+
+local function apply_cursor_alignment_view(current_buffer_id, active_group_id)
+    if not config_module.settings.align_with_cursor then
+        return
+    end
+
+    if state_module.get_layout_mode() == "horizontal" then
+        return
+    end
+
+    if not current_buffer_id or not active_group_id then
+        return
+    end
+
+    local win_id = state_module.get_win_id()
+    if not win_id or not api.nvim_win_is_valid(win_id) then
+        return
+    end
+
+    local main_win = get_main_window_id()
+    if not main_win or not api.nvim_win_is_valid(main_win) then
+        return
+    end
+
+    local line_to_buffer = state_module.get_line_to_buffer_id()
+    local line_group_context = state_module.get_line_group_context()
+    local target_line = nil
+    for line, buf_id in pairs(line_to_buffer) do
+        if buf_id == current_buffer_id and line_group_context[line] == active_group_id then
+            target_line = line
+            break
+        end
+    end
+
+    if not target_line then
+        return
+    end
+
+    local ok, cursor_line, topline = pcall(function()
+        local cursor_pos = api.nvim_win_get_cursor(main_win)
+        local view = vim.api.nvim_win_call(main_win, vim.fn.winsaveview)
+        return cursor_pos[1], (view.topline or 1)
+    end)
+
+    if not ok then
+        return
+    end
+
+    local cursor_relative = cursor_line - topline + 1
+    local sidebar_height = api.nvim_win_get_height(win_id)
+    local buf_id = state_module.get_buf_id()
+    local line_count = api.nvim_buf_line_count(buf_id)
+    local desired_topline = target_line - cursor_relative + 1
+    if desired_topline < 1 then
+        desired_topline = 1
+    end
+    local max_topline = math.max(1, line_count - sidebar_height + 1)
+
+    local needed_line_count = sidebar_height + desired_topline - 1
+    if needed_line_count > line_count then
+        local tail_padding = needed_line_count - line_count
+        local padding = {}
+        for _ = 1, tail_padding do
+            table.insert(padding, "")
+        end
+        api.nvim_buf_set_lines(buf_id, -1, -1, false, padding)
+        line_count = api.nvim_buf_line_count(buf_id)
+        max_topline = math.max(1, line_count - sidebar_height + 1)
+    end
+
+    desired_topline = math.max(1, math.min(desired_topline, max_topline))
+
+    vim.api.nvim_win_call(win_id, function()
+        local view = vim.fn.winsaveview()
+        view.topline = desired_topline
+        view.leftcol = 0
+        vim.fn.winrestview(view)
+    end)
+
 end
 
 -- Complete buffer setup and make it read-only
@@ -3076,6 +3211,7 @@ function M.refresh(reason, position_override)
     local line_group_context = {}  -- Store which group each line belongs to
     local line_buffer_ranges = {}  -- Store buffer column ranges per line (horizontal layout)
 
+    local active_buffer_line = nil
     if state_module.get_layout_mode() == "horizontal" then
         render_horizontal_layout(active_group, components, current_buffer_id, is_picking, lines_text, line_types, line_infos, line_buffer_ranges, buffer_hints)
     else
@@ -3083,11 +3219,27 @@ function M.refresh(reason, position_override)
         render_current_group_history(active_group, current_buffer_id, is_picking, lines_text, new_line_map, group_header_lines, line_types, all_components, line_components, line_group_context, line_infos, components, buffer_hints)
 
         -- Render all groups with their buffers (without applying highlights yet)
-        render_all_groups(active_group, components, current_buffer_id, is_picking, lines_text, new_line_map, group_header_lines, line_types, all_components, line_components, line_group_context, line_infos, buffer_hints)
+        local remaining_components = nil
+        remaining_components, active_buffer_line = render_all_groups(active_group, components, current_buffer_id, is_picking, lines_text, new_line_map, group_header_lines, line_types, all_components, line_components, line_group_context, line_infos, buffer_hints)
+        if remaining_components then
+            components = remaining_components
+        end
+    end
+
+    if not active_buffer_line and active_group and current_buffer_id then
+        for line_num, buffer_id in pairs(new_line_map) do
+            if buffer_id == current_buffer_id
+                and line_group_context[line_num] == active_group.id
+                and line_types[line_num] == "buffer" then
+                active_buffer_line = line_num
+                break
+            end
+        end
     end
 
     -- Finalize buffer display (set lines but keep modifiable) - this clears highlights
-    line_infos, new_line_map, line_types, line_components, group_header_lines, line_buffer_ranges = finalize_buffer_display(lines_text, new_line_map, line_group_context, group_header_lines, line_infos, line_types, line_components, line_buffer_ranges, position)
+    line_infos, new_line_map, line_types, line_components, group_header_lines, line_buffer_ranges = finalize_buffer_display(lines_text, new_line_map, line_group_context, group_header_lines, line_infos, line_types, line_components, line_buffer_ranges, position, active_buffer_line, current_buffer_id, active_group and active_group.id or nil)
+
     
     -- Clear old highlights and apply all highlights AFTER buffer content is set
     api.nvim_buf_clear_namespace(state_module.get_buf_id(), ns_id, 0, -1)
