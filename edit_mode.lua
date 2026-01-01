@@ -574,6 +574,11 @@ function M.open()
     api.nvim_win_set_cursor(edit_state.win_id, {initial_cursor_line, 0})
 end
 
+function M.copy_to_register()
+    local lines = build_edit_lines()
+    vim.fn.setreg('"', table.concat(lines, "\n"))
+end
+
 M.apply = apply_edit_buffer
 
 return M

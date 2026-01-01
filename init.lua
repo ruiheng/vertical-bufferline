@@ -13,6 +13,7 @@
 ---@field move_group_up fun(): nil Move current group up in the list
 ---@field move_group_down fun(): nil Move current group down in the list
 ---@field clear_history fun(group_id?: number|string): boolean Clear group history
+---@field copy_groups_to_register fun(): nil Copy current window's groups to default register
 ---@field switch_to_history_file fun(position: number): boolean Switch to a file from history
 ---@field switch_to_group_buffer fun(position: number): boolean Switch to a file by group position
 ---@field groups table Group management functions
@@ -4243,7 +4244,9 @@ local function initialize_plugin()
     -- Initialize group functionality
     groups.setup({
         auto_create_groups = config_module.settings.auto_create_groups,
-        auto_add_new_buffers = config_module.settings.auto_add_new_buffers
+        auto_add_new_buffers = config_module.settings.auto_add_new_buffers,
+        group_scope = config_module.settings.group_scope,
+        inherit_on_new_window = config_module.settings.inherit_on_new_window,
     })
 
     -- Enable bufferline integration
@@ -4264,6 +4267,7 @@ local function initialize_plugin()
     -- TEMP DISABLED: api.nvim_command("autocmd BufEnter,BufDelete,BufWipeout * lua require('vertical-bufferline').refresh_if_open()")
     api.nvim_command("autocmd BufWritePost * lua require('vertical-bufferline').refresh_if_open()")
     api.nvim_command("autocmd WinClosed * lua require('vertical-bufferline').check_quit_condition()")
+    api.nvim_command("autocmd WinEnter * lua require('vertical-bufferline').handle_win_enter()")
 
     -- Add cursor alignment triggers (only for VBL-managed file buffers)
     -- WinScrolled is needed to catch viewport changes from zz, zt, zb, etc.
@@ -4300,6 +4304,16 @@ end
 function M.refresh_if_open()
     if state_module.is_sidebar_open() then
         M.refresh("autocmd_trigger")
+    end
+end
+
+function M.handle_win_enter()
+    if not groups.is_window_scope_enabled() then
+        return
+    end
+
+    if state_module.is_sidebar_open() then
+        M.refresh("window_context_switch")
     end
 end
 
@@ -4495,6 +4509,11 @@ M.clear_history = function(group_id)
     return success
 end
 
+--- Copy current window's groups to the default register (edit-mode format)
+function M.copy_groups_to_register()
+    require('vertical-bufferline.edit_mode').copy_to_register()
+end
+
 --- Cycle through path display modes (yes/no/auto)
 --- @return nil
 M.cycle_show_path = M.cycle_show_path_setting
@@ -4518,6 +4537,8 @@ M.cycle_show_history = M.cycle_show_history_setting
 --- @field user_config.floating? boolean Use floating window instead of split (default: false)
 --- @field user_config.auto_create_groups? boolean Enable automatic group creation (default: true)
 --- @field user_config.auto_add_new_buffers? boolean Auto-add new buffers to active group (default: true)
+--- @field user_config.group_scope? "global"|"window" Group scope for VBL groups (default: "global")
+--- @field user_config.inherit_on_new_window? boolean Inherit groups when a new window is created (default: false)
 --- @field user_config.show_path? "yes"|"no"|"auto" Path display mode (default: "auto")
 --- @field user_config.path_style? "relative"|"absolute"|"smart" Path display style (default: "relative")
 --- @field user_config.path_max_length? number Maximum path display length (default: 50)

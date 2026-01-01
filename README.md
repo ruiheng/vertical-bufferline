@@ -103,6 +103,7 @@ The following functions are available for you to map to your preferred keybindin
 - `require('vertical-bufferline').switch_to_prev_group()` - Switch to previous group
 - `require('vertical-bufferline').move_group_up()` - Move current group up in the list
 - `require('vertical-bufferline').move_group_down()` - Move current group down in the list
+- `require('vertical-bufferline').copy_groups_to_register()` - Copy current window groups to default register (edit-mode format)
 - `require('vertical-bufferline').groups.switch_to_group_by_display_number(n)` - Switch directly to group n by display number
 
 **History Quick Access:**
@@ -417,6 +418,8 @@ The algorithm automatically determines the minimal path suffix needed to uniquel
     -- Group management  
     auto_create_groups = true,      -- Enable automatic group creation
     auto_add_new_buffers = true,    -- Auto-add new buffers to active group
+    group_scope = "global",         -- "global" or "window" (window-scope disabled when bufferline is active)
+    inherit_on_new_window = false,  -- Copy groups from previous window when creating a new window context
     
     -- Path display settings
     show_path = "auto",             -- "yes", "no", "auto"

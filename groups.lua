@@ -12,45 +12,101 @@ local M = {}
 
 local api = vim.api
 
--- Group data structure
-local groups_data = {
-    -- All group definitions
-    groups = {
-        -- Example:
-        -- {
-        --     id = "group1",
-        --     name = "Main",
-        --     buffers = {12, 15, 18}, -- buffer IDs
-        --     created_at = os.time(),
-        --     color = "#e06c75" -- Optional color identifier
-        -- }
-    },
+local function new_groups_data()
+    return {
+        -- All group definitions
+        groups = {
+            -- Example:
+            -- {
+            --     id = "group1",
+            --     name = "Main",
+            --     buffers = {12, 15, 18}, -- buffer IDs
+            --     created_at = os.time(),
+            --     color = "#e06c75" -- Optional color identifier
+            -- }
+        },
 
-    -- Current active group ID
-    active_group_id = nil,
+        -- Current active group ID
+        active_group_id = nil,
 
-    -- Previous active group ID (for switching back)
-    previous_group_id = nil,
+        -- Previous active group ID (for switching back)
+        previous_group_id = nil,
 
-    -- Default group ID (fallback group for all buffers)
-    default_group_id = "default",
+        -- Default group ID (fallback group for all buffers)
+        default_group_id = "default",
 
-    -- Counter for next group ID
-    next_group_id = config_module.SYSTEM.FIRST_INDEX,
-    
-    -- Group settings
-    settings = {
-        auto_create_groups = config_module.settings.auto_create_groups,
-        auto_add_new_buffers = config_module.settings.auto_add_new_buffers,
-        group_name_prefix = "Group",
-    },
+        -- Counter for next group ID
+        next_group_id = config_module.SYSTEM.FIRST_INDEX,
 
-    -- Flag to temporarily disable auto-adding
-    auto_add_disabled = false,
-    
-    -- Flag to temporarily disable history sync (when clicking history items)
-    history_sync_disabled = false,
-}
+        -- Group settings
+        settings = {
+            auto_create_groups = config_module.settings.auto_create_groups,
+            auto_add_new_buffers = config_module.settings.auto_add_new_buffers,
+            group_name_prefix = "Group",
+            group_scope = config_module.settings.group_scope,
+            inherit_on_new_window = config_module.settings.inherit_on_new_window,
+        },
+
+        -- Flag to temporarily disable auto-adding
+        auto_add_disabled = false,
+
+        -- Flag to temporarily disable history sync (when clicking history items)
+        history_sync_disabled = false,
+    }
+end
+
+local group_contexts = {}
+local global_groups_data = new_groups_data()
+local groups_data = global_groups_data
+
+local function is_window_scope_enabled()
+    if config_module.settings.group_scope ~= "window" then
+        return false
+    end
+    local bufferline_integration = require('vertical-bufferline.bufferline-integration')
+    return not bufferline_integration.is_available()
+end
+
+local function with_groups_data(data, fn)
+    local previous = groups_data
+    groups_data = data
+    local ok, result = pcall(fn)
+    groups_data = previous
+    if not ok then
+        error(result)
+    end
+    return result
+end
+
+local function get_context_id_for_window(winid)
+    return winid
+end
+
+function M.get_context_id_for_window(winid)
+    return get_context_id_for_window(winid)
+end
+
+function M.is_window_scope_enabled()
+    return is_window_scope_enabled()
+end
+
+local function seed_default_group_buffer(buf_id)
+    if not buf_id or not api.nvim_buf_is_valid(buf_id) then
+        return
+    end
+
+    local buftype = api.nvim_buf_get_option(buf_id, 'buftype')
+    if buftype ~= '' then
+        return
+    end
+
+    local bufname = api.nvim_buf_get_name(buf_id)
+    if bufname == '' then
+        return
+    end
+
+    M.add_buffer_to_group(buf_id, groups_data.default_group_id)
+end
 
 --- Re-index all groups to ensure display numbers are continuous
 local function reindex_groups()
@@ -98,6 +154,55 @@ local function init_default_group()
 
         -- Don't auto-add buffers during initialization, left to caller
     end
+end
+
+local function ensure_window_context(winid, opts)
+    local context_id = get_context_id_for_window(winid)
+    if not group_contexts[context_id] then
+        local data
+        local can_inherit = opts and opts.inherit and opts.source_data and #opts.source_data.groups > 0
+        if can_inherit then
+            data = vim.deepcopy(opts.source_data)
+        else
+            data = new_groups_data()
+            with_groups_data(data, function()
+                init_default_group()
+                if opts and opts.seed_buffer_id then
+                    seed_default_group_buffer(opts.seed_buffer_id)
+                end
+            end)
+        end
+        group_contexts[context_id] = data
+    end
+    return group_contexts[context_id]
+end
+
+function M.activate_window_context(winid)
+    if not is_window_scope_enabled() then
+        groups_data = global_groups_data
+        return groups_data
+    end
+
+    local target_win = winid or api.nvim_get_current_win()
+    local context = ensure_window_context(target_win, {
+        inherit = config_module.settings.inherit_on_new_window,
+        source_data = groups_data,
+        seed_buffer_id = api.nvim_win_get_buf(target_win),
+    })
+
+    groups_data = context
+    return groups_data
+end
+
+function M.get_vbl_groups_by_window(winid)
+    if not is_window_scope_enabled() then
+        return global_groups_data
+    end
+
+    local target_win = winid or api.nvim_get_current_win()
+    return ensure_window_context(target_win, {
+        seed_buffer_id = api.nvim_win_get_buf(target_win),
+    })
 end
 
 -- Find group
@@ -1008,8 +1113,13 @@ function M.setup(opts)
     -- Merge settings
     groups_data.settings = vim.tbl_deep_extend("force", groups_data.settings, opts)
 
-    -- Initialize default group
-    init_default_group()
+    if is_window_scope_enabled() then
+        M.activate_window_context(api.nvim_get_current_win())
+        groups_data.settings = vim.tbl_deep_extend("force", groups_data.settings, opts)
+    else
+        -- Initialize default group
+        init_default_group()
+    end
 
     local bufferline_integration = require('vertical-bufferline.bufferline-integration')
     if bufferline_integration.is_available() then
@@ -1029,6 +1139,10 @@ function M.setup(opts)
     vim.api.nvim_create_autocmd("BufEnter", {
         pattern = "*",
         callback = function(args)
+            if is_window_scope_enabled() then
+                M.activate_window_context(api.nvim_get_current_win())
+            end
+
             -- Only auto-add if bufferline is not available
             local bufferline_integration = require('vertical-bufferline.bufferline-integration')
             if bufferline_integration.is_available() then
@@ -1068,6 +1182,10 @@ function M.setup(opts)
     vim.api.nvim_create_autocmd("BufEnter", {
         pattern = "*",
         callback = function(args)
+            if is_window_scope_enabled() then
+                M.activate_window_context(api.nvim_get_current_win())
+            end
+
             local bufferline_integration = require('vertical-bufferline.bufferline-integration')
             if bufferline_integration.is_available() then
                 return -- bufferline handles history sync
@@ -1102,12 +1220,44 @@ function M.setup(opts)
 
     -- Periodically clean up invalid buffers and buffer states
     vim.defer_fn(function()
-        M.cleanup_invalid_buffers()
-        -- Clean up old buffer states from all groups
-        for _, group in ipairs(groups_data.groups) do
-            cleanup_buffer_states(group)
+        if is_window_scope_enabled() then
+            for _, context in pairs(group_contexts) do
+                with_groups_data(context, function()
+                    M.cleanup_invalid_buffers()
+                    for _, group in ipairs(groups_data.groups) do
+                        cleanup_buffer_states(group)
+                    end
+                end)
+            end
+        else
+            M.cleanup_invalid_buffers()
+            -- Clean up old buffer states from all groups
+            for _, group in ipairs(groups_data.groups) do
+                cleanup_buffer_states(group)
+            end
         end
     end, config_module.UI.AUTO_SAVE_DELAY)
+
+    if is_window_scope_enabled() then
+        vim.api.nvim_create_autocmd("WinEnter", {
+            pattern = "*",
+            callback = function(args)
+                M.activate_window_context(args.win)
+            end,
+            desc = "Activate VBL group context for window",
+        })
+
+        vim.api.nvim_create_autocmd("WinClosed", {
+            pattern = "*",
+            callback = function(args)
+                local win_id = tonumber(args.match)
+                if win_id then
+                    group_contexts[win_id] = nil
+                end
+            end,
+            desc = "Remove VBL group context for closed window",
+        })
+    end
 end
 
 --- Switch to group by display number (for quick switch shortcuts)
