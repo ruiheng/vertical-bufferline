@@ -253,6 +253,11 @@ function M.get_vbl_groups_by_window(winid)
     return ensure_window_context(target_win, {})
 end
 
+function M.reset_window_contexts()
+    group_contexts = {}
+    groups_data = global_groups_data
+end
+
 -- Find group
 local function find_group_by_id(group_id)
     for _, group in ipairs(groups_data.groups) do

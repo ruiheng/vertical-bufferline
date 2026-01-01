@@ -127,6 +127,12 @@ Run the window-scope sanity check:
 nvim --headless -u NONE -i NONE -n "+lua dofile('scripts/window_scope_check.lua')"
 ```
 
+Run the window-scope session save/restore check:
+
+```bash
+nvim --headless -u NONE -i NONE -n "+lua dofile('scripts/window_scope_session_check.lua')"
+```
+
 ## Submitting Changes
 
 ### Pull Request Process

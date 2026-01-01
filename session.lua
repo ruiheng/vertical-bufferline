@@ -5,6 +5,7 @@ local M = {}
 
 local api = vim.api
 local config_module = require('vertical-bufferline.config')
+local list_normal_windows
 
 -- Session configuration
 local config = {
@@ -221,6 +222,34 @@ local function finalize_session_restore(session_data, opened_count, total_groups
     local groups = require('vertical-bufferline.groups')
     local bufferline_integration = require('vertical-bufferline.bufferline-integration')
     
+    if groups.is_window_scope_enabled() then
+        local windows = list_normal_windows()
+        local current_win = api.nvim_get_current_win()
+
+        for _, win_id in ipairs(windows) do
+            if api.nvim_win_is_valid(win_id) then
+                api.nvim_set_current_win(win_id)
+                groups.activate_window_context(win_id, { seed_buffer_id = api.nvim_win_get_buf(win_id) })
+                local all_groups = groups.get_all_groups()
+                for _, group in ipairs(all_groups) do
+                    groups.update_group_position_info(group.id, {})
+                    if not group.history then
+                        group.history = {}
+                    end
+                    if group.last_current_buffer == nil then
+                        group.last_current_buffer = nil
+                    end
+                end
+            end
+        end
+
+        if api.nvim_win_is_valid(current_win) then
+            api.nvim_set_current_win(current_win)
+            groups.activate_window_context(current_win, { seed_buffer_id = api.nvim_win_get_buf(current_win) })
+        end
+
+        return
+    end
 
     -- Clear all position info from all groups after session restore
     local all_groups = groups.get_all_groups()
@@ -487,6 +516,111 @@ local function normalize_buffer_path(buffer_path)
     return buffer_path
 end
 
+list_normal_windows = function()
+    local state_module = require('vertical-bufferline.state')
+    local sidebar_win = state_module.get_win_id()
+    local windows = {}
+
+    for _, win_id in ipairs(api.nvim_list_wins()) do
+        if api.nvim_win_is_valid(win_id) and win_id ~= sidebar_win then
+            local win_config = api.nvim_win_get_config(win_id)
+            if win_config.relative == "" then
+                table.insert(windows, win_id)
+            end
+        end
+    end
+
+    return windows
+end
+
+local function each_session_group(session_data, fn)
+    if session_data.window_groups and type(session_data.window_groups) == "table" then
+        for _, window_group in ipairs(session_data.window_groups) do
+            for _, group_data in ipairs(window_group.groups or {}) do
+                fn(group_data, window_group)
+            end
+        end
+    else
+        for _, group_data in ipairs(session_data.groups or {}) do
+            fn(group_data, nil)
+        end
+    end
+end
+
+local function count_session_groups(session_data)
+    local count = 0
+    each_session_group(session_data, function()
+        count = count + 1
+    end)
+    return count
+end
+
+local function build_group_data_list(groups_module, active_group_id, current_window_buf)
+    local all_groups = groups_module.get_all_groups()
+    local results = {}
+
+    for _, group in ipairs(all_groups) do
+        local group_data = {
+            id = group.id,
+            name = group.name,
+            created_at = group.created_at,
+            color = group.color,
+            buffers = {},
+            current_buffer_path = nil,
+            history = {}
+        }
+
+        local current_group_buffers = groups_module.get_group_buffers(group.id)
+        for _, buffer_id in ipairs(current_group_buffers) do
+            if api.nvim_buf_is_valid(buffer_id) then
+                local buffer_path = api.nvim_buf_get_name(buffer_id)
+                if buffer_path ~= "" then
+                    local normalized_path = normalize_buffer_path(buffer_path)
+                    table.insert(group_data.buffers, {
+                        path = normalized_path
+                    })
+                end
+            end
+        end
+
+        local current_buf_for_group = nil
+        if group.id == active_group_id then
+            if current_window_buf and vim.tbl_contains(current_group_buffers, current_window_buf) then
+                current_buf_for_group = current_window_buf
+            end
+        end
+
+        if not current_buf_for_group then
+            if group.current_buffer and api.nvim_buf_is_valid(group.current_buffer)
+               and vim.tbl_contains(current_group_buffers, group.current_buffer) then
+                current_buf_for_group = group.current_buffer
+            end
+        end
+
+        if current_buf_for_group then
+            local current_buffer_path = api.nvim_buf_get_name(current_buf_for_group)
+            if current_buffer_path ~= "" then
+                group_data.current_buffer_path = normalize_buffer_path(current_buffer_path)
+            end
+        end
+
+        if group.history then
+            for _, buffer_id in ipairs(group.history) do
+                if api.nvim_buf_is_valid(buffer_id) then
+                    local buffer_path = api.nvim_buf_get_name(buffer_id)
+                    if buffer_path ~= "" then
+                        table.insert(group_data.history, normalize_buffer_path(buffer_path))
+                    end
+                end
+            end
+        end
+
+        table.insert(results, group_data)
+    end
+
+    return results
+end
+
 -- Convert relative path back to absolute path
 local function expand_buffer_path(buffer_path)
     if buffer_path:sub(1, 1) == "/" then
@@ -541,8 +675,38 @@ function M.save_session(filename)
 
     local groups = require('vertical-bufferline.groups')
     local state_module = require('vertical-bufferline.state')
-    local all_groups = groups.get_all_groups()
     local active_group_id = groups.get_active_group_id()
+    local current_buf = api.nvim_get_current_buf()
+    local window_groups = nil
+
+    if groups.is_window_scope_enabled() then
+        window_groups = {}
+        local windows = list_normal_windows()
+        local current_win = api.nvim_get_current_win()
+
+        for _, win_id in ipairs(windows) do
+            groups.activate_window_context(win_id, { seed_buffer_id = api.nvim_win_get_buf(win_id) })
+            local win_active_group = groups.get_active_group_id()
+            local win_buf = api.nvim_win_get_buf(win_id)
+            local win_buf_path = ""
+            if api.nvim_buf_is_valid(win_buf) then
+                win_buf_path = api.nvim_buf_get_name(win_buf)
+            end
+
+            table.insert(window_groups, {
+                window_buffer_path = win_buf_path ~= "" and normalize_buffer_path(win_buf_path) or nil,
+                active_group_id = win_active_group,
+                groups = build_group_data_list(groups, win_active_group, win_buf),
+            })
+        end
+
+        if api.nvim_win_is_valid(current_win) then
+            groups.activate_window_context(current_win, { seed_buffer_id = api.nvim_win_get_buf(current_win) })
+        end
+
+        active_group_id = groups.get_active_group_id()
+        current_buf = api.nvim_get_current_buf()
+    end
 
     -- Prepare session data
     local session_data = {
@@ -555,77 +719,11 @@ function M.save_session(filename)
         last_width = state_module.get_last_width(),
         last_height = state_module.get_last_height(),
         groups = {},
+        window_groups = window_groups,
         pinned_buffers = {}
     }
 
-    -- Convert groups data for persistence
-    for _, group in ipairs(all_groups) do
-        local group_data = {
-            id = group.id,
-            name = group.name,
-            created_at = group.created_at,
-            color = group.color,
-            buffers = {},
-            current_buffer_path = nil,  -- Will be set below if valid
-            history = {}  -- Will be set below if valid
-        }
-
-        -- Save buffer information using the cleaned group buffers
-        -- This ensures we save the current runtime state, not stale data
-        local current_group_buffers = groups.get_group_buffers(group.id)
-        for _, buffer_id in ipairs(current_group_buffers) do
-            if api.nvim_buf_is_valid(buffer_id) then
-                local buffer_path = api.nvim_buf_get_name(buffer_id)
-                if buffer_path ~= "" then
-                    -- Normalize paths to be relative when possible
-                    local normalized_path = normalize_buffer_path(buffer_path)
-                    table.insert(group_data.buffers, {
-                        path = normalized_path
-                    })
-                end
-            end
-        end
-
-        -- Save current buffer for this group
-        -- If this is the active group, use the actual current buffer
-        -- Otherwise, use the group's recorded current buffer
-        local current_buf_for_group = nil
-        if group.id == active_group_id then
-            -- For active group, use the actual current buffer
-            local actual_current_buf = api.nvim_get_current_buf()
-            if vim.tbl_contains(current_group_buffers, actual_current_buf) then
-                current_buf_for_group = actual_current_buf
-            end
-        else
-            -- For other groups, use the recorded current buffer if valid
-            if group.current_buffer and api.nvim_buf_is_valid(group.current_buffer) and 
-               vim.tbl_contains(current_group_buffers, group.current_buffer) then
-                current_buf_for_group = group.current_buffer
-            end
-        end
-        
-        if current_buf_for_group then
-            local current_buffer_path = api.nvim_buf_get_name(current_buf_for_group)
-            if current_buffer_path ~= "" then
-                group_data.current_buffer_path = normalize_buffer_path(current_buffer_path)
-            end
-        end
-
-        -- Save history for this group (always save history field, even if empty)
-        if group.history then
-            for _, buffer_id in ipairs(group.history) do
-                if api.nvim_buf_is_valid(buffer_id) then
-                    local buffer_path = api.nvim_buf_get_name(buffer_id)
-                    if buffer_path ~= "" then
-                        table.insert(group_data.history, normalize_buffer_path(buffer_path))
-                    end
-                end
-            end
-        end
-        -- Note: group_data.history is always initialized as {} above, so it will be saved even if empty
-
-        table.insert(session_data.groups, group_data)
-    end
+    session_data.groups = build_group_data_list(groups, active_group_id, current_buf)
 
     session_data.pinned_buffers = get_pinned_buffers()
 
@@ -652,15 +750,17 @@ end
 
 -- Check if a buffer path is in session data
 local function is_buffer_in_session(buffer_path, session_data)
-    for _, group_data in ipairs(session_data.groups) do
+    local found = false
+    each_session_group(session_data, function(group_data)
         for _, buffer_info in ipairs(group_data.buffers or {}) do
             local session_path = expand_buffer_path(buffer_info.path)
             if session_path == buffer_path then
-                return true
+                found = true
+                return
             end
         end
-    end
-    return false
+    end)
+    return found
 end
 
 -- Handle existing buffers before session loading
@@ -668,6 +768,17 @@ local function handle_existing_buffers(session_data)
     local groups = require('vertical-bufferline.groups')
     local existing_buffers = vim.api.nvim_list_bufs()
     local handled_buffers = {}
+    local window_scope = groups.is_window_scope_enabled()
+
+    local function activate_context_for_buffer(buf_id)
+        if not window_scope then
+            return
+        end
+        local win_id = vim.fn.win_findbuf(buf_id)[1]
+        if win_id then
+            groups.activate_window_context(win_id, { seed_buffer_id = vim.api.nvim_win_get_buf(win_id) })
+        end
+    end
 
     for _, buf_id in ipairs(existing_buffers) do
         if vim.api.nvim_buf_is_valid(buf_id) and vim.api.nvim_buf_get_option(buf_id, 'buflisted') then
@@ -680,6 +791,7 @@ local function handle_existing_buffers(session_data)
                     -- [No Name] buffer
                     if vim.api.nvim_buf_get_option(buf_id, 'modified') then
                         -- Has modifications, keep in Default group
+                        activate_context_for_buffer(buf_id)
                         groups.add_buffer_to_group(buf_id, "default")
                         table.insert(handled_buffers, buf_id)
                     else
@@ -695,6 +807,7 @@ local function handle_existing_buffers(session_data)
                         -- Buffer not in session
                         if vim.api.nvim_buf_get_option(buf_id, 'modified') then
                             -- Has modifications, keep in Default group
+                            activate_context_for_buffer(buf_id)
                             groups.add_buffer_to_group(buf_id, "default")
                             table.insert(handled_buffers, buf_id)
                         else
@@ -715,7 +828,7 @@ local function collect_session_files(session_data)
     local all_files = {}
     local unique_files = {}
 
-    for _, group_data in ipairs(session_data.groups) do
+    each_session_group(session_data, function(group_data)
         for _, buffer_info in ipairs(group_data.buffers or {}) do
             local file_path = expand_buffer_path(buffer_info.path)
             if not unique_files[file_path] then
@@ -723,7 +836,7 @@ local function collect_session_files(session_data)
                 table.insert(all_files, file_path)
             end
         end
-    end
+    end)
 
     return all_files
 end
@@ -811,7 +924,7 @@ local function find_existing_buffers(session_data)
     end
 
     -- Try to match session data buffers with existing buffers
-    for _, group_data in ipairs(session_data.groups) do
+    each_session_group(session_data, function(group_data)
         for _, buffer_info in ipairs(group_data.buffers or {}) do
             local file_path = expand_buffer_path(buffer_info.path)
             
@@ -848,12 +961,12 @@ local function find_existing_buffers(session_data)
                 end
             end
         end
-    end
+    end)
 
     -- If session data contains buffers not found in existing buffers,
     -- safely preload them (without complex async logic)
     local preloaded_count = 0
-    for _, group_data in ipairs(session_data.groups) do
+    each_session_group(session_data, function(group_data)
         for _, buffer_info in ipairs(group_data.buffers or {}) do
             local file_path = expand_buffer_path(buffer_info.path)
             
@@ -904,7 +1017,7 @@ local function find_existing_buffers(session_data)
                 end
             end
         end
-    end
+    end)
     
     -- Fallback: if no session buffers but existing buffers, add them to mapping
     if found_count == 0 and #existing_buf_names > 0 then
@@ -955,14 +1068,15 @@ local function open_session_files(session_files)
     return buffer_mappings, opened_count
 end
 
--- Rebuild group structure from session data using proper APIs
-local function rebuild_groups(session_data, buffer_mappings)
+local function rebuild_groups_from_data(group_block, buffer_mappings)
     local groups = require('vertical-bufferline.groups')
+    local group_list = group_block.groups or {}
+    local active_group_id = group_block.active_group_id
 
     -- Step 1: Clear existing groups using proper API
     local existing_groups = groups.get_all_groups()
     for _, group in ipairs(existing_groups) do
-        if group.id ~= "default" then  -- Don't delete default group
+        if group.id ~= "default" then
             groups.delete_group(group.id)
         end
     end
@@ -970,32 +1084,27 @@ local function rebuild_groups(session_data, buffer_mappings)
     -- Step 2: Clear default group buffers
     local default_group = groups.find_group_by_id("default")
     if default_group then
-        -- Remove all buffers from default group
         for _, buf_id in ipairs(vim.deepcopy(default_group.buffers)) do
             groups.remove_buffer_from_group(buf_id, "default")
         end
     end
 
     -- Step 3: Recreate groups from session data using proper API
-    local group_id_mapping = {} -- old_id -> new_id mapping for non-default groups
+    local group_id_mapping = {}
 
-    for _, group_data in ipairs(session_data.groups) do
+    for _, group_data in ipairs(group_list) do
         local new_group_id
 
         if group_data.id == "default" then
-            -- Use existing default group
             new_group_id = "default"
-            -- Update default group name if needed
             if group_data.name and group_data.name ~= "" then
                 groups.rename_group("default", group_data.name)
             end
         else
-            -- Create new group
             new_group_id = groups.create_group(group_data.name, group_data.color)
             group_id_mapping[group_data.id] = new_group_id
         end
 
-        -- Assign buffers to this group
         for _, buffer_info in ipairs(group_data.buffers or {}) do
             local file_path = expand_buffer_path(buffer_info.path)
             local buf_id = buffer_mappings[file_path]
@@ -1005,7 +1114,6 @@ local function rebuild_groups(session_data, buffer_mappings)
             end
         end
         
-        -- Restore current buffer for this group if available
         if group_data.current_buffer_path then
             local current_buffer_file_path = expand_buffer_path(group_data.current_buffer_path)
             local current_buf_id = buffer_mappings[current_buffer_file_path]
@@ -1018,7 +1126,6 @@ local function rebuild_groups(session_data, buffer_mappings)
             end
         end
         
-        -- Restore history for this group if available
         local restored_group = groups.find_group_by_id(new_group_id)
         if restored_group and group_data.history then
             restored_group.history = {}
@@ -1033,81 +1140,156 @@ local function rebuild_groups(session_data, buffer_mappings)
     end
 
     -- Step 4: Set active group using proper API
-    local target_active_group_id = session_data.active_group_id
+    local target_active_group_id = active_group_id or "default"
     if target_active_group_id ~= "default" and group_id_mapping[target_active_group_id] then
         target_active_group_id = group_id_mapping[target_active_group_id]
     end
 
-    -- Verify the target group exists and set it active
     local target_group = groups.find_group_by_id(target_active_group_id)
     if target_group then
         groups.set_active_group(target_active_group_id)
         
-        -- Ensure the correct current buffer is set after group switch
-        if target_group.current_buffer and vim.api.nvim_buf_is_valid(target_group.current_buffer) 
+        if target_group.current_buffer and vim.api.nvim_buf_is_valid(target_group.current_buffer)
            and vim.tbl_contains(target_group.buffers, target_group.current_buffer) then
             vim.schedule(function()
                 vim.api.nvim_set_current_buf(target_group.current_buffer)
             end)
         end
     else
-        -- Fallback to default group if target doesn't exist
         groups.set_active_group("default")
     end
     
     -- Step 5: Fallback for unmapped existing buffers - add them to default group
-    local default_group = groups.find_group_by_id("default")
-    if default_group then
+    local fallback_group = groups.find_group_by_id("default")
+    if fallback_group then
         for file_path, buf_id in pairs(buffer_mappings) do
             if vim.api.nvim_buf_is_valid(buf_id) then
-                -- Check if this buffer is already in any group
                 local buffer_group = groups.find_buffer_group(buf_id)
                 if not buffer_group then
-                    -- Buffer exists but not in any group, add to default
                     groups.add_buffer_to_group(buf_id, "default")
                 end
             end
         end
     end
+end
 
-    if session_data.pinned_buffers and type(session_data.pinned_buffers) == "table" then
-        local pin_set = {}
-        for _, pinned_path in ipairs(session_data.pinned_buffers) do
-            local expanded = expand_buffer_path(pinned_path)
-            local buf_id = buffer_mappings[expanded]
-            if buf_id and vim.api.nvim_buf_is_valid(buf_id) then
-                pin_set[buf_id] = true
-            end
+local function apply_pinned_buffers(session_data, buffer_mappings)
+    if not session_data.pinned_buffers or type(session_data.pinned_buffers) ~= "table" then
+        return
+    end
+
+    local pin_set = {}
+    for _, pinned_path in ipairs(session_data.pinned_buffers) do
+        local expanded = expand_buffer_path(pinned_path)
+        local buf_id = buffer_mappings[expanded]
+        if buf_id and vim.api.nvim_buf_is_valid(buf_id) then
+            pin_set[buf_id] = true
         end
+    end
 
-        local state_module = require('vertical-bufferline.state')
-        for _, buf_id in ipairs(vim.api.nvim_list_bufs()) do
-            if vim.api.nvim_buf_is_valid(buf_id) then
-                state_module.set_buffer_pinned(buf_id, pin_set[buf_id] == true)
-            end
+    local state_module = require('vertical-bufferline.state')
+    for _, buf_id in ipairs(vim.api.nvim_list_bufs()) do
+        if vim.api.nvim_buf_is_valid(buf_id) then
+            state_module.set_buffer_pinned(buf_id, pin_set[buf_id] == true)
         end
+    end
 
-        local bufferline_integration = require('vertical-bufferline.bufferline-integration')
-        if bufferline_integration.is_available() then
-            local ok_groups, bufferline_groups = pcall(require, "bufferline.groups")
-            if ok_groups then
-                for _, buf_id in ipairs(vim.api.nvim_list_bufs()) do
-                    if vim.api.nvim_buf_is_valid(buf_id) then
-                        local element = { id = buf_id }
-                        if pin_set[buf_id] then
-                            bufferline_groups.add_element("pinned", element)
-                        else
-                            bufferline_groups.remove_element("pinned", element)
-                        end
+    local bufferline_integration = require('vertical-bufferline.bufferline-integration')
+    if bufferline_integration.is_available() then
+        local ok_groups, bufferline_groups = pcall(require, "bufferline.groups")
+        if ok_groups then
+            for _, buf_id in ipairs(vim.api.nvim_list_bufs()) do
+                if vim.api.nvim_buf_is_valid(buf_id) then
+                    local element = { id = buf_id }
+                    if pin_set[buf_id] then
+                        bufferline_groups.add_element("pinned", element)
+                    else
+                        bufferline_groups.remove_element("pinned", element)
                     end
                 end
-                local ok_ui, bufferline_ui = pcall(require, "bufferline.ui")
-                if ok_ui and bufferline_ui.refresh then
-                    bufferline_ui.refresh()
-                end
+            end
+            local ok_ui, bufferline_ui = pcall(require, "bufferline.ui")
+            if ok_ui and bufferline_ui.refresh then
+                bufferline_ui.refresh()
             end
         end
     end
+end
+
+local function map_window_groups_to_windows(session_data, windows)
+    local mapping = {}
+    local used = {}
+    local by_path = {}
+
+    for _, win_id in ipairs(windows) do
+        local buf_id = api.nvim_win_get_buf(win_id)
+        if api.nvim_buf_is_valid(buf_id) then
+            local buf_name = api.nvim_buf_get_name(buf_id)
+            if buf_name ~= "" then
+                by_path[normalize_buffer_path(buf_name)] = win_id
+            end
+        end
+    end
+
+    for idx, window_group in ipairs(session_data.window_groups or {}) do
+        local match = nil
+        if window_group.window_buffer_path then
+            match = by_path[window_group.window_buffer_path]
+        end
+        if match and not used[match] then
+            mapping[idx] = match
+            used[match] = true
+        end
+    end
+
+    local remaining = {}
+    for _, win_id in ipairs(windows) do
+        if not used[win_id] then
+            table.insert(remaining, win_id)
+        end
+    end
+
+    local rem_index = 1
+    for idx, _ in ipairs(session_data.window_groups or {}) do
+        if not mapping[idx] then
+            mapping[idx] = remaining[rem_index]
+            rem_index = rem_index + 1
+        end
+    end
+
+    return mapping
+end
+
+local function restore_groups_from_session(session_data, buffer_mappings)
+    local groups = require('vertical-bufferline.groups')
+
+    if groups.is_window_scope_enabled() and session_data.window_groups then
+        groups.reset_window_contexts()
+        local windows = list_normal_windows()
+        local mapping = map_window_groups_to_windows(session_data, windows)
+        local current_win = api.nvim_get_current_win()
+
+        for idx, window_group in ipairs(session_data.window_groups) do
+            local win_id = mapping[idx]
+            if win_id and api.nvim_win_is_valid(win_id) then
+                api.nvim_set_current_win(win_id)
+                groups.activate_window_context(win_id, { seed_buffer_id = api.nvim_win_get_buf(win_id) })
+                rebuild_groups_from_data(window_group, buffer_mappings)
+            end
+        end
+
+        if api.nvim_win_is_valid(current_win) then
+            api.nvim_set_current_win(current_win)
+            groups.activate_window_context(current_win, { seed_buffer_id = api.nvim_win_get_buf(current_win) })
+        end
+    else
+        rebuild_groups_from_data({
+            groups = session_data.groups or {},
+            active_group_id = session_data.active_group_id,
+        }, buffer_mappings)
+    end
+
+    apply_pinned_buffers(session_data, buffer_mappings)
 end
 
 --- Load groups configuration from session file
@@ -1143,10 +1325,14 @@ function M.load_session(filename)
     end
 
     -- Validate session data
-    if not session_data.groups or type(session_data.groups) ~= "table" then
+    local has_groups = session_data.groups and type(session_data.groups) == "table"
+    local has_window_groups = session_data.window_groups and type(session_data.window_groups) == "table"
+    if not has_groups and not has_window_groups then
         vim.notify("Invalid session data format", vim.log.levels.ERROR)
         return false
     end
+
+    session_data.groups = session_data.groups or {}
 
     apply_session_position(session_data)
     apply_session_sidebar_state(session_data)
@@ -1176,10 +1362,10 @@ function M.load_session(filename)
         local buffer_mappings, opened_count = open_session_files(session_files)
 
         -- Step 4: Rebuild group structure
-        rebuild_groups(session_data, buffer_mappings)
+        restore_groups_from_session(session_data, buffer_mappings)
 
         -- Step 5: Common finalization
-        finalize_session_restore(session_data, opened_count, #session_data.groups)
+        finalize_session_restore(session_data, opened_count, count_session_groups(session_data))
 
         return opened_count
     end)
@@ -1195,7 +1381,7 @@ function M.load_session(filename)
 
     local opened_count = result
     vim.notify(string.format("Session loaded: %s (%d buffers, %d groups)",
-        vim.fn.fnamemodify(filename, ":t"), opened_count, #session_data.groups), vim.log.levels.INFO)
+        vim.fn.fnamemodify(filename, ":t"), opened_count, count_session_groups(session_data)), vim.log.levels.INFO)
 
     return true
 end
@@ -1370,8 +1556,38 @@ end
 local function collect_current_state()
     local groups = require('vertical-bufferline.groups')
     local state_module = require('vertical-bufferline.state')
-    local all_groups = groups.get_all_groups()
     local active_group_id = groups.get_active_group_id()
+    local current_buf = api.nvim_get_current_buf()
+    local window_groups = nil
+
+    if groups.is_window_scope_enabled() then
+        window_groups = {}
+        local windows = list_normal_windows()
+        local current_win = api.nvim_get_current_win()
+
+        for _, win_id in ipairs(windows) do
+            groups.activate_window_context(win_id, { seed_buffer_id = api.nvim_win_get_buf(win_id) })
+            local win_active_group = groups.get_active_group_id()
+            local win_buf = api.nvim_win_get_buf(win_id)
+            local win_buf_path = ""
+            if api.nvim_buf_is_valid(win_buf) then
+                win_buf_path = api.nvim_buf_get_name(win_buf)
+            end
+
+            table.insert(window_groups, {
+                window_buffer_path = win_buf_path ~= "" and normalize_buffer_path(win_buf_path) or nil,
+                active_group_id = win_active_group,
+                groups = build_group_data_list(groups, win_active_group, win_buf),
+            })
+        end
+
+        if api.nvim_win_is_valid(current_win) then
+            groups.activate_window_context(current_win, { seed_buffer_id = api.nvim_win_get_buf(current_win) })
+        end
+
+        active_group_id = groups.get_active_group_id()
+        current_buf = api.nvim_get_current_buf()
+    end
     
     -- Prepare session data (similar to save_session but simplified)
     local session_data = {
@@ -1383,76 +1599,11 @@ local function collect_current_state()
         last_width = state_module.get_last_width(),
         last_height = state_module.get_last_height(),
         groups = {},
+        window_groups = window_groups,
         pinned_buffers = {}
     }
     
-    -- Convert groups data for persistence
-    for _, group in ipairs(all_groups) do
-        local group_data = {
-            id = group.id,
-            name = group.name,
-            created_at = group.created_at,
-            color = group.color,
-            buffers = {},
-            current_buffer_path = nil,  -- Will be set below if valid
-            history = {}  -- Will be set below if valid
-        }
-        
-        -- Save buffer information using current group buffers
-        local current_group_buffers = groups.get_group_buffers(group.id)
-        for _, buffer_id in ipairs(current_group_buffers) do
-            if api.nvim_buf_is_valid(buffer_id) then
-                local buffer_path = api.nvim_buf_get_name(buffer_id)
-                if buffer_path ~= "" then
-                    -- Normalize paths to be relative when possible
-                    local normalized_path = normalize_buffer_path(buffer_path)
-                    table.insert(group_data.buffers, {
-                        path = normalized_path
-                    })
-                end
-            end
-        end
-        
-        -- Save current buffer for this group
-        -- If this is the active group, use the actual current buffer
-        -- Otherwise, use the group's recorded current buffer
-        local current_buf_for_group = nil
-        if group.id == active_group_id then
-            -- For active group, use the actual current buffer
-            local actual_current_buf = api.nvim_get_current_buf()
-            if vim.tbl_contains(current_group_buffers, actual_current_buf) then
-                current_buf_for_group = actual_current_buf
-            end
-        else
-            -- For other groups, use the recorded current buffer if valid
-            if group.current_buffer and api.nvim_buf_is_valid(group.current_buffer) and 
-               vim.tbl_contains(current_group_buffers, group.current_buffer) then
-                current_buf_for_group = group.current_buffer
-            end
-        end
-        
-        if current_buf_for_group then
-            local current_buffer_path = api.nvim_buf_get_name(current_buf_for_group)
-            if current_buffer_path ~= "" then
-                group_data.current_buffer_path = normalize_buffer_path(current_buffer_path)
-            end
-        end
-        
-        -- Save history for this group (always save history field, even if empty)
-        if group.history then
-            for _, buffer_id in ipairs(group.history) do
-                if api.nvim_buf_is_valid(buffer_id) then
-                    local buffer_path = api.nvim_buf_get_name(buffer_id)
-                    if buffer_path ~= "" then
-                        table.insert(group_data.history, normalize_buffer_path(buffer_path))
-                    end
-                end
-            end
-        end
-        -- Note: group_data.history is always initialized as {} above, so it will be saved even if empty
-        
-        table.insert(session_data.groups, group_data)
-    end
+    session_data.groups = build_group_data_list(groups, active_group_id, current_buf)
 
     session_data.pinned_buffers = get_pinned_buffers()
     
@@ -1473,10 +1624,14 @@ local function restore_state_from_global()
     
     
     -- Validate session data
-    if not session_data.groups or type(session_data.groups) ~= "table" then
+    local has_groups = session_data.groups and type(session_data.groups) == "table"
+    local has_window_groups = session_data.window_groups and type(session_data.window_groups) == "table"
+    if not has_groups and not has_window_groups then
         vim.notify("Invalid VBL session data format", vim.log.levels.ERROR)
         return false
     end
+
+    session_data.groups = session_data.groups or {}
 
     apply_session_position(session_data)
     apply_session_sidebar_state(session_data)
@@ -1509,10 +1664,10 @@ local function restore_state_from_global()
         local buffer_mappings = find_existing_buffers(session_data)
 
         -- Basic group restoration with existing buffers
-        rebuild_groups(session_data, buffer_mappings)
+        restore_groups_from_session(session_data, buffer_mappings)
 
         -- Common finalization
-        finalize_session_restore(session_data, vim.tbl_count(buffer_mappings), #session_data.groups)
+        finalize_session_restore(session_data, vim.tbl_count(buffer_mappings), count_session_groups(session_data))
     end)
 
     -- Always re-enable auto-add and reset state, even if there was an error
@@ -1525,7 +1680,7 @@ local function restore_state_from_global()
         return false
     end
 
-    vim.notify(string.format("VBL state restored (%d groups)", #session_data.groups), vim.log.levels.INFO)
+    vim.notify(string.format("VBL state restored (%d groups)", count_session_groups(session_data)), vim.log.levels.INFO)
     return true
 end
 
@@ -1739,12 +1894,12 @@ local function setup_session_integration()
             -- Decode session data to show preview
             local success, session_data = pcall(vim.json.decode, vim.g.VerticalBufferlineSession)
             local preview = ""
-            if success and session_data.groups then
-                local group_count = #session_data.groups
+            if success and (session_data.groups or session_data.window_groups) then
+                local group_count = count_session_groups(session_data)
                 local buffer_count = 0
-                for _, group in ipairs(session_data.groups) do
-                    buffer_count = buffer_count + #(group.buffers or {})
-                end
+                each_session_group(session_data, function(group_data)
+                    buffer_count = buffer_count + #(group_data.buffers or {})
+                end)
                 preview = string.format(" (%d groups, %d buffers)", group_count, buffer_count)
             end
             
