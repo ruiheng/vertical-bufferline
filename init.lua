@@ -4546,9 +4546,10 @@ M.clear_history = function(group_id)
     return success
 end
 
---- Copy current window's groups to the default register (edit-mode format)
-function M.copy_groups_to_register()
-    require('vertical-bufferline.edit_mode').copy_to_register()
+--- Copy current window's groups to a register (edit-mode format)
+--- @param register? string Target register (defaults to ")
+function M.copy_groups_to_register(register)
+    require('vertical-bufferline.edit_mode').copy_to_register(register)
 end
 
 --- Cycle through path display modes (yes/no/auto)

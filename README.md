@@ -123,6 +123,7 @@ Note: `BufferLineGoToBuffer` and `BufferLinePick` are provided by bufferline.nvi
 - `:VBufferLineRenameGroup <new_name>` - Rename current active group
 - `:VBufferLineSwitchGroup [name_or_id]` - Switch to specified group
 - `:VBufferLineAddToGroup <name_or_id>` - Add current buffer to specified group
+- `:VBufferLineCopyGroups [register]` - Copy groups to a register (edit-mode format)
 
 ### Navigation
 - `:VBufferLineNextGroup` - Switch to next group

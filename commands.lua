@@ -398,6 +398,16 @@ local function edit_mode_command()
     require('vertical-bufferline.edit_mode').open()
 end
 
+local function copy_groups_command(args)
+    local register = args and args.args or ""
+    if register ~= "" and #register ~= 1 then
+        vim.notify("Usage: VBufferLineCopyGroups [register]", vim.log.levels.ERROR)
+        return
+    end
+    require('vertical-bufferline').copy_groups_to_register(register ~= "" and register or nil)
+    vim.notify("Copied VBL groups to register " .. (register ~= "" and register or '"'), vim.log.levels.INFO)
+end
+
 --- Set up all user commands
 function M.setup()
     -- Create group
@@ -410,6 +420,11 @@ function M.setup()
     vim.api.nvim_create_user_command("VBufferLineEdit", edit_mode_command, {
         nargs = 0,
         desc = "Edit buffer groups in a temporary buffer"
+    })
+
+    vim.api.nvim_create_user_command("VBufferLineCopyGroups", copy_groups_command, {
+        nargs = "?",
+        desc = "Copy groups to a register (edit-mode format)"
     })
 
     -- Delete group
