@@ -4961,6 +4961,12 @@ function M.switch_to_history_file(position)
     vim.schedule(function()
         groups.restore_buffer_state_for_current_group(buffer_id)
     end)
+
+    if state_module.is_sidebar_open() then
+        vim.schedule(function()
+            M.refresh("history_switch")
+        end)
+    end
     
     return true
 end
@@ -5002,6 +5008,12 @@ function M.switch_to_group_buffer(position)
     end
 
     groups.sync_group_history_with_current(active_group.id, buffer_id)
+
+    if state_module.is_sidebar_open() then
+        vim.schedule(function()
+            M.refresh("group_switch")
+        end)
+    end
     return true
 end
 
