@@ -99,12 +99,33 @@ end
 
 -- Setup highlight groups function
 local function setup_highlights()
+    -- Base theme colors for composing highlights
+    local pmenusel_attrs = vim.api.nvim_get_hl(0, {name = 'PmenuSel'})
+    local pmenu_attrs = vim.api.nvim_get_hl(0, {name = 'Pmenu'})
+    local title_attrs = vim.api.nvim_get_hl(0, {name = 'Title'})
+    local comment_attrs = vim.api.nvim_get_hl(0, {name = 'Comment'})
+    local directory_attrs = vim.api.nvim_get_hl(0, {name = 'Directory'})
+    local operator_attrs = vim.api.nvim_get_hl(0, {name = 'Operator'})
+    local warning_attrs = vim.api.nvim_get_hl(0, {name = 'WarningMsg'})
+    local special_attrs = vim.api.nvim_get_hl(0, {name = 'Special'})
+    local cursorline_attrs = vim.api.nvim_get_hl(0, {name = 'CursorLine'})
+    local current_bg = pmenusel_attrs.bg or cursorline_attrs.bg
+
     -- Buffer state highlights using semantic nvim highlight groups for theme compatibility
-    api.nvim_set_hl(0, config_module.HIGHLIGHTS.CURRENT, { link = "CursorLine", bold = true })
+    api.nvim_set_hl(0, config_module.HIGHLIGHTS.CURRENT, { bg = current_bg })
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.VISIBLE, { link = "PmenuSel" })
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.INACTIVE, { link = "Comment" })
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.MODIFIED, { link = "WarningMsg", italic = true })
+    api.nvim_set_hl(0, config_module.HIGHLIGHTS.MODIFIED_CURRENT, {
+        fg = warning_attrs.fg or config_module.COLORS.YELLOW,
+        bg = current_bg,
+        italic = true
+    })
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.PIN, { link = "Special" })
+    api.nvim_set_hl(0, config_module.HIGHLIGHTS.PIN_CURRENT, {
+        fg = special_attrs.fg or config_module.COLORS.CYAN,
+        bg = current_bg
+    })
     
     -- Path highlights - should be subtle and low-key
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.PATH, { link = "Comment", italic = true })
@@ -113,26 +134,34 @@ local function setup_highlights()
     
     -- Prefix highlights - for minimal prefixes, should be consistent
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.PREFIX, { link = "Comment", italic = true })
-    api.nvim_set_hl(0, config_module.HIGHLIGHTS.PREFIX_CURRENT, { link = "Directory", bold = true })
+    api.nvim_set_hl(0, config_module.HIGHLIGHTS.PREFIX_CURRENT, {
+        fg = directory_attrs.fg or title_attrs.fg or config_module.COLORS.BLUE,
+        bg = current_bg,
+        bold = true
+    })
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.PREFIX_VISIBLE, { link = "String", italic = true })
     
     -- Filename highlights - should be consistent between prefixed and non-prefixed
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.FILENAME, { link = "Normal" })
-    api.nvim_set_hl(0, config_module.HIGHLIGHTS.FILENAME_CURRENT, { link = "Title", bold = true })
+    api.nvim_set_hl(0, config_module.HIGHLIGHTS.FILENAME_CURRENT, {
+        fg = title_attrs.fg or config_module.COLORS.WHITE,
+        bg = current_bg,
+        bold = true
+    })
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.FILENAME_VISIBLE, { link = "String", bold = true })
     
     -- Dual numbering highlights - different styles for easy distinction
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.NUMBER_LOCAL, { link = "Number", bold = true })      -- Local: bright, bold
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.NUMBER_GLOBAL, { link = "Comment" })                -- Global: subdued
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.NUMBER_SEPARATOR, { link = "Operator" })            -- Separator: distinct
+    api.nvim_set_hl(0, config_module.HIGHLIGHTS.NUMBER_SEPARATOR_CURRENT, {
+        fg = operator_attrs.fg or comment_attrs.fg,
+        bg = current_bg
+    })
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.NUMBER_HIDDEN, { link = "NonText" })                -- Hidden: very subtle
     
     -- Group header highlights - use semantic colors for theme compatibility
     -- Get background from PmenuSel/Pmenu but foreground/style from Title/Comment
-    local pmenusel_attrs = vim.api.nvim_get_hl(0, {name = 'PmenuSel'})
-    local pmenu_attrs = vim.api.nvim_get_hl(0, {name = 'Pmenu'})
-    local title_attrs = vim.api.nvim_get_hl(0, {name = 'Title'})
-    local comment_attrs = vim.api.nvim_get_hl(0, {name = 'Comment'})
     
     -- Subtle group header highlights for less eye-catching appearance
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_ACTIVE, {
@@ -1247,7 +1276,7 @@ local function build_horizontal_item_parts(component, number_index, max_digits, 
     end
 
     local is_modified = is_buffer_actually_modified(component.id)
-    local modified_parts = components.create_modified_indicator(is_modified)
+    local modified_parts = components.create_modified_indicator(is_modified, is_current)
     for _, part in ipairs(modified_parts) do
         if is_current then
             part.highlight = config_module.HIGHLIGHTS.HORIZONTAL_CURRENT
@@ -1651,7 +1680,7 @@ local function create_buffer_line(component, j, total_components, current_buffer
     
     -- 6. Pin indicator (only show when bufferline is available)
     if bufferline_integration.is_available() and is_buffer_pinned(component.id) then
-        local pin_parts = components.create_pin_indicator(get_pin_icon())
+        local pin_parts = components.create_pin_indicator(get_pin_icon(), is_current)
         for _, part in ipairs(pin_parts) do
             table.insert(parts, part)
         end
@@ -1677,7 +1706,7 @@ local function create_buffer_line(component, j, total_components, current_buffer
     
     -- 8. Modified indicator (moved to end)
     local is_modified = is_buffer_actually_modified(component.id)
-    local modified_parts = components.create_modified_indicator(is_modified)
+    local modified_parts = components.create_modified_indicator(is_modified, is_current)
     for _, part in ipairs(modified_parts) do
         table.insert(parts, part)
     end
@@ -1768,6 +1797,7 @@ local function create_buffer_line(component, j, total_components, current_buffer
         path_line = path_line,
         has_path = path_line ~= nil,
         has_pick = has_pick,
+        is_current = is_current,
         prefix_info = prefix_info,
         -- Legacy fields for compatibility
         tree_prefix = parts[1] and parts[1].text or "",
@@ -1795,6 +1825,17 @@ local function apply_buffer_highlighting(line_info, component, actual_line_numbe
                     })
                 end
             end
+        end
+
+        if line_info.is_current then
+            api.nvim_buf_add_highlight(
+                state_module.get_buf_id(),
+                ns_id,
+                config_module.HIGHLIGHTS.CURRENT,
+                actual_line_number - 1,
+                0,
+                -1
+            )
         end
 
         renderer.apply_highlights(state_module.get_buf_id(), ns_id, actual_line_number - 1, line_info.rendered_line)

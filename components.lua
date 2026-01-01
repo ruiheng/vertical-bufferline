@@ -80,10 +80,13 @@ function M.create_smart_numbering(local_pos, global_pos, max_local_digits, max_g
     local local_padding = max_local_digits - #local_num
     local padded_local_num = string.rep(" ", local_padding) .. local_num
 
+    local separator_highlight = is_current and config_module.HIGHLIGHTS.NUMBER_SEPARATOR_CURRENT
+        or config_module.HIGHLIGHTS.NUMBER_SEPARATOR
+
     return {
         renderer.create_part(padded_local_num,
             local_num == "-" and config_module.HIGHLIGHTS.NUMBER_HIDDEN or number_highlight),
-        renderer.create_part("|", config_module.HIGHLIGHTS.NUMBER_SEPARATOR),
+        renderer.create_part("|", separator_highlight),
         renderer.create_part(padded_global_num, number_highlight)
     }
 end
@@ -93,8 +96,9 @@ end
 ---@param global_pos number Global position in current group (calculated from group buffer list)
 ---@param max_local_digits number Maximum digits in local positions for alignment
 ---@param max_global_digits number Maximum digits in global positions for alignment
+---@param is_current boolean|nil Whether this is the current buffer
 ---@return LinePart[]
-function M.create_dual_numbering(local_pos, global_pos, max_local_digits, max_global_digits)
+function M.create_dual_numbering(local_pos, global_pos, max_local_digits, max_global_digits, is_current)
     local local_num = local_pos and tostring(local_pos) or "-"
     local global_num = tostring(global_pos)
     
@@ -104,10 +108,13 @@ function M.create_dual_numbering(local_pos, global_pos, max_local_digits, max_gl
     local padded_local_num = string.rep(" ", local_padding) .. local_num
     local padded_global_num = string.rep(" ", global_padding) .. global_num
     
+    local separator_highlight = is_current and config_module.HIGHLIGHTS.NUMBER_SEPARATOR_CURRENT
+        or config_module.HIGHLIGHTS.NUMBER_SEPARATOR
+
     return {
-        renderer.create_part(padded_local_num, 
+        renderer.create_part(padded_local_num,
             local_num == "-" and config_module.HIGHLIGHTS.NUMBER_HIDDEN or config_module.HIGHLIGHTS.NUMBER_LOCAL),
-        renderer.create_part("|", config_module.HIGHLIGHTS.NUMBER_SEPARATOR),
+        renderer.create_part("|", separator_highlight),
         renderer.create_part(padded_global_num, config_module.HIGHLIGHTS.NUMBER_GLOBAL)
     }
 end
@@ -140,11 +147,14 @@ end
 
 -- Create modified indicator component
 ---@param is_modified boolean
+---@param is_current boolean|nil
 ---@return LinePart[]
-function M.create_modified_indicator(is_modified)
+function M.create_modified_indicator(is_modified, is_current)
     if is_modified then
+        local highlight_group = is_current and config_module.HIGHLIGHTS.MODIFIED_CURRENT
+            or config_module.HIGHLIGHTS.MODIFIED
         return {
-            renderer.create_part("• ", config_module.HIGHLIGHTS.MODIFIED)
+            renderer.create_part("• ", highlight_group)
         }
     else
         return {}
@@ -154,10 +164,12 @@ end
 -- Create pin indicator component
 ---@param icon string
 ---@return LinePart[]
-function M.create_pin_indicator(icon)
+function M.create_pin_indicator(icon, is_current)
     if icon and icon ~= "" then
+        local highlight_group = is_current and config_module.HIGHLIGHTS.PIN_CURRENT
+            or config_module.HIGHLIGHTS.PIN
         return {
-            renderer.create_part(icon, config_module.HIGHLIGHTS.PIN)
+            renderer.create_part(icon, highlight_group)
         }
     end
     return {}

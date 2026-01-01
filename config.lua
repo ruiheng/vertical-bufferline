@@ -75,7 +75,9 @@ M.HIGHLIGHTS = {
     CURRENT = "VBufferLineCurrent",
     VISIBLE = "VBufferLineVisible",
     MODIFIED = "VBufferLineModified",
+    MODIFIED_CURRENT = "VBufferLineModifiedCurrent",
     PIN = "VBufferLinePin",
+    PIN_CURRENT = "VBufferLinePinCurrent",
     INACTIVE = "VBufferLineInactive",
     ERROR = "VBufferLineError",
     WARNING = "VBufferLineWarning",
@@ -118,6 +120,7 @@ M.HIGHLIGHTS = {
     NUMBER_LOCAL = "VBufferLineNumberLocal",    -- Local position (for <leader>1 style)
     NUMBER_GLOBAL = "VBufferLineNumberGlobal",  -- Global position (for <leader>b1 style)
     NUMBER_SEPARATOR = "VBufferLineNumberSep",  -- The "|" separator
+    NUMBER_SEPARATOR_CURRENT = "VBufferLineNumberSepCurrent",  -- "|" separator for current buffer line
     NUMBER_HIDDEN = "VBufferLineNumberHidden",  -- The "-" when not visible
 
     HORIZONTAL_NUMBER = "VBufferLineHorizontalNumber",
