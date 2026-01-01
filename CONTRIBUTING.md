@@ -121,7 +121,11 @@ docs(readme): update installation instructions
 
 ### Automated Testing
 
-Currently, the project relies on manual testing. Contributions to add automated tests are welcome.
+Run the window-scope sanity check:
+
+```bash
+nvim --headless -u NONE -i NONE -n "+lua dofile('scripts/window_scope_check.lua')"
+```
 
 ## Submitting Changes
 
