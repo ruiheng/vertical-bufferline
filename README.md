@@ -407,9 +407,8 @@ The algorithm automatically determines the minimal path suffix needed to uniquel
     min_width = 15,                 -- Minimum sidebar width (for adaptive sizing)
     max_width = 60,                 -- Maximum sidebar width (for adaptive sizing)
     adaptive_width = true,          -- Enable adaptive width based on content
-    min_height = 3,                 -- Minimum bar height for top/bottom
-    max_height = 10,                -- Maximum bar height for top/bottom
-    adaptive_height = true,         -- Enable adaptive height based on content
+    min_height = 3,                 -- Legacy: retained for compatibility (not used for top/bottom)
+    max_height = 10,                -- Legacy: retained for compatibility (not used for top/bottom)
     show_inactive_group_buffers = false,  -- Show buffer lists for inactive groups (default: only active group)
     show_icons = false,             -- Show file type emoji icons
     position = "left",              -- Sidebar position: "left", "right", "top", "bottom"

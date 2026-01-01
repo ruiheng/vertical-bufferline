@@ -121,9 +121,8 @@ Default configuration:
       min_width = 15,                         -- Minimum sidebar width
       max_width = 60,                     -- Maximum sidebar width
       adaptive_width = true,              -- Enable adaptive width sizing
-      min_height = 3,                      -- Minimum bar height (top/bottom)
-      max_height = 10,                     -- Maximum bar height (top/bottom)
-      adaptive_height = true,              -- Enable adaptive height sizing
+      min_height = 3,                      -- Legacy: retained for compatibility (not used for top/bottom)
+      max_height = 10,                     -- Legacy: retained for compatibility (not used for top/bottom)
       show_inactive_group_buffers = false,-- Show buffer list for inactive groups
       show_icons = false,                 -- Show file type emoji icons
       position = "left",                  -- Sidebar position: "left", "right", "top", "bottom"
@@ -187,20 +186,12 @@ adaptive_width          Enable automatic width adjustment based on content.
                         Default: true
 
                                     *vertical-bufferline-config-min-height*
-min_height              Minimum height for top/bottom bars. When adaptive_height
-                        is enabled, this acts as the minimum height bound.
+min_height              Legacy setting for top/bottom height. No longer used.
                         Default: 3
 
                                     *vertical-bufferline-config-max-height*
-max_height              Maximum height for top/bottom bars when adaptive_height
-                        is enabled. The bar will never exceed this height.
+max_height              Legacy setting for top/bottom height. No longer used.
                         Default: 10
-
-                                *vertical-bufferline-config-adaptive-height*
-adaptive_height         Enable automatic height adjustment based on content
-                        for top/bottom bars. When true, the bar dynamically
-                        resizes between `min_height` and `max_height`.
-                        Default: true
 
                       *vertical-bufferline-config-show-inactive-group-buffers*
 show_inactive_group_buffers

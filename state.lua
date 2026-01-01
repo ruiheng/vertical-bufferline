@@ -36,6 +36,10 @@ local state = {
     -- Pin state (fallback when bufferline.nvim is not available)
     pinned_buffers = {},
 
+    -- Horizontal overlay placeholder state
+    placeholder_win_id = nil,
+    placeholder_buf_id = nil,
+
     -- Layout mode: "vertical" (left/right) or "horizontal" (top/bottom)
     layout_mode = "vertical",
 }
@@ -59,6 +63,28 @@ function M.set_win_id(win_id)
         error("Invalid window ID: " .. tostring(win_id))
     end
     state.win_id = win_id
+end
+
+function M.get_placeholder_win_id()
+    return state.placeholder_win_id
+end
+
+function M.set_placeholder_win_id(win_id)
+    if win_id and not is_valid_win_id(win_id) then
+        error("Invalid placeholder window ID: " .. tostring(win_id))
+    end
+    state.placeholder_win_id = win_id
+end
+
+function M.get_placeholder_buf_id()
+    return state.placeholder_buf_id
+end
+
+function M.set_placeholder_buf_id(buf_id)
+    if buf_id and not is_valid_buf_id(buf_id) then
+        error("Invalid placeholder buffer ID: " .. tostring(buf_id))
+    end
+    state.placeholder_buf_id = buf_id
 end
 
 function M.is_valid_window()
@@ -113,6 +139,8 @@ end
 function M.close_sidebar()
     state.is_sidebar_open = false
     state.win_id = nil
+    state.placeholder_win_id = nil
+    state.placeholder_buf_id = nil
 end
 
 -- Last width management

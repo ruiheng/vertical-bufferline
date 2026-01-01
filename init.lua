@@ -2630,26 +2630,54 @@ local function apply_adaptive_width(content_width)
 end
 
 -- Calculate and apply adaptive height to the sidebar window (top/bottom only)
-local function apply_adaptive_height(content_height)
-    if not config_module.settings.adaptive_height then
-        return
+local function count_normal_windows()
+    local count = 0
+    for _, win_id in ipairs(api.nvim_list_wins()) do
+        if api.nvim_win_is_valid(win_id) then
+            local win_config = api.nvim_win_get_config(win_id)
+            if win_config.relative == "" then
+                count = count + 1
+            end
+        end
     end
+    return count
+end
 
+local function apply_horizontal_height(content_height)
     local win_id = state_module.get_win_id()
     if not win_id or not api.nvim_win_is_valid(win_id) then
         return
     end
 
-    local max_height = config_module.settings.max_height
+    local placeholder_win_id = state_module.get_placeholder_win_id()
+    local statusline_height = layout.statusline_height(vim.o.laststatus, count_normal_windows())
+    local placeholder_height = layout.placeholder_height(content_height, statusline_height)
 
-    local desired_height = content_height
-    local new_height = math.max(1, math.min(desired_height, max_height))
+    if placeholder_win_id and api.nvim_win_is_valid(placeholder_win_id) then
+        pcall(api.nvim_win_set_option, placeholder_win_id, 'winfixheight', false)
+        pcall(api.nvim_win_set_height, placeholder_win_id, placeholder_height)
 
-    local current_height = api.nvim_win_get_height(win_id)
-    if new_height ~= current_height then
-        api.nvim_win_set_option(win_id, 'winfixheight', false)
-        api.nvim_win_set_height(win_id, new_height)
-        state_module.set_last_height(new_height)
+        local row, col = unpack(api.nvim_win_get_position(placeholder_win_id))
+        local width = api.nvim_win_get_width(placeholder_win_id)
+        local float_height = placeholder_height + statusline_height
+
+        api.nvim_win_set_config(win_id, {
+            relative = 'editor',
+            width = width,
+            height = float_height,
+            col = col,
+            row = row,
+            style = 'minimal',
+            border = 'none',
+            focusable = true,
+        })
+    else
+        local desired_height = math.max(1, content_height)
+        local current_height = api.nvim_win_get_height(win_id)
+        if desired_height ~= current_height then
+            api.nvim_win_set_option(win_id, 'winfixheight', false)
+            api.nvim_win_set_height(win_id, desired_height)
+        end
     end
 end
 
@@ -2754,7 +2782,7 @@ local function finalize_buffer_display(lines_text, new_line_map, line_group_cont
 
     -- Calculate and apply adaptive size based on layout
     if is_horizontal_position(position) then
-        apply_adaptive_height(#final_lines)
+        apply_horizontal_height(#final_lines)
     elseif config_module.settings.adaptive_width then
         local content_width = calculate_content_width(lines_text)
         apply_adaptive_width(content_width)
@@ -3515,7 +3543,11 @@ function M.close_sidebar(position_override)
     local use_floating = config_module.settings.floating and not is_horizontal
 
     -- Save the current size before closing
-    layout.save_size(sidebar_win_id, position, state_module)
+    local placeholder_win_id = state_module.get_placeholder_win_id()
+    local size_win_id = placeholder_win_id or sidebar_win_id
+    if api.nvim_win_is_valid(size_win_id) then
+        layout.save_size(size_win_id, position, state_module)
+    end
 
     -- Check if only one window remains (sidebar is the last window)
     if #all_windows == 1 then
@@ -3527,17 +3559,25 @@ function M.close_sidebar(position_override)
             -- Close floating window
             api.nvim_win_close(sidebar_win_id, false)
         else
+            -- Close floating overlay if present
+            if api.nvim_win_is_valid(sidebar_win_id) then
+                pcall(api.nvim_win_close, sidebar_win_id, false)
+            end
+
             -- Close split window
-            api.nvim_set_current_win(sidebar_win_id)
-            vim.cmd("close")
+            local target_win = placeholder_win_id or sidebar_win_id
+            if target_win and api.nvim_win_is_valid(target_win) then
+                api.nvim_set_current_win(target_win)
+                vim.cmd("close")
+            end
             
             -- Return to previous window
-            if api.nvim_win_is_valid(current_win) and current_win ~= sidebar_win_id then
+            if api.nvim_win_is_valid(current_win) and current_win ~= sidebar_win_id and current_win ~= placeholder_win_id then
                 api.nvim_set_current_win(current_win)
             else
                 -- If previous window is invalid, find first valid non-sidebar window
                 for _, win_id in ipairs(api.nvim_list_wins()) do
-                    if win_id ~= sidebar_win_id and api.nvim_win_is_valid(win_id) then
+                    if win_id ~= sidebar_win_id and win_id ~= placeholder_win_id and api.nvim_win_is_valid(win_id) then
                         api.nvim_set_current_win(win_id)
                         break
                     end
@@ -3597,6 +3637,8 @@ local function open_sidebar(position_override)
     local width, height = layout.initial_size(position, state_module, config_module.settings)
 
     local new_win_id
+    local placeholder_win_id = nil
+    local placeholder_buf_id = nil
 
     if use_floating then
         -- Create floating sidebar (right side, focusable=false)
@@ -3619,14 +3661,35 @@ local function open_sidebar(position_override)
     else
         -- Create traditional split sidebar
         if is_horizontal then
+            placeholder_buf_id = api.nvim_create_buf(false, true)
+            api.nvim_buf_set_option(placeholder_buf_id, 'bufhidden', 'wipe')
+            api.nvim_buf_set_option(placeholder_buf_id, 'filetype', 'vertical-bufferline-placeholder')
             if position == "top" then
                 vim.cmd("topleft split")
             else
                 vim.cmd("botright split")
             end
-            new_win_id = api.nvim_get_current_win()
-            api.nvim_win_set_buf(new_win_id, buf_id)
-            api.nvim_win_set_height(new_win_id, height)
+            placeholder_win_id = api.nvim_get_current_win()
+            api.nvim_win_set_buf(placeholder_win_id, placeholder_buf_id)
+            api.nvim_win_set_height(placeholder_win_id, height)
+
+            local row, col = unpack(api.nvim_win_get_position(placeholder_win_id))
+            local width = api.nvim_win_get_width(placeholder_win_id)
+            local normal_count = count_normal_windows()
+            local statusline_height = layout.statusline_height(vim.o.laststatus, normal_count)
+            local float_height = height + statusline_height
+
+            new_win_id = api.nvim_open_win(buf_id, false, {
+                relative = 'editor',
+                width = width,
+                height = float_height,
+                col = col,
+                row = row,
+                style = 'minimal',
+                border = 'none',
+                focusable = true,
+                mouse = true,
+            })
         else
             if position == "left" then
                 vim.cmd("topleft vsplit")
@@ -3641,7 +3704,7 @@ local function open_sidebar(position_override)
     
     -- Configure window options after creation
     api.nvim_win_set_option(new_win_id, 'winfixwidth', not config_module.settings.adaptive_width)
-    api.nvim_win_set_option(new_win_id, 'winfixheight', not config_module.settings.adaptive_height)
+    api.nvim_win_set_option(new_win_id, 'winfixheight', false)
     api.nvim_win_set_option(new_win_id, 'number', false)
     api.nvim_win_set_option(new_win_id, 'relativenumber', false)
     api.nvim_win_set_option(new_win_id, 'cursorline', false)
@@ -3687,18 +3750,30 @@ local function open_sidebar(position_override)
             end,
             desc = "Resize floating sidebar when terminal is resized"
         })
+    elseif is_horizontal then
+        api.nvim_create_autocmd({"VimResized", "WinResized"}, {
+            group = group_name,
+            callback = function()
+                if not api.nvim_win_is_valid(new_win_id) then
+                    return
+                end
+                local line_count = api.nvim_buf_line_count(buf_id)
+                apply_horizontal_height(line_count)
+            end,
+            desc = "Resize horizontal floating overlay when window is resized"
+        })
     else
         -- For split windows, add WinEnter redirect with delay for mouse clicks
         api.nvim_create_autocmd("WinEnter", {
             group = group_name,
             callback = function()
                 local current_win = api.nvim_get_current_win()
-                if current_win == new_win_id then
+                if current_win == new_win_id or current_win == placeholder_win_id then
                     -- Wait a short delay to allow mouse click processing
                     vim.defer_fn(function()
                         -- Check if we're still in the sidebar window
                         local check_win = api.nvim_get_current_win()
-                        if check_win == new_win_id then
+                        if check_win == new_win_id or check_win == placeholder_win_id then
                             -- Find best non-sidebar window
                             local all_wins = api.nvim_list_wins()
                             local best_win = nil
@@ -3751,7 +3826,7 @@ local function open_sidebar(position_override)
         callback = function(ev)
             -- Only respond if the event is happening in the sidebar window specifically
             local current_win = ev.buf and vim.fn.win_findbuf(ev.buf)[1]
-            if not current_win or current_win ~= new_win_id then
+            if not current_win or (current_win ~= new_win_id and current_win ~= placeholder_win_id) then
                 return -- Event not related to sidebar window
             end
             
@@ -3812,6 +3887,8 @@ local function open_sidebar(position_override)
     })
     state_module.set_win_id(new_win_id)
     state_module.set_buf_id(buf_id)
+    state_module.set_placeholder_win_id(placeholder_win_id)
+    state_module.set_placeholder_buf_id(placeholder_buf_id)
     state_module.set_sidebar_open(true)
     state_module.set_current_position(position)
 
@@ -4638,9 +4715,8 @@ M.cycle_show_history = M.cycle_show_history_setting
 --- @field user_config.min_width? number Minimum sidebar width (default: 25)
 --- @field user_config.max_width? number Maximum sidebar width (default: 60)
 --- @field user_config.adaptive_width? boolean Enable adaptive width sizing (default: true)
---- @field user_config.min_height? number Minimum bar height for top/bottom (default: 3)
---- @field user_config.max_height? number Maximum bar height for top/bottom (default: 10)
---- @field user_config.adaptive_height? boolean Enable adaptive height sizing (default: true)
+--- @field user_config.min_height? number Legacy top/bottom height setting (default: 3)
+--- @field user_config.max_height? number Legacy top/bottom height setting (default: 10)
 --- @field user_config.show_inactive_group_buffers? boolean Show buffer list for inactive groups (default: false)
 --- @field user_config.show_icons? boolean Show file type emoji icons (default: false)
 --- @field user_config.position? "left"|"right"|"top"|"bottom" Sidebar position (default: "left")

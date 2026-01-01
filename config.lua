@@ -157,9 +157,8 @@ M.DEFAULTS = {
     min_width = M.UI.DEFAULT_MIN_WIDTH,  -- Minimum width (adaptive sizing will use this as base)
     max_width = M.UI.DEFAULT_MAX_WIDTH,  -- Maximum width for adaptive sizing
     adaptive_width = true,  -- Enable adaptive width based on content
-    min_height = 3,  -- Minimum height for top/bottom bar (adaptive sizing uses this as base)
-    max_height = 10,  -- Maximum height for top/bottom bar
-    adaptive_height = true,  -- Enable adaptive height based on content (top/bottom)
+    min_height = 3,  -- Legacy: retained for compatibility (not used for top/bottom)
+    max_height = 10,  -- Legacy: retained for compatibility (not used for top/bottom)
     show_inactive_group_buffers = false,  -- Show buffer list for inactive groups (default: only show active group)
     show_icons = false,  -- Show file type icons (emoji)
     position = "left",  -- Sidebar position: "left", "right", "top", "bottom"
@@ -255,9 +254,6 @@ function M.validate_max_height(max_height)
     return type(max_height) == "number" and max_height > 0 and max_height <= 50
 end
 
-function M.validate_adaptive_height(adaptive_height)
-    return type(adaptive_height) == "boolean"
-end
 
 function M.validate_color(color)
     return type(color) == "string" and color:match("^#%x%x%x%x%x%x$")

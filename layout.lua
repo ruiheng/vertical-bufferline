@@ -15,10 +15,10 @@ end
 
 function M.initial_size(position, state_module, settings)
     local width = state_module.get_last_width() or settings.min_width
-    local height = state_module.get_last_height() or settings.min_height
     if M.is_horizontal(position) then
-        height = clamp(height, settings.min_height, settings.max_height)
+        return width, 1
     end
+    local height = state_module.get_last_height() or settings.min_height
     return width, height
 end
 
@@ -48,6 +48,20 @@ function M.clear_cached_size_on_axis_switch(previous_position, next_position, st
     else
         state_module.set_last_height(nil)
     end
+end
+
+function M.statusline_height(laststatus, normal_window_count)
+    if laststatus == 3 or laststatus == 0 then
+        return 0
+    end
+    if laststatus == 1 then
+        return normal_window_count > 1 and 1 or 0
+    end
+    return 1
+end
+
+function M.placeholder_height(content_height, statusline_height)
+    return math.max(1, content_height - statusline_height)
 end
 
 return M
