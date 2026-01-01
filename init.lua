@@ -185,6 +185,9 @@ local function setup_highlights()
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.BAR, {
         bg = bar_bg
     })
+    api.nvim_set_hl(0, config_module.HIGHLIGHTS.PLACEHOLDER, {
+        bg = config_module.COLORS.RED
+    })
     
     -- Path highlights - should be subtle and low-key
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.PATH, { link = "Comment", italic = true })
@@ -2702,41 +2705,82 @@ local function count_normal_windows()
     return count
 end
 
+local function configure_sidebar_window(win_id, is_horizontal, opts)
+    opts = opts or {}
+    api.nvim_win_set_option(win_id, 'winfixwidth', not config_module.settings.adaptive_width)
+    api.nvim_win_set_option(win_id, 'winfixheight', false)
+    api.nvim_win_set_option(win_id, 'number', false)
+    api.nvim_win_set_option(win_id, 'relativenumber', false)
+    api.nvim_win_set_option(win_id, 'cursorline', false)
+    api.nvim_win_set_option(win_id, 'cursorcolumn', false)
+    api.nvim_win_set_option(win_id, 'statuscolumn', '')
+    api.nvim_win_set_option(win_id, 'statusline', ' ')
+    if opts.placeholder then
+        api.nvim_win_set_option(win_id, 'winhl', 'Normal:' .. config_module.HIGHLIGHTS.PLACEHOLDER)
+    elseif is_horizontal then
+        api.nvim_win_set_option(win_id, 'winhl', 'Normal:' .. config_module.HIGHLIGHTS.BAR)
+    end
+end
+
+local function create_horizontal_overlay(placeholder_win_id, buf_id, placeholder_height, statusline_height)
+    local row, col = unpack(api.nvim_win_get_position(placeholder_win_id))
+    local width = api.nvim_win_get_width(placeholder_win_id)
+    local float_height = placeholder_height + statusline_height
+    local new_win_id = api.nvim_open_win(buf_id, false, {
+        relative = 'editor',
+        width = width,
+        height = float_height,
+        col = col,
+        row = row,
+        style = 'minimal',
+        border = 'none',
+        focusable = false,
+        mouse = true,
+    })
+    configure_sidebar_window(new_win_id, true)
+    return new_win_id
+end
+
 local function apply_horizontal_height(content_height)
     local win_id = state_module.get_win_id()
-    if not win_id or not api.nvim_win_is_valid(win_id) then
+    local placeholder_win_id = state_module.get_placeholder_win_id()
+    local buf_id = state_module.get_buf_id()
+    if not placeholder_win_id or not api.nvim_win_is_valid(placeholder_win_id) then
         return
     end
-
-    local placeholder_win_id = state_module.get_placeholder_win_id()
     local statusline_height = layout.statusline_height(vim.o.laststatus, count_normal_windows())
     local placeholder_height = layout.placeholder_height(content_height, statusline_height)
 
-    if placeholder_win_id and api.nvim_win_is_valid(placeholder_win_id) then
-        pcall(api.nvim_win_set_option, placeholder_win_id, 'winfixheight', false)
-        pcall(api.nvim_win_set_height, placeholder_win_id, placeholder_height)
+    pcall(api.nvim_win_set_option, placeholder_win_id, 'winfixheight', false)
+    pcall(api.nvim_win_set_height, placeholder_win_id, placeholder_height)
+    pcall(api.nvim_win_set_option, placeholder_win_id, 'winhl', 'Normal:' .. config_module.HIGHLIGHTS.PLACEHOLDER)
+    pcall(api.nvim_win_set_option, placeholder_win_id, 'statusline', ' ')
 
-        local row, col = unpack(api.nvim_win_get_position(placeholder_win_id))
-        local width = api.nvim_win_get_width(placeholder_win_id)
-        local float_height = placeholder_height + statusline_height
-
-        api.nvim_win_set_config(win_id, {
-            relative = 'editor',
-            width = width,
-            height = float_height,
-            col = col,
-            row = row,
-            style = 'minimal',
-            border = 'none',
-            focusable = true,
-        })
-    else
-        local desired_height = math.max(1, content_height)
-        local current_height = api.nvim_win_get_height(win_id)
-        if desired_height ~= current_height then
-            api.nvim_win_set_option(win_id, 'winfixheight', false)
-            api.nvim_win_set_height(win_id, desired_height)
+    local valid_float = win_id and api.nvim_win_is_valid(win_id)
+    if valid_float then
+        local win_config = api.nvim_win_get_config(win_id)
+        if win_config and win_config.relative ~= "" then
+            local row, col = unpack(api.nvim_win_get_position(placeholder_win_id))
+            local width = api.nvim_win_get_width(placeholder_win_id)
+            local float_height = placeholder_height + statusline_height
+            api.nvim_win_set_config(win_id, {
+                relative = 'editor',
+                width = width,
+                height = float_height,
+                col = col,
+                row = row,
+                style = 'minimal',
+                border = 'none',
+                focusable = false,
+            })
+            configure_sidebar_window(win_id, true)
+            return
         end
+    end
+
+    if buf_id and api.nvim_buf_is_valid(buf_id) then
+        local new_win_id = create_horizontal_overlay(placeholder_win_id, buf_id, placeholder_height, statusline_height)
+        state_module.set_win_id(new_win_id)
     end
 end
 
@@ -3685,6 +3729,9 @@ local function open_sidebar(position_override)
     if state_module.is_sidebar_open() then return end
     local buf_id = api.nvim_create_buf(false, true)
     api.nvim_buf_set_option(buf_id, 'bufhidden', 'wipe')
+    api.nvim_buf_set_option(buf_id, 'buftype', 'nofile')
+    api.nvim_buf_set_option(buf_id, 'buflisted', false)
+    api.nvim_buf_set_option(buf_id, 'swapfile', false)
     api.nvim_buf_set_option(buf_id, 'filetype', 'vertical-bufferline')
     local current_win = api.nvim_get_current_win()
 
@@ -3722,6 +3769,9 @@ local function open_sidebar(position_override)
         if is_horizontal then
             placeholder_buf_id = api.nvim_create_buf(false, true)
             api.nvim_buf_set_option(placeholder_buf_id, 'bufhidden', 'wipe')
+            api.nvim_buf_set_option(placeholder_buf_id, 'buftype', 'nofile')
+            api.nvim_buf_set_option(placeholder_buf_id, 'buflisted', false)
+            api.nvim_buf_set_option(placeholder_buf_id, 'swapfile', false)
             api.nvim_buf_set_option(placeholder_buf_id, 'filetype', 'vertical-bufferline-placeholder')
             if position == "top" then
                 vim.cmd("topleft split")
@@ -3731,6 +3781,7 @@ local function open_sidebar(position_override)
             placeholder_win_id = api.nvim_get_current_win()
             api.nvim_win_set_buf(placeholder_win_id, placeholder_buf_id)
             api.nvim_win_set_height(placeholder_win_id, height)
+            configure_sidebar_window(placeholder_win_id, true, { placeholder = true })
 
             local row, col = unpack(api.nvim_win_get_position(placeholder_win_id))
             local width = api.nvim_win_get_width(placeholder_win_id)
@@ -3746,10 +3797,10 @@ local function open_sidebar(position_override)
                 row = row,
                 style = 'minimal',
                 border = 'none',
-                focusable = true,
+                focusable = false,
                 mouse = true,
             })
-            api.nvim_win_set_option(new_win_id, 'winhl', 'Normal:' .. config_module.HIGHLIGHTS.BAR)
+            configure_sidebar_window(new_win_id, true)
         else
             if position == "left" then
                 vim.cmd("topleft vsplit")
@@ -3763,14 +3814,7 @@ local function open_sidebar(position_override)
     end
     
     -- Configure window options after creation
-    api.nvim_win_set_option(new_win_id, 'winfixwidth', not config_module.settings.adaptive_width)
-    api.nvim_win_set_option(new_win_id, 'winfixheight', false)
-    api.nvim_win_set_option(new_win_id, 'number', false)
-    api.nvim_win_set_option(new_win_id, 'relativenumber', false)
-    api.nvim_win_set_option(new_win_id, 'cursorline', false)
-    api.nvim_win_set_option(new_win_id, 'cursorcolumn', false)
-    api.nvim_win_set_option(new_win_id, 'statuscolumn', '')  -- Disable statuscolumn to prevent column usage
-    api.nvim_win_set_option(new_win_id, 'statusline', ' ')  -- Hide statusline without affecting global laststatus
+    configure_sidebar_window(new_win_id, is_horizontal)
     
     -- Ensure mouse support is enabled for this window
     if vim.o.mouse == '' then
@@ -3918,6 +3962,9 @@ local function open_sidebar(position_override)
                     -- The original sidebar buffer was wiped, create a new one
                     local new_sidebar_buf = api.nvim_create_buf(false, true)
                     api.nvim_buf_set_option(new_sidebar_buf, 'bufhidden', 'wipe')
+                    api.nvim_buf_set_option(new_sidebar_buf, 'buftype', 'nofile')
+                    api.nvim_buf_set_option(new_sidebar_buf, 'buflisted', false)
+                    api.nvim_buf_set_option(new_sidebar_buf, 'swapfile', false)
                     api.nvim_buf_set_option(new_sidebar_buf, 'filetype', 'vertical-bufferline')
                     api.nvim_win_set_buf(new_win_id, new_sidebar_buf)
                     
@@ -3932,6 +3979,9 @@ local function open_sidebar(position_override)
                     -- No main window available, restore sidebar
                     local new_sidebar_buf = api.nvim_create_buf(false, true)
                     api.nvim_buf_set_option(new_sidebar_buf, 'bufhidden', 'wipe')
+                    api.nvim_buf_set_option(new_sidebar_buf, 'buftype', 'nofile')
+                    api.nvim_buf_set_option(new_sidebar_buf, 'buflisted', false)
+                    api.nvim_buf_set_option(new_sidebar_buf, 'swapfile', false)
                     api.nvim_buf_set_option(new_sidebar_buf, 'filetype', 'vertical-bufferline')
                     api.nvim_win_set_buf(new_win_id, new_sidebar_buf)
                     state_module.set_buf_id(new_sidebar_buf)
@@ -4824,12 +4874,20 @@ end
 
 switch_to_buffer_in_main_window = function(buffer_id, error_prefix)
     local main_win_id = nil
+    local placeholder_win_id = state_module.get_placeholder_win_id()
     for _, win_id in ipairs(api.nvim_list_wins()) do
-        if win_id ~= state_module.get_win_id() and api.nvim_win_is_valid(win_id) then
+        if win_id ~= state_module.get_win_id()
+            and win_id ~= placeholder_win_id
+            and api.nvim_win_is_valid(win_id) then
             local win_config = api.nvim_win_get_config(win_id)
             if win_config.relative == "" then
-                main_win_id = win_id
-                break
+                local win_buf = api.nvim_win_get_buf(win_id)
+                local buf_type = api.nvim_buf_get_option(win_buf, 'buftype')
+                local filetype = api.nvim_buf_get_option(win_buf, 'filetype')
+                if buf_type == '' and filetype ~= 'vertical-bufferline-placeholder' then
+                    main_win_id = win_id
+                    break
+                end
             end
         end
     end

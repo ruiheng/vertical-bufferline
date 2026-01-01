@@ -82,6 +82,7 @@ M.HIGHLIGHTS = {
     ERROR = "VBufferLineError",
     WARNING = "VBufferLineWarning",
     BAR = "VBufferLineBar",
+    PLACEHOLDER = "VBufferLinePlaceholder",
 
     -- Group highlights
     GROUP_ACTIVE = "VBufferLineGroupActive",
