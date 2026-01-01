@@ -1366,6 +1366,35 @@ local function open_menu(lines, title)
     api.nvim_set_current_win(win_id)
 end
 
+local function can_open_popup_menu()
+    local current_win = api.nvim_get_current_win()
+    local sidebar_win = state_module.get_win_id()
+    if sidebar_win and current_win == sidebar_win then
+        return false
+    end
+
+    local win_config = api.nvim_win_get_config(current_win)
+    if win_config.relative ~= "" then
+        return false
+    end
+
+    local buf_id = api.nvim_win_get_buf(current_win)
+    if not api.nvim_buf_is_valid(buf_id) then
+        return false
+    end
+
+    if utils.is_special_buffer(buf_id) then
+        return false
+    end
+
+    local buftype = api.nvim_buf_get_option(buf_id, 'buftype')
+    if buftype ~= "" then
+        return false
+    end
+
+    return groups.find_buffer_group(buf_id) ~= nil
+end
+
 local function build_menu_lines(items, include_hint)
     local lines = {}
     local max_digits = #tostring(#items)
@@ -3218,6 +3247,10 @@ function M.menu_select_current_line()
 end
 
 function M.open_buffer_menu()
+    if not can_open_popup_menu() then
+        return
+    end
+
     local active_group = groups.get_active_group()
     if not active_group then
         return
@@ -3284,6 +3317,10 @@ function M.open_buffer_menu()
 end
 
 function M.open_group_menu()
+    if not can_open_popup_menu() then
+        return
+    end
+
     local all_groups = groups.get_all_groups()
     if #all_groups == 0 then
         return
@@ -3317,6 +3354,10 @@ function M.open_group_menu()
 end
 
 function M.open_history_menu()
+    if not can_open_popup_menu() then
+        return
+    end
+
     local active_group = groups.get_active_group()
     if not active_group then
         return
