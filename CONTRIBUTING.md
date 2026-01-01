@@ -139,6 +139,12 @@ Run the bufferline integration check (requires `vendor/bufferline.nvim`):
 nvim --headless -u NONE -i NONE -n "+lua dofile('scripts/bufferline_integration_check.lua')"
 ```
 
+Run the edit-mode folding check:
+
+```bash
+nvim --headless -u NONE -i NONE -n "+lua dofile('scripts/edit_mode_fold_check.lua')"
+```
+
 ## Submitting Changes
 
 ### Pull Request Process

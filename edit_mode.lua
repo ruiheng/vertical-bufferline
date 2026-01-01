@@ -148,6 +148,19 @@ local function build_edit_lines()
     return lines, initial_cursor_line
 end
 
+function M.foldexpr(lnum)
+    local line = vim.fn.getline(lnum)
+    if line:match("^%[Group%]") then
+        return ">" .. lnum
+    end
+
+    if lnum == 1 then
+        return 0
+    end
+
+    return "="
+end
+
 local function strip_comment(line)
     if line:match("^%s*#") then
         return "", true
@@ -569,6 +582,11 @@ function M.open()
         zindex = 50,
     })
     api.nvim_win_set_option(edit_state.win_id, "wrap", false)
+    api.nvim_win_set_option(edit_state.win_id, "foldmethod", "expr")
+    api.nvim_win_set_option(edit_state.win_id, "foldexpr",
+        "v:lua.require('vertical-bufferline.edit_mode').foldexpr(v:lnum)")
+    api.nvim_win_set_option(edit_state.win_id, "foldlevel", 99)
+    api.nvim_win_set_option(edit_state.win_id, "foldenable", true)
 
     -- Move cursor to first buffer line
     api.nvim_win_set_cursor(edit_state.win_id, {initial_cursor_line, 0})
