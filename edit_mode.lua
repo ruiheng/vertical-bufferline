@@ -549,6 +549,7 @@ function M.open()
 
     local lines, initial_cursor_line = build_edit_lines()
     api.nvim_buf_set_lines(buf_id, 0, -1, false, lines)
+    api.nvim_buf_set_option(buf_id, "modified", false)
 
     local width = math.max(60, vim.o.columns - 4)
     local height = math.max(15, vim.o.lines - 4)
