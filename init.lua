@@ -109,7 +109,63 @@ local function setup_highlights()
     local warning_attrs = vim.api.nvim_get_hl(0, {name = 'WarningMsg'})
     local special_attrs = vim.api.nvim_get_hl(0, {name = 'Special'})
     local cursorline_attrs = vim.api.nvim_get_hl(0, {name = 'CursorLine'})
+    local statusline_attrs = vim.api.nvim_get_hl(0, {name = 'StatusLine'})
+    local normal_attrs = vim.api.nvim_get_hl(0, {name = 'Normal'})
     local current_bg = pmenusel_attrs.bg or cursorline_attrs.bg
+
+    local function normalize_hex(color)
+        if type(color) ~= "string" then
+            return nil
+        end
+        local hex = color:match("^#?%x%x%x%x%x%x$")
+        if not hex then
+            return nil
+        end
+        if hex:sub(1, 1) ~= "#" then
+            hex = "#" .. hex
+        end
+        return hex:lower()
+    end
+
+    local function tweak_hex(color, delta)
+        local hex = normalize_hex(color)
+        if not hex then
+            return nil
+        end
+        local r = tonumber(hex:sub(2, 3), 16)
+        local g = tonumber(hex:sub(4, 5), 16)
+        local b = tonumber(hex:sub(6, 7), 16)
+        local function clamp(value)
+            return math.max(0, math.min(255, value))
+        end
+        r = clamp(r + delta)
+        g = clamp(g + delta)
+        b = clamp(b + delta)
+        return string.format("#%02x%02x%02x", r, g, b)
+    end
+
+    local normalized_current_bg = normalize_hex(current_bg)
+    local bar_bg = nil
+    local candidates = {
+        pmenu_attrs.bg,
+        statusline_attrs.bg,
+        cursorline_attrs.bg,
+        normal_attrs.bg,
+    }
+    for _, bg in ipairs(candidates) do
+        local normalized = normalize_hex(bg)
+        if normalized and normalized ~= normalized_current_bg then
+            bar_bg = normalized
+            break
+        end
+    end
+    if not bar_bg then
+        if normalized_current_bg then
+            bar_bg = tweak_hex(normalized_current_bg, -20)
+        else
+            bar_bg = config_module.COLORS.DARK_GRAY
+        end
+    end
 
     -- Buffer state highlights using semantic nvim highlight groups for theme compatibility
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.CURRENT, { bg = current_bg })
@@ -125,6 +181,9 @@ local function setup_highlights()
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.PIN_CURRENT, {
         fg = special_attrs.fg or config_module.COLORS.CYAN,
         bg = current_bg
+    })
+    api.nvim_set_hl(0, config_module.HIGHLIGHTS.BAR, {
+        bg = bar_bg
     })
     
     -- Path highlights - should be subtle and low-key
@@ -1808,7 +1867,7 @@ local function create_buffer_line(component, j, total_components, current_buffer
 end
 
 -- Apply all highlighting for a single buffer line (unified highlighting function)
-local function apply_buffer_highlighting(line_info, component, actual_line_number, current_buffer_id, is_picking, is_in_active_group)
+local function apply_buffer_highlighting(line_info, component, actual_line_number, current_buffer_id, is_picking, is_in_active_group, position)
     if not line_info or not component then return end
 
     -- Use component-based renderer system - this is the modern approach
@@ -3087,7 +3146,7 @@ function M.refresh(reason, position_override)
                 end
                 
                 -- Apply highlighting with group context
-                apply_buffer_highlighting(line_info, component, line_num, group_current_buffer_id, is_picking, is_in_active_group)
+                apply_buffer_highlighting(line_info, component, line_num, group_current_buffer_id, is_picking, is_in_active_group, position)
             elseif line_type == "history" then
                 -- This is a history line - apply proper highlighting using the component system
                 local component = line_components[line_num]
@@ -3096,7 +3155,7 @@ function M.refresh(reason, position_override)
                     local buffer_id = new_line_map[line_num]
                     local is_current_buffer = (buffer_id == current_buffer_id)
                     -- Apply highlighting with proper group context (history group is considered active)
-                    apply_buffer_highlighting(line_info, component, line_num, current_buffer_id, is_picking, true)
+                    apply_buffer_highlighting(line_info, component, line_num, current_buffer_id, is_picking, true, position)
                 end
             elseif line_type == "history_header" then
                 -- This is a history header line - apply header highlighting
@@ -3690,6 +3749,7 @@ local function open_sidebar(position_override)
                 focusable = true,
                 mouse = true,
             })
+            api.nvim_win_set_option(new_win_id, 'winhl', 'Normal:' .. config_module.HIGHLIGHTS.BAR)
         else
             if position == "left" then
                 vim.cmd("topleft vsplit")
