@@ -210,7 +210,7 @@ local function find_primary_window()
     return nil
 end
 
-function M.activate_window_context(winid)
+function M.activate_window_context(winid, opts)
     if not is_window_scope_enabled() then
         groups_data = global_groups_data
         return groups_data
@@ -225,10 +225,11 @@ function M.activate_window_context(winid)
         return groups_data
     end
 
+    opts = opts or {}
     local context = ensure_window_context(target_win, {
         inherit = config_module.settings.inherit_on_new_window,
         source_data = groups_data,
-        seed_buffer_id = api.nvim_win_get_buf(target_win),
+        seed_buffer_id = opts.seed_buffer_id,
     })
 
     groups_data = context
@@ -249,9 +250,7 @@ function M.get_vbl_groups_by_window(winid)
         return groups_data
     end
 
-    return ensure_window_context(target_win, {
-        seed_buffer_id = api.nvim_win_get_buf(target_win),
-    })
+    return ensure_window_context(target_win, {})
 end
 
 -- Find group
@@ -1189,7 +1188,9 @@ function M.setup(opts)
         pattern = "*",
         callback = function(args)
             if is_window_scope_enabled() then
-                M.activate_window_context(api.nvim_get_current_win())
+                local buf_id = tonumber(args.buf)
+                local target_win = buf_id and vim.fn.win_findbuf(buf_id)[1] or nil
+                M.activate_window_context(target_win or api.nvim_get_current_win())
             end
 
             -- Only auto-add if bufferline is not available
@@ -1232,7 +1233,9 @@ function M.setup(opts)
         pattern = "*",
         callback = function(args)
             if is_window_scope_enabled() then
-                M.activate_window_context(api.nvim_get_current_win())
+                local buf_id = tonumber(args.buf)
+                local target_win = buf_id and vim.fn.win_findbuf(buf_id)[1] or nil
+                M.activate_window_context(target_win or api.nvim_get_current_win())
             end
 
             local bufferline_integration = require('vertical-bufferline.bufferline-integration')

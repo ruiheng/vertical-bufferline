@@ -133,7 +133,7 @@ Default configuration:
       -- Group management
       auto_create_groups = true,          -- Enable automatic group creation
       auto_add_new_buffers = true,        -- Auto-add new buffers to active group
-      group_scope = "global",             -- "global" or "window" (window-scope disabled with bufferline)
+      group_scope = "window",             -- "global" or "window" (window-scope disabled with bufferline)
       inherit_on_new_window = false,      -- Copy groups from previous window when creating a new window context
 
       -- Path display settings
@@ -239,7 +239,7 @@ auto_add_new_buffers    Automatically add new buffers to the active group.
                                   *vertical-bufferline-config-group-scope*
 group_scope             Scope for group data: "global" or "window". Window
                         scope is disabled when bufferline is active.
-                        Default: "global"
+                        Default: "window"
 
                             *vertical-bufferline-config-inherit-on-new-window*
 inherit_on_new_window   When using window scope, inherit groups from the

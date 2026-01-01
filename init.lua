@@ -4415,33 +4415,60 @@ populate_startup_buffers = function()
                 return
             end
 
-            local visible_buffers = {}
-            for _, win_id in ipairs(vim.api.nvim_list_wins()) do
-                if vim.api.nvim_win_is_valid(win_id) then
-                    local win_buf = vim.api.nvim_win_get_buf(win_id)
-                    visible_buffers[win_buf] = true
-                end
-            end
-            local active_group = groups.get_active_group()
-            if active_group then
-                local added_count = 0
-                for buf, _ in pairs(visible_buffers) do
-                    if vim.api.nvim_buf_is_valid(buf) then
-                        local buf_type = vim.api.nvim_buf_get_option(buf, 'buftype')
-                        -- Only add visible buffers not already in groups
-                        if not utils.is_special_buffer(buf) and
-                           buf_type == config_module.SYSTEM.EMPTY_BUFTYPE and
-                           not vim.tbl_contains(active_group.buffers, buf) and
-                           not groups.find_buffer_group(buf) then
-                            groups.add_buffer_to_group(buf, active_group.id)
-                            added_count = added_count + 1
+            local added_count = 0
+
+            if groups.is_window_scope_enabled() then
+                for _, win_id in ipairs(vim.api.nvim_list_wins()) do
+                    if vim.api.nvim_win_is_valid(win_id) and win_id ~= state_module.get_win_id() then
+                        local win_config = vim.api.nvim_win_get_config(win_id)
+                        if win_config.relative == "" then
+                            groups.activate_window_context(win_id)
+                            local active_group = groups.get_active_group()
+                            if active_group then
+                                local buf = vim.api.nvim_win_get_buf(win_id)
+                                if vim.api.nvim_buf_is_valid(buf) then
+                                    local buf_type = vim.api.nvim_buf_get_option(buf, 'buftype')
+                                    if not utils.is_special_buffer(buf) and
+                                       buf_type == config_module.SYSTEM.EMPTY_BUFTYPE and
+                                       not vim.tbl_contains(active_group.buffers, buf) and
+                                       not groups.find_buffer_group(buf) then
+                                        groups.add_buffer_to_group(buf, active_group.id)
+                                        added_count = added_count + 1
+                                    end
+                                end
+                            end
                         end
                     end
                 end
-                if added_count > 0 then
-                    -- Refresh interface
-                    M.refresh("auto_add_buffers")
+            else
+                local visible_buffers = {}
+                for _, win_id in ipairs(vim.api.nvim_list_wins()) do
+                    if vim.api.nvim_win_is_valid(win_id) then
+                        local win_buf = vim.api.nvim_win_get_buf(win_id)
+                        visible_buffers[win_buf] = true
+                    end
                 end
+                local active_group = groups.get_active_group()
+                if active_group then
+                    for buf, _ in pairs(visible_buffers) do
+                        if vim.api.nvim_buf_is_valid(buf) then
+                            local buf_type = vim.api.nvim_buf_get_option(buf, 'buftype')
+                            -- Only add visible buffers not already in groups
+                            if not utils.is_special_buffer(buf) and
+                               buf_type == config_module.SYSTEM.EMPTY_BUFTYPE and
+                               not vim.tbl_contains(active_group.buffers, buf) and
+                               not groups.find_buffer_group(buf) then
+                                groups.add_buffer_to_group(buf, active_group.id)
+                                added_count = added_count + 1
+                            end
+                        end
+                    end
+                end
+            end
+
+            if added_count > 0 then
+                -- Refresh interface
+                M.refresh("auto_add_buffers")
             end
         end, delay)
     end

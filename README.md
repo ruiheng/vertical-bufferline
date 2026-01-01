@@ -418,7 +418,7 @@ The algorithm automatically determines the minimal path suffix needed to uniquel
     -- Group management  
     auto_create_groups = true,      -- Enable automatic group creation
     auto_add_new_buffers = true,    -- Auto-add new buffers to active group
-    group_scope = "global",         -- "global" or "window" (window-scope disabled when bufferline is active)
+    group_scope = "window",         -- "global" or "window" (window-scope disabled when bufferline is active)
     inherit_on_new_window = false,  -- Copy groups from previous window when creating a new window context
     
     -- Path display settings
