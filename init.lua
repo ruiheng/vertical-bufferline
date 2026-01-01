@@ -2640,11 +2640,10 @@ local function apply_adaptive_height(content_height)
         return
     end
 
-    local min_height = config_module.settings.min_height
     local max_height = config_module.settings.max_height
 
     local desired_height = content_height
-    local new_height = math.max(min_height, math.min(desired_height, max_height))
+    local new_height = math.max(1, math.min(desired_height, max_height))
 
     local current_height = api.nvim_win_get_height(win_id)
     if new_height ~= current_height then
@@ -2661,6 +2660,9 @@ local function finalize_buffer_display(lines_text, new_line_map, line_group_cont
     -- Calculate vertical offset to align with cursor
     local content_length = #lines_text
     local offset = calculate_cursor_based_offset(content_length)
+    if is_horizontal_position(position) then
+        offset = 0
+    end
 
     -- Add empty lines at the beginning if offset is needed
     local final_lines = {}

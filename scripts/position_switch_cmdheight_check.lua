@@ -54,9 +54,11 @@ local function assert_vertical_sizes(sidebar_win, main_win, min_width, max_width
     assert_ok(main_width <= vim.o.columns, "main window width exceeds columns")
 end
 
-local function assert_horizontal_sizes(sidebar_win, main_win, min_height, max_height)
+local function assert_horizontal_sizes(sidebar_win, main_win, min_height, max_height, enforce_min_height)
     local sidebar_height = vim.api.nvim_win_get_height(sidebar_win)
-    assert_ok(sidebar_height >= min_height, "sidebar height below min_height")
+    if enforce_min_height then
+        assert_ok(sidebar_height >= min_height, "sidebar height below min_height")
+    end
     assert_ok(sidebar_height <= max_height, "sidebar height above max_height")
 
     local main_height = vim.api.nvim_win_get_height(main_win)
@@ -65,6 +67,24 @@ local function assert_horizontal_sizes(sidebar_win, main_win, min_height, max_he
 
     local total_height = sidebar_height + main_height
     assert_ok(total_height <= vim.o.lines, "window heights exceed total lines")
+end
+
+local function assert_no_blank_lines(sidebar_win)
+    local buf = vim.api.nvim_win_get_buf(sidebar_win)
+    local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+    for i, line in ipairs(lines) do
+        assert_ok(line ~= "", "blank line found in sidebar at index " .. i)
+    end
+end
+
+local function assert_horizontal_no_extra_space(sidebar_win, enforce_height)
+    if not enforce_height then
+        return
+    end
+    local buf = vim.api.nvim_win_get_buf(sidebar_win)
+    local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+    local sidebar_height = vim.api.nvim_win_get_height(sidebar_win)
+    assert_ok(sidebar_height == #lines, "sidebar height exceeds content height")
 end
 
 add_rtp_root()
@@ -126,7 +146,9 @@ local function run_test(adaptive_height)
     local top_main_win = find_main_window(top_sidebar_win)
     assert_ok(top_main_win, "main window not found for top position")
 
-    assert_horizontal_sizes(top_sidebar_win, top_main_win, config.settings.min_height, config.settings.max_height)
+    assert_horizontal_sizes(top_sidebar_win, top_main_win, config.settings.min_height, config.settings.max_height, not adaptive_height)
+    assert_no_blank_lines(top_sidebar_win)
+    assert_horizontal_no_extra_space(top_sidebar_win, adaptive_height)
     assert_ok(vim.o.cmdheight == baseline_cmdheight, "cmdheight changed after position switch")
 
     vbl.close_sidebar(config.settings.position)
