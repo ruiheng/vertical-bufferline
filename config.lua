@@ -170,7 +170,8 @@ M.DEFAULTS = {
     -- History settings
     show_history = "auto",  -- "yes", "no", "auto" - show recent files history as unified group
     history_size = 10,      -- Maximum number of recent files to track per group
-    history_auto_threshold = 2,  -- Minimum files needed for auto mode to show history
+    history_auto_threshold = 6,  -- Minimum files needed for auto mode to show history
+    history_auto_threshold_horizontal = 10,  -- Minimum files needed for auto mode (top/bottom)
     history_display_count = 7,  -- Maximum number of history items to display
     
     -- Path display settings

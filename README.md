@@ -248,9 +248,9 @@ Each group maintains its own history of recently accessed files. The current act
 - **Current Group History**: Shows recent files from the currently active group at the top
 - **Current file first**: The current file is shown first without a number (marked with ►)
 - **Numbered history**: Following files are numbered 1, 2, 3... representing access order
-- **Auto mode**: History is shown when active group has 3+ files and history isn't empty
+- **Auto mode**: History is shown when active group has enough recent files (left/right: 6+, top/bottom: 10+)
 - **Manual toggle**: Use `h` key in sidebar to cycle through yes/no/auto modes
-- **Configurable display count**: Maximum number of history items shown (default: 5)
+- **Configurable display count**: Maximum number of history items shown (default: 7)
 
 ### History Quick Access
 Map `require('vertical-bufferline').switch_to_history_file(n)` to your preferred keys. Example mapping to positions 1-9:
@@ -432,7 +432,8 @@ The algorithm automatically determines the minimal path suffix needed to uniquel
     -- History settings
     show_history = "auto",          -- "yes", "no", "auto" - show recent files history per group
     history_size = 10,              -- Maximum number of recent files to track per group
-    history_auto_threshold = 2,     -- Minimum files needed for auto mode to show history
+    history_auto_threshold = 6,     -- Minimum files needed for auto mode to show history
+    history_auto_threshold_horizontal = 10, -- Minimum files for auto mode (top/bottom)
     history_display_count = 7,      -- Maximum number of history items to display
     
     -- Session persistence settings

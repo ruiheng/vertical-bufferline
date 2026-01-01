@@ -1522,7 +1522,13 @@ function M.should_show_history(group_id)
         return true
     else -- "auto"
         local history = M.get_group_history(group_id)
-        return #history >= config_module.settings.history_auto_threshold
+        local position = config_module.settings.position
+        local is_horizontal = position == "top" or position == "bottom"
+        local threshold = config_module.settings.history_auto_threshold
+        if is_horizontal then
+            threshold = config_module.settings.history_auto_threshold_horizontal or threshold
+        end
+        return #history >= threshold
     end
 end
 

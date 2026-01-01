@@ -146,7 +146,8 @@ Default configuration:
       -- History settings
       show_history = "auto",              -- "yes", "no", "auto"
       history_size = 10,                  -- Maximum files to track per group
-      history_auto_threshold = 2,         -- Min files for auto mode to show history
+      history_auto_threshold = 6,         -- Min files for auto mode to show history
+      history_auto_threshold_horizontal = 10, -- Min files for auto mode (top/bottom)
       history_display_count = 7,          -- Max history items to display
 
       -- Session persistence settings
@@ -267,7 +268,13 @@ history_size            Maximum number of recent files to track per group.
                         *vertical-bufferline-config-history-auto-threshold*
 history_auto_threshold  Minimum number of files in a group for auto mode to
                         display history.
-                        Default: 2
+                        Default: 6
+
+              *vertical-bufferline-config-history-auto-threshold-horizontal*
+history_auto_threshold_horizontal
+                        Minimum number of files in a group for auto mode when
+                        the sidebar is positioned at top/bottom.
+                        Default: 10
 
                           *vertical-bufferline-config-history-display-count*
 history_display_count   Maximum number of history items to display in sidebar.
@@ -507,7 +514,7 @@ Each group maintains a history of recently accessed files, providing quick
 access to your most recent work within that group.
 
 History Display:
-- *Auto mode*: History shown when group has 3+ files and history isn't empty
+- *Auto mode*: History shown when group has enough files (left/right: 6+, top/bottom: 10+)
 - *Manual toggle*: Use `h` key in sidebar to cycle yes/no/auto modes
 - *Visual feedback*: History entries appear below regular buffers
 
