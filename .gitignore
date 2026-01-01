@@ -25,3 +25,6 @@ test_*.lua
 .DS_Store
 Thumbs.db
 .nvimlog
+
+# Vendor dependencies
+vendor/

@@ -133,6 +133,12 @@ Run the window-scope session save/restore check:
 nvim --headless -u NONE -i NONE -n "+lua dofile('scripts/window_scope_session_check.lua')"
 ```
 
+Run the bufferline integration check (requires `vendor/bufferline.nvim`):
+
+```bash
+nvim --headless -u NONE -i NONE -n "+lua dofile('scripts/bufferline_integration_check.lua')"
+```
+
 ## Submitting Changes
 
 ### Pull Request Process
