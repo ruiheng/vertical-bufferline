@@ -42,6 +42,7 @@ local bufferline_integration = require('vertical-bufferline.bufferline-integrati
 local session = require('vertical-bufferline.session')
 local filename_utils = require('vertical-bufferline.filename_utils')
 local logger = require('vertical-bufferline.logger')
+local layout = require('vertical-bufferline.layout')
 
 if not package.preload["telescope._extensions.vertical_bufferline"] then
     package.preload["telescope._extensions.vertical_bufferline"] = function()
@@ -64,9 +65,8 @@ local extended_picking_state = {
     saved_offset = 0  -- Save scroll offset before entering pick mode
 }
 
-local function is_horizontal_position()
-    local position = config_module.settings.position
-    return position == "top" or position == "bottom"
+local function is_horizontal_position(position)
+    return layout.is_horizontal(position or config_module.settings.position)
 end
 
 local menu_state = {
@@ -2655,7 +2655,7 @@ local function apply_adaptive_height(content_height)
 end
 
 -- Finalize buffer display with lines and mapping
-local function finalize_buffer_display(lines_text, new_line_map, line_group_context, group_header_lines, line_infos, line_types, line_components, line_buffer_ranges)
+local function finalize_buffer_display(lines_text, new_line_map, line_group_context, group_header_lines, line_infos, line_types, line_components, line_buffer_ranges, position)
     api.nvim_buf_set_option(state_module.get_buf_id(), "modifiable", true)
 
     -- Calculate vertical offset to align with cursor
@@ -2751,7 +2751,7 @@ local function finalize_buffer_display(lines_text, new_line_map, line_group_cont
     api.nvim_buf_set_lines(state_module.get_buf_id(), 0, -1, false, final_lines)
 
     -- Calculate and apply adaptive size based on layout
-    if is_horizontal_position() then
+    if is_horizontal_position(position) then
         apply_adaptive_height(#final_lines)
     elseif config_module.settings.adaptive_width then
         local content_width = calculate_content_width(lines_text)
@@ -2793,7 +2793,7 @@ end
 --- Updates all buffer states, group information, and highlights
 --- @param reason? string Optional reason for the refresh (for debugging)
 --- @return nil
-function M.refresh(reason)
+function M.refresh(reason, position_override)
     -- Auto-enable logging for refresh debugging (disabled for normal use)
     -- if not logger.is_enabled() and not _G._vbl_auto_logging_enabled then
     --     logger.enable(vim.fn.expand("~/vbl-refresh-debug.log"), "INFO")
@@ -2819,7 +2819,8 @@ function M.refresh(reason)
         return 
     end
 
-    state_module.set_layout_mode(is_horizontal_position() and "horizontal" or "vertical")
+    local position = position_override or config_module.settings.position
+    state_module.set_layout_mode(is_horizontal_position(position) and "horizontal" or "vertical")
 
     local components = refresh_data.components
     local current_buffer_id = refresh_data.current_buffer_id
@@ -2953,7 +2954,7 @@ function M.refresh(reason)
     end
 
     -- Finalize buffer display (set lines but keep modifiable) - this clears highlights
-    line_infos, new_line_map, line_types, line_components, group_header_lines, line_buffer_ranges = finalize_buffer_display(lines_text, new_line_map, line_group_context, group_header_lines, line_infos, line_types, line_components, line_buffer_ranges)
+    line_infos, new_line_map, line_types, line_components, group_header_lines, line_buffer_ranges = finalize_buffer_display(lines_text, new_line_map, line_group_context, group_header_lines, line_infos, line_types, line_components, line_buffer_ranges, position)
     
     -- Clear old highlights and apply all highlights AFTER buffer content is set
     api.nvim_buf_clear_namespace(state_module.get_buf_id(), ns_id, 0, -1)
@@ -3501,24 +3502,18 @@ end
 
 
 --- Closes the sidebar window.
-function M.close_sidebar()
+function M.close_sidebar(position_override)
     if not state_module.is_sidebar_open() or not api.nvim_win_is_valid(state_module.get_win_id()) then return end
 
     local current_win = api.nvim_get_current_win()
     local all_windows = api.nvim_list_wins()
     local sidebar_win_id = state_module.get_win_id()
-    local position = config_module.settings.position
-    local is_horizontal = position == "top" or position == "bottom"
+    local position = position_override or config_module.settings.position
+    local is_horizontal = is_horizontal_position(position)
     local use_floating = config_module.settings.floating and not is_horizontal
 
-    -- Save the current width before closing
-    if is_horizontal then
-        local current_height = api.nvim_win_get_height(sidebar_win_id)
-        state_module.set_last_height(current_height)
-    else
-        local current_width = api.nvim_win_get_width(sidebar_win_id)
-        state_module.set_last_width(current_width)
-    end
+    -- Save the current size before closing
+    layout.save_size(sidebar_win_id, position, state_module)
 
     -- Check if only one window remains (sidebar is the last window)
     if #all_windows == 1 then
@@ -3585,25 +3580,19 @@ local function setup_sidebar_keymaps(buf_id)
 end
 
 --- Opens the sidebar window.
-local function open_sidebar()
+local function open_sidebar(position_override)
     if state_module.is_sidebar_open() then return end
     local buf_id = api.nvim_create_buf(false, true)
     api.nvim_buf_set_option(buf_id, 'bufhidden', 'wipe')
     api.nvim_buf_set_option(buf_id, 'filetype', 'vertical-bufferline')
     local current_win = api.nvim_get_current_win()
 
-    local position = config_module.settings.position
-    local is_horizontal = position == "top" or position == "bottom"
+    local position = position_override or config_module.settings.position
+    local is_horizontal = is_horizontal_position(position)
     local use_floating = config_module.settings.floating and not is_horizontal
 
     -- Use saved size if available, otherwise use defaults
-    local width = state_module.get_last_width() or config_module.settings.min_width
-    local height = state_module.get_last_height() or config_module.settings.min_height
-    if is_horizontal then
-        local min_h = config_module.settings.min_height
-        local max_h = config_module.settings.max_height
-        height = math.max(min_h, math.min(height, max_h))
-    end
+    local width, height = layout.initial_size(position, state_module, config_module.settings)
 
     local new_win_id
 
@@ -4383,7 +4372,7 @@ local function initialize_plugin()
             if vim.v.this_session and vim.v.this_session ~= "" then
                 return
             end
-            open_sidebar()
+            open_sidebar(config_module.settings.position)
             if not (config_module.settings.auto_load and session.has_session()) then
                 populate_startup_buffers()
             end
@@ -4563,7 +4552,7 @@ function M.toggle()
     if state_module.is_sidebar_open() then
         M.close_sidebar()
     else
-        open_sidebar()
+        open_sidebar(config_module.settings.position)
         populate_startup_buffers()
 
         -- Ensure initial state displays correctly

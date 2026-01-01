@@ -1244,16 +1244,26 @@ function M.setup()
             return
         end
 
+        local state = require('vertical-bufferline.state')
+        local was_open = state.is_sidebar_open()
+        local previous_position = config.settings.position
+
+        if was_open then
+            local vbl = require('vertical-bufferline')
+            vbl.close_sidebar(previous_position)
+        end
+
+        if previous_position ~= position then
+            local layout = require('vertical-bufferline.layout')
+            layout.clear_cached_size_on_axis_switch(previous_position, position, state)
+        end
+
         config.settings.position = position
         vim.notify(string.format("VBL position set to %s", position), vim.log.levels.INFO)
 
-        local state = require('vertical-bufferline.state')
-        if state.is_sidebar_open() then
+        if was_open then
             local vbl = require('vertical-bufferline')
-            vbl.close_sidebar()
-            vim.schedule(function()
-                vbl.toggle()
-            end)
+            vbl.toggle()
         end
     end, {
         nargs = 1,
