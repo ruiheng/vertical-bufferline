@@ -38,9 +38,13 @@ local win1 = vim.api.nvim_get_current_win()
 groups.activate_window_context(win1)
 local buf1 = vim.api.nvim_get_current_buf()
 
-vim.cmd("vsplit " .. vim.fn.fnameescape(file2))
+vim.cmd("vsplit")
 local win2 = vim.api.nvim_get_current_win()
 groups.activate_window_context(win2)
+local buf1_in_win2 = vim.api.nvim_get_current_buf()
+assert_ok(buf1_in_win2 == buf1, "expected split window to show buf1")
+
+vim.cmd("edit " .. vim.fn.fnameescape(file2))
 local buf2 = vim.api.nvim_get_current_buf()
 
 local data1 = groups.get_vbl_groups_by_window(win1)
@@ -72,8 +76,8 @@ assert_ok(default1 and default2, "missing default group in one or more contexts"
 
 assert_ok(contains(default1.buffers, buf1), "win1 default group missing buf1")
 assert_ok(not contains(default1.buffers, buf2), "win1 default group unexpectedly has buf2")
+assert_ok(contains(default2.buffers, buf1), "win2 default group missing buf1")
 assert_ok(contains(default2.buffers, buf2), "win2 default group missing buf2")
-assert_ok(not contains(default2.buffers, buf1), "win2 default group unexpectedly has buf1")
 
 vbl.toggle()
 local state = require('vertical-bufferline.state')
@@ -93,7 +97,7 @@ vim.api.nvim_set_current_win(win2)
 vbl.refresh("window_scope_check_win2")
 local active_after_win2 = groups.get_active_group()
 assert_ok(active_after_win2 and contains(active_after_win2.buffers, buf2), "win2 active group missing buf2 after refresh")
-assert_ok(not contains(active_after_win2.buffers, buf1), "win2 active group unexpectedly has buf1 after refresh")
+assert_ok(contains(active_after_win2.buffers, buf1), "win2 active group missing buf1 after refresh")
 
 print("OK: window-scoped groups are isolated and sidebar refresh stays in main window context")
 vim.cmd("qa")

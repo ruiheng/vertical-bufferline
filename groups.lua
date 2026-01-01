@@ -158,7 +158,9 @@ end
 
 local function ensure_window_context(winid, opts)
     local context_id = get_context_id_for_window(winid)
+    local created = false
     if not group_contexts[context_id] then
+        created = true
         local data
         local can_inherit = opts and opts.inherit and opts.source_data and #opts.source_data.groups > 0
         if can_inherit then
@@ -167,14 +169,14 @@ local function ensure_window_context(winid, opts)
             data = new_groups_data()
             with_groups_data(data, function()
                 init_default_group()
-                if opts and opts.seed_buffer_id then
+                if opts and opts.seed_on_create and opts.seed_buffer_id then
                     seed_default_group_buffer(opts.seed_buffer_id)
                 end
             end)
         end
         group_contexts[context_id] = data
     end
-    return group_contexts[context_id]
+    return group_contexts[context_id], created
 end
 
 local function is_eligible_window(winid)
@@ -230,6 +232,7 @@ function M.activate_window_context(winid, opts)
         inherit = config_module.settings.inherit_on_new_window,
         source_data = groups_data,
         seed_buffer_id = opts.seed_buffer_id,
+        seed_on_create = opts.seed_on_create,
     })
 
     groups_data = context
@@ -1299,7 +1302,14 @@ function M.setup(opts)
         vim.api.nvim_create_autocmd("WinEnter", {
             pattern = "*",
             callback = function(args)
-                M.activate_window_context(args.win)
+                local win_id = args.win or api.nvim_get_current_win()
+                if type(win_id) ~= "number" then
+                    return
+                end
+                M.activate_window_context(win_id, {
+                    seed_on_create = true,
+                    seed_buffer_id = api.nvim_win_get_buf(win_id),
+                })
             end,
             desc = "Activate VBL group context for window",
         })
