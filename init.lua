@@ -2828,10 +2828,11 @@ local function finalize_buffer_display(lines_text, new_line_map, line_group_cont
     end
 
     local offset = 0
-    if config_module.settings.align_with_cursor
+    if extended_picking_state.active then
+        offset = extended_picking_state.saved_offset or 0
+    elseif config_module.settings.align_with_cursor
         and state_module.get_layout_mode() ~= "horizontal"
-        and target_line
-        and not extended_picking_state.active then
+        and target_line then
         local main_win = get_main_window_id()
         if main_win and api.nvim_win_is_valid(main_win) then
             local ok, cursor_line, topline = pcall(function()
