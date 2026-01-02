@@ -64,6 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Removed `:VBufferLineSaveSession`, `:VBufferLineLoadSession`, `:VBufferLineDeleteSession`, `:VBufferLineListSessions`
   - Sessions now automatically managed via `auto_serialize` and Neovim's `:mksession`
   - Users simply use native `:mksession` and `:source` - VBL state is included automatically
+- JSON session persistence (`auto_save`, `auto_load`, `session_name_strategy`)
 
 ### Documentation Improvements
 - **Clarified keymaps documentation** - separated built-in vs user-configured vs bufferline keymaps

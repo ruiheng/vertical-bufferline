@@ -437,11 +437,6 @@ The algorithm automatically determines the minimal path suffix needed to uniquel
     history_auto_threshold_horizontal = 10, -- Minimum files for auto mode (top/bottom)
     history_display_count = 7,      -- Maximum number of history items to display
     
-    -- Session persistence settings
-    auto_save = false,              -- Auto-save session on Neovim exit
-    auto_load = false,              -- Auto-load session on startup
-    session_name_strategy = "cwd_hash", -- "cwd_hash", "cwd_path", "manual"
-
     session = {
         mini_sessions_integration = true,    -- Integrate with mini.sessions
         auto_serialize = true,               -- Auto-serialize to global variable

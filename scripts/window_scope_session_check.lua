@@ -43,8 +43,6 @@ vbl.setup({
     inherit_on_new_window = false,
     auto_create_groups = true,
     auto_add_new_buffers = true,
-    auto_save = false,
-    auto_load = false,
 })
 
 local groups = require('vertical-bufferline.groups')
@@ -70,11 +68,11 @@ local group2_id = groups.create_group("Beta")
 groups.add_buffer_to_group(buf2, group2_id)
 groups.set_active_group(group2_id)
 
-local session_file = vim.fn.tempname()
-assert_ok(session.save_session(session_file), "session save failed")
+local session_data = session.collect_current_state()
+vim.g.VerticalBufferlineSession = vim.json.encode(session_data)
 
 groups.reset_window_contexts()
-assert_ok(session.load_session(session_file), "session load failed")
+assert_ok(session.restore_state_from_global(), "session restore failed")
 
 groups.activate_window_context(win1, { seed_buffer_id = buf1 })
 local groups_win1 = groups.get_all_groups()

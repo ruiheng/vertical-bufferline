@@ -4905,12 +4905,6 @@ local function initialize_plugin()
     -- Enable bufferline integration
     bufferline_integration.enable()
 
-    -- Initialize session module
-    session.setup({
-        auto_save = config_module.settings.auto_save,
-        auto_load = config_module.settings.auto_load,
-    })
-    
     -- Setup global variable session integration (for mini.sessions and native mksession)
     session.setup_session_integration()
 
@@ -4945,9 +4939,7 @@ local function initialize_plugin()
                 return
             end
             open_sidebar(config_module.settings.position)
-            if not (config_module.settings.auto_load and session.has_session()) then
-                populate_startup_buffers()
-            end
+            populate_startup_buffers()
             M.refresh("no_bufferline_auto_open")
         end)
     end
@@ -5228,9 +5220,6 @@ M.cycle_show_history = M.cycle_show_history_setting
 --- @field user_config.history_auto_threshold? number Min files for auto mode to show history (default: 6)
 --- @field user_config.history_auto_threshold_horizontal? number Min files for auto mode (top/bottom) (default: 10)
 --- @field user_config.history_display_count? number Max history items to display (default: 7)
---- @field user_config.auto_save? boolean Auto-save session on exit (default: false)
---- @field user_config.auto_load? boolean Auto-load session on startup (default: false)
---- @field user_config.session_name_strategy? "cwd_hash"|"cwd_path"|"manual" Session naming strategy (default: "cwd_hash")
 --- @field user_config.session? table Session integration settings
 --- @return nil
 function M.setup(user_config)

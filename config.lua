@@ -153,11 +153,6 @@ M.DEFAULTS = {
     group_scope = "global",  -- "global" or "window" (window-scope disabled when bufferline is active)
     inherit_on_new_window = false,  -- Copy groups from previous window when creating a new window context
 
-    -- Session management
-    auto_save = false,
-    auto_load = false,
-    session_name_strategy = "cwd_hash", -- "cwd_hash" or "cwd_path" or "manual"
-
     -- UI settings
     min_width = M.UI.DEFAULT_MIN_WIDTH,  -- Minimum width (adaptive sizing will use this as base)
     max_width = M.UI.DEFAULT_MAX_WIDTH,  -- Maximum width for adaptive sizing
