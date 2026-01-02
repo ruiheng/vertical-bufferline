@@ -32,6 +32,7 @@ Key Features:
 - Two display modes: Expand all groups or show only active group
 - Smart filename disambiguation with minimal path context
 - History tracking per group with quick access keymaps
+- Pinned buffers with a global pinned section (standalone)
 - Session persistence with automatic save/restore
 - Cursor alignment support for better navigation
 - Configurable icons, tree lines, and visual styling

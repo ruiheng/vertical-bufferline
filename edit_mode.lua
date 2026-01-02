@@ -68,7 +68,15 @@ local function format_buffer_line(buf_id)
     end
 
     local name = api.nvim_buf_get_name(buf_id)
-    local pin_suffix = is_pinned_buffer(buf_id) and " [pin]" or ""
+    local pin_suffix = ""
+    if is_pinned_buffer(buf_id) then
+        local pin_char = state_module.get_buffer_pin_char(buf_id)
+        if pin_char and pin_char ~= "" then
+            pin_suffix = " [pin=" .. pin_char .. "]"
+        else
+            pin_suffix = " [pin]"
+        end
+    end
     if name == "" then
         local buftype = api.nvim_get_option_value("buftype", { buf = buf_id })
         local filetype = api.nvim_get_option_value("filetype", { buf = buf_id })
@@ -219,12 +227,28 @@ local function parse_flags(raw, warnings, line_number)
     if base then
         path = vim.trim(base)
         for flag in flag_str:gmatch("%S+") do
-            flags[flag] = true
+            if flag == "pin" then
+                flags.pin = true
+            else
+                local pin_char = flag:match("^pin=(.+)$")
+                if pin_char ~= nil then
+                    flags.pin = true
+                    if pin_char == "" then
+                        table.insert(warnings, string.format("Line %d: pin flag requires a character", line_number))
+                    elseif #pin_char ~= 1 then
+                        table.insert(warnings, string.format("Line %d: pin flag must be a single character", line_number))
+                    else
+                        flags.pin_char = pin_char
+                    end
+                else
+                    flags[flag] = true
+                end
+            end
         end
     end
 
     for flag, _ in pairs(flags) do
-        if flag ~= "pin" then
+        if flag ~= "pin" and flag ~= "pin_char" then
             table.insert(warnings, string.format("Line %d: unknown flag '%s' ignored", line_number, flag))
         end
     end
@@ -296,6 +320,8 @@ local function build_group_buffers(group_specs)
     local cwd = vim.fn.getcwd()
     local results = {}
     local pin_set = {}
+    local pin_chars = {}
+    local used_pin_chars = {}
 
     for _, spec in ipairs(group_specs) do
         local buffers = {}
@@ -318,6 +344,18 @@ local function build_group_buffers(group_specs)
                 end
                 if flags.pin then
                     pin_set[buf_id] = true
+                    if flags.pin_char then
+                        if used_pin_chars[flags.pin_char] and used_pin_chars[flags.pin_char] ~= buf_id then
+                            table.insert(warnings, string.format(
+                                "Line %d: pin character '%s' already used; ignored",
+                                entry.line,
+                                flags.pin_char
+                            ))
+                        else
+                            pin_chars[buf_id] = flags.pin_char
+                            used_pin_chars[flags.pin_char] = buf_id
+                        end
+                    end
                 end
             end
 
@@ -327,7 +365,7 @@ local function build_group_buffers(group_specs)
         table.insert(results, { name = spec.name, buffers = buffers })
     end
 
-    return results, warnings, pin_set
+    return results, warnings, pin_set, pin_chars
 end
 
 local function enforce_modified_buffers(group_specs, warnings)
@@ -379,7 +417,7 @@ local function apply_edit_buffer(buf_id)
         group_specs = { { name = "Default", entries = {} } }
     end
 
-    local group_buffers, parse_warnings, pin_set = build_group_buffers(group_specs)
+    local group_buffers, parse_warnings, pin_set, pin_chars = build_group_buffers(group_specs)
     for _, message in ipairs(parse_warnings) do
         table.insert(warnings, message)
     end
@@ -391,7 +429,13 @@ local function apply_edit_buffer(buf_id)
     if pin_set then
         for _, buf_id in ipairs(api.nvim_list_bufs()) do
             if api.nvim_buf_is_valid(buf_id) then
-                state_module.set_buffer_pinned(buf_id, pin_set[buf_id] == true)
+                local is_pinned = pin_set[buf_id] == true
+                state_module.set_buffer_pinned(buf_id, is_pinned)
+                if is_pinned then
+                    state_module.set_buffer_pin_char(buf_id, pin_chars and pin_chars[buf_id] or nil)
+                else
+                    state_module.set_buffer_pin_char(buf_id, nil)
+                end
             end
         end
 

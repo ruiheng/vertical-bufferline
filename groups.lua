@@ -7,6 +7,7 @@ if _G._vertical_bufferline_groups_loaded then
 end
 
 local config_module = require('vertical-bufferline.config')
+local state_module = require('vertical-bufferline.state')
 
 local M = {}
 
@@ -1230,6 +1231,9 @@ function M.setup(opts)
             -- Add to active group
             local active_group = M.get_active_group()
             if active_group then
+                if state_module.is_buffer_pinned(buf_id) and not vim.tbl_contains(active_group.buffers, buf_id) then
+                    return
+                end
                 M.add_buffer_to_group(buf_id, active_group.id)
             end
         end,

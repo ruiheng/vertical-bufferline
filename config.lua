@@ -48,10 +48,13 @@ M.UI = {
 
     -- Horizontal layout labels
     HORIZONTAL_LABEL_HISTORY = "🕘",
+    HORIZONTAL_LABEL_PINNED = "📌",
     HORIZONTAL_LABEL_FILES = "📄",
     HORIZONTAL_LABEL_GROUPS = "🗂",
     VERTICAL_LABEL_RECENT = "🕘",
     VERTICAL_RECENT_TEXT = "Recent",
+    VERTICAL_LABEL_PINNED = "📌",
+    VERTICAL_PINNED_TEXT = "Pinned",
 }
 
 -- Color scheme (One Dark theme colors)

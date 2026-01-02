@@ -720,12 +720,25 @@ function M.save_session(filename)
         last_height = state_module.get_last_height(),
         groups = {},
         window_groups = window_groups,
-        pinned_buffers = {}
+        pinned_buffers = {},
+        pinned_pick_chars = {}
     }
 
     session_data.groups = build_group_data_list(groups, active_group_id, current_buf)
 
     session_data.pinned_buffers = get_pinned_buffers()
+    local pinned_pick_chars = state_module.get_pinned_pick_chars()
+    for buf_id, pick_char in pairs(pinned_pick_chars or {}) do
+        if api.nvim_buf_is_valid(buf_id) and type(pick_char) == "string" and pick_char ~= "" then
+            local buffer_path = api.nvim_buf_get_name(buf_id)
+            if buffer_path ~= "" then
+                local normalized = normalize_buffer_path(buffer_path)
+                if normalized ~= "" then
+                    session_data.pinned_pick_chars[normalized] = pick_char
+                end
+            end
+        end
+    end
 
     -- Write session file
     local success, err = pcall(function()
@@ -1187,10 +1200,45 @@ local function apply_pinned_buffers(session_data, buffer_mappings)
         end
     end
 
+    if session_data.pinned_pick_chars and type(session_data.pinned_pick_chars) == "table" then
+        for pinned_path, pick_char in pairs(session_data.pinned_pick_chars) do
+            if type(pick_char) == "string" and pick_char ~= "" then
+                local expanded = expand_buffer_path(pinned_path)
+                local buf_id = buffer_mappings[expanded]
+                if buf_id and vim.api.nvim_buf_is_valid(buf_id) then
+                    pin_set[buf_id] = true
+                end
+            end
+        end
+    end
+
     local state_module = require('vertical-bufferline.state')
     for _, buf_id in ipairs(vim.api.nvim_list_bufs()) do
         if vim.api.nvim_buf_is_valid(buf_id) then
             state_module.set_buffer_pinned(buf_id, pin_set[buf_id] == true)
+        end
+    end
+
+    if session_data.pinned_pick_chars and type(session_data.pinned_pick_chars) == "table" then
+        local pin_char_by_buf = {}
+        for pinned_path, pick_char in pairs(session_data.pinned_pick_chars) do
+            if type(pick_char) == "string" and pick_char ~= "" then
+                local expanded = expand_buffer_path(pinned_path)
+                local buf_id = buffer_mappings[expanded]
+                if buf_id and vim.api.nvim_buf_is_valid(buf_id) then
+                    pin_char_by_buf[buf_id] = pick_char
+                end
+            end
+        end
+
+        for _, buf_id in ipairs(vim.api.nvim_list_bufs()) do
+            if vim.api.nvim_buf_is_valid(buf_id) then
+                if pin_set[buf_id] and pin_char_by_buf[buf_id] then
+                    state_module.set_buffer_pin_char(buf_id, pin_char_by_buf[buf_id])
+                else
+                    state_module.set_buffer_pin_char(buf_id, nil)
+                end
+            end
         end
     end
 
@@ -1600,12 +1648,25 @@ local function collect_current_state()
         last_height = state_module.get_last_height(),
         groups = {},
         window_groups = window_groups,
-        pinned_buffers = {}
+        pinned_buffers = {},
+        pinned_pick_chars = {}
     }
     
     session_data.groups = build_group_data_list(groups, active_group_id, current_buf)
 
     session_data.pinned_buffers = get_pinned_buffers()
+    local pinned_pick_chars = state_module.get_pinned_pick_chars()
+    for buf_id, pick_char in pairs(pinned_pick_chars or {}) do
+        if api.nvim_buf_is_valid(buf_id) and type(pick_char) == "string" and pick_char ~= "" then
+            local buffer_path = api.nvim_buf_get_name(buf_id)
+            if buffer_path ~= "" then
+                local normalized = normalize_buffer_path(buffer_path)
+                if normalized ~= "" then
+                    session_data.pinned_pick_chars[normalized] = pick_char
+                end
+            end
+        end
+    end
     
     return session_data
 end

@@ -56,7 +56,7 @@ require('bufferline').setup({
 - **Two display modes**: Show only active group (default) or expand all groups
 - **Smart filename disambiguation** - automatically resolves duplicate filenames with minimal path context
 - **Cursor alignment** - VBL content automatically aligns with your cursor position in the main window
-- **Pinned buffer indicator** - shows pin state in the sidebar (syncs with bufferline when installed)
+- **Pinned buffers** - show in a global pinned section (syncs with bufferline when installed); standalone can assign stable pick chars via edit mode
 - **Edit mode (modal)** - batch edit groups in a temporary buffer and apply
 
 ### Group Management
@@ -116,6 +116,7 @@ Note: `BufferLineGoToBuffer` and `BufferLinePick` are provided by bufferline.nvi
 
 ### Edit Mode
 - `:VBufferLineEdit` - Open a modal edit buffer to batch-edit groups (apply with `:w`, discard by closing the window)
+- Edit entries accept `[pin]` or `[pin=a]` to mark pinned buffers and optional stable pick chars.
 
 ### Group Operations
 - `:VBufferLineCreateGroup [name]` - Create new group with optional name
@@ -205,7 +206,7 @@ The visible ordinal corresponds to bufferline's ordinal numbers (for example, if
 **Buffer Display Elements:**
 - `► 1 🌙 filename.lua` - Current buffer with arrow marker
 - `2 ● 📄 modified.js` - Modified buffer with dot indicator
-- `📌 3 utils.lua` - Pinned buffer (matches bufferline pinned state)
+- `📌 3 utils.lua` - Pinned buffer (shown in the global pinned section)
 - `└─ 3 📋 src/config.json` - Tree structure with smart disambiguation for duplicate names
 
 ### Picking Mode Integration

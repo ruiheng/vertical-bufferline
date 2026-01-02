@@ -222,14 +222,16 @@ end
 ---@param is_current boolean
 ---@param is_visible boolean
 ---@return LinePart[]
-function M.create_pick_letter(letter, is_current, is_visible)
-    local highlight_group
-    if is_current then
-        highlight_group = config_module.HIGHLIGHTS.PICK_SELECTED
-    elseif is_visible then
-        highlight_group = config_module.HIGHLIGHTS.PICK_VISIBLE
-    else
-        highlight_group = config_module.HIGHLIGHTS.PICK
+function M.create_pick_letter(letter, is_current, is_visible, highlight_override)
+    local highlight_group = highlight_override
+    if not highlight_group then
+        if is_current then
+            highlight_group = config_module.HIGHLIGHTS.PICK_SELECTED
+        elseif is_visible then
+            highlight_group = config_module.HIGHLIGHTS.PICK_VISIBLE
+        else
+            highlight_group = config_module.HIGHLIGHTS.PICK
+        end
     end
     
     return {

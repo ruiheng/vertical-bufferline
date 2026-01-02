@@ -35,6 +35,7 @@ local state = {
 
     -- Pin state (fallback when bufferline.nvim is not available)
     pinned_buffers = {},
+    pinned_pick_chars = {},
 
     -- Horizontal overlay placeholder state
     placeholder_win_id = nil,
@@ -329,16 +330,25 @@ function M.set_buffer_pinned(buf_id, pinned)
         state.pinned_buffers[buf_id] = true
     else
         state.pinned_buffers[buf_id] = nil
+        state.pinned_pick_chars[buf_id] = nil
     end
 end
 
 function M.set_pinned_buffers(pinned_list)
-    state.pinned_buffers = {}
+    local new_pins = {}
     if type(pinned_list) ~= "table" then
+        state.pinned_buffers = {}
+        state.pinned_pick_chars = {}
         return
     end
     for _, buf_id in ipairs(pinned_list) do
-        state.pinned_buffers[buf_id] = true
+        new_pins[buf_id] = true
+    end
+    state.pinned_buffers = new_pins
+    for buf_id, _ in pairs(state.pinned_pick_chars) do
+        if not new_pins[buf_id] then
+            state.pinned_pick_chars[buf_id] = nil
+        end
     end
 end
 
@@ -354,6 +364,23 @@ end
 
 function M.clear_pinned_buffers()
     state.pinned_buffers = {}
+    state.pinned_pick_chars = {}
+end
+
+function M.set_buffer_pin_char(buf_id, pick_char)
+    if pick_char == nil or pick_char == "" then
+        state.pinned_pick_chars[buf_id] = nil
+        return
+    end
+    state.pinned_pick_chars[buf_id] = pick_char
+end
+
+function M.get_buffer_pin_char(buf_id)
+    return state.pinned_pick_chars[buf_id]
+end
+
+function M.get_pinned_pick_chars()
+    return state.pinned_pick_chars
 end
 
 function M.stop_highlight_timer()

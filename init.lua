@@ -407,6 +407,19 @@ local function get_pin_icon()
     return config_module.UI.PIN_MARKER
 end
 
+local function get_pinned_buffer_ids()
+    local pinned = {}
+    local utils_module = require('vertical-bufferline.utils')
+    for _, buf_id in ipairs(api.nvim_list_bufs()) do
+        if api.nvim_buf_is_valid(buf_id)
+            and not utils_module.is_special_buffer(buf_id)
+            and is_buffer_pinned(buf_id) then
+            table.insert(pinned, buf_id)
+        end
+    end
+    return pinned
+end
+
 -- Extended picking mode implementation
 local PICK_ALPHABET = "asdfjklghqwertyuiopzxcvbnmASDFJKLGHQWERTYUIOPZXCVBNM"
 
@@ -434,6 +447,17 @@ local function generate_buffer_hints(all_group_buffers, bufferline_components, a
     local buffer_hints = {}
     local used_chars = {}
 
+    -- Reserve fixed pick chars for pinned buffers
+    local pinned_pick_chars = state_module.get_pinned_pick_chars() or {}
+    for buf_id, pick_char in pairs(pinned_pick_chars) do
+        if type(pick_char) == "string" and pick_char ~= "" and #pick_char == 1 then
+            if not used_chars[pick_char] then
+                used_chars[pick_char] = true
+                buffer_hints[buf_id] = pick_char
+            end
+        end
+    end
+
     -- Extract existing bufferline hints (these take priority)
     for _, component in ipairs(bufferline_components or {}) do
         local ok, element = pcall(function() return component:as_element() end)
@@ -444,7 +468,7 @@ local function generate_buffer_hints(all_group_buffers, bufferline_components, a
             letter = component.letter
         end
 
-        if letter then
+        if letter and not buffer_hints[component.id] and not used_chars[letter] then
             used_chars[letter] = true
             buffer_hints[component.id] = letter
         end
@@ -677,6 +701,18 @@ local function handle_extended_picking_key(key)
     -- Look up buffer_id from hint_lines (letter -> buffer_id mapping)
     local buffer_id = extended_picking.hint_lines[key]
     if not buffer_id or not api.nvim_buf_is_valid(buffer_id) then
+        return false
+    end
+
+    if is_buffer_pinned(buffer_id) then
+        if extended_picking.pick_mode == "switch" then
+            if switch_to_buffer_in_main_window and switch_to_buffer_in_main_window(buffer_id, "Error switching to pinned buffer") then
+                vim.schedule(function()
+                    M.refresh("pinned_pick_switch")
+                end)
+                return true
+            end
+        end
         return false
     end
 
@@ -1296,7 +1332,7 @@ local function build_component_list_from_buffers(buffer_ids, buffer_hints, windo
     return list
 end
 
-local function build_horizontal_item_parts(component, number_index, max_digits, is_current, is_visible, is_picking)
+local function build_horizontal_item_parts(component, number_index, max_digits, is_current, is_visible, is_picking, force_pick_letter, reserve_pick_space)
     local parts = {}
 
     if number_index then
@@ -1309,11 +1345,16 @@ local function build_horizontal_item_parts(component, number_index, max_digits, 
         table.insert(parts, renderer.create_part(" ", nil))
     end
 
-    if is_picking then
+    if is_picking or force_pick_letter or reserve_pick_space then
         local letter = component.letter
         if letter then
-            local pick_parts = components.create_pick_letter(letter, is_current, is_visible)
+            local pick_parts = components.create_pick_letter(letter, is_current, is_visible, opts.pick_highlight_group)
             for _, part in ipairs(pick_parts) do
+                table.insert(parts, part)
+            end
+        elseif reserve_pick_space then
+            local space_parts = components.create_space(2)
+            for _, part in ipairs(space_parts) do
                 table.insert(parts, part)
             end
         end
@@ -1504,6 +1545,12 @@ local function assign_menu_hints(items, buffer_hints, opts)
     local reserved = opts.reserved or { j = true, k = true, q = true }
     local used = {}
 
+    for _, item in ipairs(items) do
+        if item.hint and #item.hint == 1 then
+            used[item.hint] = true
+        end
+    end
+
     local function is_available_hint(hint)
         if not hint or #hint ~= 1 then
             return false
@@ -1640,7 +1687,8 @@ local function setup_menu_mappings(items, on_select_item, include_hint, title_of
 end
 
 -- Create individual buffer line with proper formatting and highlights
-local function create_buffer_line(component, j, total_components, current_buffer_id, is_picking, line_number, group_id, max_local_digits, max_global_digits, has_any_local_info, should_hide_local_numbering)
+local function create_buffer_line(component, j, total_components, current_buffer_id, is_picking, line_number, group_id, max_local_digits, max_global_digits, has_any_local_info, should_hide_local_numbering, opts)
+    opts = opts or {}
     local is_last = (j == total_components)
     local is_visible = component.focused or false  -- Assuming focused means visible
     local has_pick = false
@@ -1657,6 +1705,8 @@ local function create_buffer_line(component, j, total_components, current_buffer
     local is_current = false
     if is_in_active_group then
         -- For active group, use global current buffer
+        is_current = (component.id == current_buffer_id)
+    elseif opts.use_current_buffer then
         is_current = (component.id == current_buffer_id)
     else
         -- For inactive groups, use the group's history to determine current buffer
@@ -1684,13 +1734,18 @@ local function create_buffer_line(component, j, total_components, current_buffer
     end
     
     -- 2. Pick letter (picking mode) - MUST be before numbering for alignment
-    if is_picking then
+    if is_picking or opts.force_pick_letter or opts.reserve_pick_space then
         local letter = component.letter
 
         if letter then
             has_pick = true
-            local pick_parts = components.create_pick_letter(letter, is_current, is_visible)
+            local pick_parts = components.create_pick_letter(letter, is_current, is_visible, force_pick_letter and config_module.HIGHLIGHTS.PICK or nil)
             for _, part in ipairs(pick_parts) do
+                table.insert(parts, part)
+            end
+        elseif opts.reserve_pick_space then
+            local space_parts = components.create_space(2)
+            for _, part in ipairs(space_parts) do
                 table.insert(parts, part)
             end
         end
@@ -1699,7 +1754,7 @@ local function create_buffer_line(component, j, total_components, current_buffer
     -- 3. Smart numbering (intelligent display logic)
     local bl_integration = require('vertical-bufferline.bufferline-integration')
     -- 2. Numbering (skip if position is 0, show for active group and history group)
-    if j > 0 and (is_in_active_group or group_id == "history") then
+    if j > 0 and (is_in_active_group or group_id == "history" or opts.force_numbering) then
         local ok, position_info = pcall(bl_integration.get_buffer_position_info, group_id)
         if ok and position_info then
             local local_pos = position_info[component.id]  -- nil if not visible in bufferline
@@ -1718,7 +1773,7 @@ local function create_buffer_line(component, j, total_components, current_buffer
     end
     
     -- 4. Space after numbering (only if there was numbering)
-    if j > 0 and (is_in_active_group or group_id == "history") then
+    if j > 0 and (is_in_active_group or group_id == "history" or opts.force_numbering) then
         local space_parts = components.create_space(1)
         for _, part in ipairs(space_parts) do
             table.insert(parts, part)
@@ -1741,7 +1796,7 @@ local function create_buffer_line(component, j, total_components, current_buffer
     end
     
     -- 6. Pin indicator (only show when bufferline is available)
-    if bufferline_integration.is_available() and is_buffer_pinned(component.id) then
+    if not opts.hide_pin_icon and is_buffer_pinned(component.id) then
         local pin_parts = components.create_pin_indicator(get_pin_icon(), is_current)
         for _, part in ipairs(pin_parts) do
             table.insert(parts, part)
@@ -1972,7 +2027,7 @@ local function render_group_buffers(group_components, current_buffer_id, is_pick
         if component.id and component.name and api.nvim_buf_is_valid(component.id) then
             -- Calculate the line number this buffer will be on
             local main_line_number = #lines_text + 1
-            local line_info = create_buffer_line(component, j, #group_components, current_buffer_id, is_picking, main_line_number, line_group_context.current_group_id, max_local_digits, max_global_digits, has_any_local_info, should_hide_local_numbering)
+            local line_info = create_buffer_line(component, j, #group_components, current_buffer_id, is_picking, main_line_number, line_group_context.current_group_id, max_local_digits, max_global_digits, has_any_local_info, should_hide_local_numbering, nil)
 
             -- Add main buffer line
             table.insert(lines_text, line_info.text)
@@ -2036,7 +2091,7 @@ local function render_group_header(group, i, is_active, buffer_count, lines_text
 end
 
 -- Render horizontal layout with multiple buffers per line
-local function render_horizontal_layout(active_group, bufferline_components, current_buffer_id, is_picking, lines_text, line_types, line_infos, line_buffer_ranges, buffer_hints)
+local function render_horizontal_layout(active_group, bufferline_components, current_buffer_id, is_picking, lines_text, line_types, line_infos, line_buffer_ranges, buffer_hints, pinned_buffers, pinned_set)
     if not active_group then
         return
     end
@@ -2054,6 +2109,9 @@ local function render_horizontal_layout(active_group, bufferline_components, cur
     local line_has_items = false
     local line_has_pick = false
     local continuation_prefix = nil
+    local function is_pinned_buffer_id(buf_id)
+        return pinned_set and pinned_set[buf_id] == true
+    end
 
     local function reset_line(prefix_parts)
         current_parts = {}
@@ -2135,7 +2193,7 @@ local function render_horizontal_layout(active_group, bufferline_components, cur
         line_has_items = true
     end
 
-    local function render_section(label_text, label_highlight, item_entries, group_id, is_history, current_id, max_digits, is_group_entry)
+local function render_section(label_text, label_highlight, item_entries, group_id, is_history, current_id, max_digits, is_group_entry, force_pick_letter)
         if #current_parts > 0 then
             flush_line()
         end
@@ -2155,12 +2213,29 @@ local function render_horizontal_layout(active_group, bufferline_components, cur
                 local component = entry.component
                 local number_index = entry.index
                 local is_current = (component.id == current_id)
-                local parts = build_horizontal_item_parts(component, number_index, max_digits, is_current, component.focused or false, is_picking)
+                local parts = build_horizontal_item_parts(component, number_index, max_digits, is_current, component.focused or false, is_picking, force_pick_letter, force_pick_letter and not component.letter)
                 add_item(parts, component.id, group_id, is_history)
             end
         end
 
         flush_line()
+    end
+
+    -- Pinned section
+    if pinned_buffers and #pinned_buffers > 0 then
+        local pinned_entries = {}
+        local pinned_items = build_component_list_from_buffers(pinned_buffers, buffer_hints, window_width)
+        for i, component in ipairs(pinned_items) do
+            local pin_char = state_module.get_buffer_pin_char(component.id)
+            if pin_char and pin_char ~= "" then
+                component.letter = pin_char
+            end
+            table.insert(pinned_entries, { component = component, index = i })
+        end
+        if #pinned_entries > 0 then
+            local max_digits = #tostring(#pinned_entries)
+            render_section(config_module.UI.HORIZONTAL_LABEL_PINNED, config_module.HIGHLIGHTS.SECTION_LABEL_INACTIVE, pinned_entries, "pinned", false, current_buffer_id, max_digits, false, true)
+        end
     end
 
     -- History section (active group only)
@@ -2172,7 +2247,11 @@ local function render_horizontal_layout(active_group, bufferline_components, cur
             if i > config_module.settings.history_display_count then
                 break
             end
+            if is_pinned_buffer_id(buf_id) then
+                goto continue
+            end
             table.insert(buffer_ids, buf_id)
+            ::continue::
         end
         if #buffer_ids > 0 then
             local history_items = build_component_list_from_buffers(buffer_ids, buffer_hints, window_width)
@@ -2191,7 +2270,11 @@ local function render_horizontal_layout(active_group, bufferline_components, cur
         local active_components = {}
         if bufferline_components then
             for _, comp in ipairs(bufferline_components or {}) do
-                if comp.id and comp.name and api.nvim_buf_is_valid(comp.id) and not utils.is_special_buffer(comp.id) then
+                if comp.id
+                    and comp.name
+                    and api.nvim_buf_is_valid(comp.id)
+                    and not utils.is_special_buffer(comp.id)
+                    and not is_pinned_buffer_id(comp.id) then
                     table.insert(active_components, comp)
                 end
             end
@@ -2218,9 +2301,13 @@ local function render_horizontal_layout(active_group, bufferline_components, cur
 
         local group_label = config_module.UI.HORIZONTAL_LABEL_FILES
         local group_current_id = nil
-        if current_buffer_id and vim.tbl_contains(active_group.buffers or {}, current_buffer_id) then
+        if current_buffer_id
+            and vim.tbl_contains(active_group.buffers or {}, current_buffer_id)
+            and not is_pinned_buffer_id(current_buffer_id) then
             group_current_id = current_buffer_id
-        elseif active_group.current_buffer and vim.tbl_contains(active_group.buffers or {}, active_group.current_buffer) then
+        elseif active_group.current_buffer
+            and vim.tbl_contains(active_group.buffers or {}, active_group.current_buffer)
+            and not is_pinned_buffer_id(active_group.current_buffer) then
             group_current_id = active_group.current_buffer
         end
         render_section(group_label, config_module.HIGHLIGHTS.SECTION_LABEL_INACTIVE, active_group_entries, active_group.id, false, group_current_id, active_group_max_digits)
@@ -2269,9 +2356,97 @@ local function render_horizontal_layout(active_group, bufferline_components, cur
     end
 end
 
+local function render_pinned_section(pinned_buffers, current_buffer_id, is_picking, lines_text, new_line_map, group_header_lines, line_types, all_components, line_components, line_group_context, line_infos, buffer_hints)
+    if not pinned_buffers or #pinned_buffers == 0 then
+        return nil
+    end
+
+    local header_text = string.format(" %s %s (%d)", config_module.UI.VERTICAL_LABEL_PINNED, config_module.UI.VERTICAL_PINNED_TEXT, #pinned_buffers)
+    table.insert(lines_text, header_text)
+    local header_line_num = #lines_text
+    group_header_lines[header_line_num] = {
+        type = "header",
+        line = header_line_num - 1
+    }
+
+    local win_id = state_module.get_win_id()
+    local window_width = 40
+    if win_id and api.nvim_win_is_valid(win_id) then
+        window_width = api.nvim_win_get_width(win_id)
+    end
+
+    local minimal_prefixes = filename_utils.generate_minimal_prefixes(pinned_buffers, window_width)
+    local target_line = nil
+
+    for i, buf_id in ipairs(pinned_buffers) do
+        local buf_name = api.nvim_buf_get_name(buf_id)
+        local filename = buf_name == "" and "[No Name]" or vim.fn.fnamemodify(buf_name, ":t")
+        local is_current = buf_id == current_buffer_id
+
+        local pin_char = state_module.get_buffer_pin_char(buf_id)
+        local pinned_component = {
+            id = buf_id,
+            name = filename,
+            minimal_prefix = minimal_prefixes[i],
+            focused = is_current,
+            letter = pin_char or (buffer_hints and buffer_hints[buf_id] or nil)
+        }
+
+        local line_info = create_buffer_line(
+            pinned_component,
+            i,
+            #pinned_buffers,
+            current_buffer_id,
+            is_picking,
+            #lines_text + 1,
+            "pinned",
+            1,
+            1,
+            false,
+            false,
+            {
+                hide_pin_icon = true,
+                force_pick_letter = true,
+                reserve_pick_space = pin_char == nil,
+                pick_highlight_group = config_module.HIGHLIGHTS.PICK,
+                use_current_buffer = true,
+                force_numbering = true
+            }
+        )
+        table.insert(lines_text, line_info.text)
+        local line_num = #lines_text
+
+        new_line_map[line_num] = buf_id
+        line_types[line_num] = "buffer"
+        line_components[line_num] = pinned_component
+        line_group_context[line_num] = "pinned"
+        line_infos[line_num] = line_info
+        all_components[buf_id] = pinned_component
+
+        if is_current then
+            target_line = line_num
+        end
+
+        if line_info.has_path and line_info.path_line then
+            table.insert(lines_text, line_info.path_line)
+            local path_line_num = #lines_text
+            new_line_map[path_line_num] = buf_id
+            line_types[path_line_num] = "path"
+            line_components[path_line_num] = pinned_component
+            line_group_context[path_line_num] = "pinned"
+        end
+    end
+
+    table.insert(lines_text, "")
+    local empty_line_num = #lines_text
+    line_types[empty_line_num] = "empty"
+
+    return target_line
+end
+
 -- Render current group's history as a unified group
 -- @param current_components: Current bufferline components (for filtering history to match display)
-local function render_current_group_history(active_group, current_buffer_id, is_picking, lines_text, new_line_map, group_header_lines, line_types, all_components, line_components, line_group_context, line_infos, current_components, buffer_hints)
+local function render_current_group_history(active_group, current_buffer_id, is_picking, lines_text, new_line_map, group_header_lines, line_types, all_components, line_components, line_group_context, line_infos, current_components, buffer_hints, pinned_set)
     if state_module.get_layout_mode() == "horizontal" then
         return
     end
@@ -2297,7 +2472,9 @@ local function render_current_group_history(active_group, current_buffer_id, is_
     -- Filter valid history items and ensure they're still in the current display
     local valid_history = {}
     for _, buffer_id in ipairs(history) do
-        if api.nvim_buf_is_valid(buffer_id) and vim.tbl_contains(current_buffer_ids, buffer_id) then
+        if api.nvim_buf_is_valid(buffer_id)
+            and vim.tbl_contains(current_buffer_ids, buffer_id)
+            and not (pinned_set and pinned_set[buffer_id]) then
             table.insert(valid_history, buffer_id)
         end
     end
@@ -2352,7 +2529,7 @@ local function render_current_group_history(active_group, current_buffer_id, is_
             
             -- Create buffer line - first item (current) has no number, rest have numbers
             local display_pos = (i == 1) and 0 or (i - 1)  -- First item has no number, rest are numbered 1, 2, 3...
-            local line_info = create_buffer_line(history_component, display_pos, #valid_history, current_buffer_id, is_picking, #lines_text + 1, "history", 1, 1, false, false)
+            local line_info = create_buffer_line(history_component, display_pos, #valid_history, current_buffer_id, is_picking, #lines_text + 1, "history", 1, 1, false, false, nil)
             table.insert(lines_text, line_info.text)
             local line_num = #lines_text
             
@@ -2375,7 +2552,7 @@ local function render_current_group_history(active_group, current_buffer_id, is_
 end
 
 -- Render all groups with their buffers
-local function render_all_groups(active_group, components, current_buffer_id, is_picking, lines_text, new_line_map, group_header_lines, line_types, all_components, line_components, line_group_context, line_infos, buffer_hints)
+local function render_all_groups(active_group, components, current_buffer_id, is_picking, lines_text, new_line_map, group_header_lines, line_types, all_components, line_components, line_group_context, line_infos, buffer_hints, pinned_set)
     if not active_group then
         return components, nil
     end
@@ -2384,6 +2561,9 @@ local function render_all_groups(active_group, components, current_buffer_id, is
     local all_groups = groups.get_all_groups()
     local remaining_components = components
     local active_buffer_line = nil
+    local function is_pinned_buffer_id(buf_id)
+        return pinned_set and pinned_set[buf_id] == true
+    end
 
     for i, group in ipairs(all_groups) do
         local is_active = group.id == active_group.id
@@ -2393,10 +2573,12 @@ local function render_all_groups(active_group, components, current_buffer_id, is
             goto continue
         end
 
-        -- Calculate valid buffer count (filter out special buffers only)
+        -- Calculate valid buffer count (filter out special and pinned buffers)
         local valid_buffer_count = 0
         for _, buf_id in ipairs(group_buffers) do
-            if vim.api.nvim_buf_is_valid(buf_id) and not utils.is_special_buffer(buf_id) then
+            if vim.api.nvim_buf_is_valid(buf_id)
+                and not utils.is_special_buffer(buf_id)
+                and not is_pinned_buffer_id(buf_id) then
                 valid_buffer_count = valid_buffer_count + 1
             end
         end
@@ -2415,7 +2597,10 @@ local function render_all_groups(active_group, components, current_buffer_id, is
             if is_active then
                 -- For active group, use bufferline components directly (including [No Name] buffers)
                 for _, comp in ipairs(components) do
-                    if comp.id and comp.name and not utils.is_special_buffer(comp.id) then
+                    if comp.id
+                        and comp.name
+                        and not utils.is_special_buffer(comp.id)
+                        and not is_pinned_buffer_id(comp.id) then
                         table.insert(group_components, comp)
                     end
                 end
@@ -2456,7 +2641,9 @@ local function render_all_groups(active_group, components, current_buffer_id, is
                 -- First collect all valid buffer information
                 local valid_buffers = {}
                 for _, buf_id in ipairs(group_buffers) do
-                    if api.nvim_buf_is_valid(buf_id) and not utils.is_special_buffer(buf_id) then
+                    if api.nvim_buf_is_valid(buf_id)
+                        and not utils.is_special_buffer(buf_id)
+                        and not is_pinned_buffer_id(buf_id) then
                         table.insert(valid_buffers, buf_id)
                     end
                 end
@@ -2505,14 +2692,20 @@ local function render_all_groups(active_group, components, current_buffer_id, is
             if is_active then
                 -- For active group, use global current buffer if it's in the group, otherwise use group's remembered current_buffer
                 local global_current = current_buffer_id
-                if global_current and vim.tbl_contains(group.buffers, global_current) then
+                if global_current
+                    and vim.tbl_contains(group.buffers, global_current)
+                    and not is_pinned_buffer_id(global_current) then
                     group_current_buffer_id = global_current
-                elseif group.current_buffer and vim.tbl_contains(group.buffers, group.current_buffer) then
+                elseif group.current_buffer
+                    and vim.tbl_contains(group.buffers, group.current_buffer)
+                    and not is_pinned_buffer_id(group.current_buffer) then
                     group_current_buffer_id = group.current_buffer
                 end
             else
                 -- For non-active groups, always use the group's remembered current_buffer
-                if group.current_buffer and vim.tbl_contains(group.buffers, group.current_buffer) then
+                if group.current_buffer
+                    and vim.tbl_contains(group.buffers, group.current_buffer)
+                    and not is_pinned_buffer_id(group.current_buffer) then
                     group_current_buffer_id = group.current_buffer
                 end
             end
@@ -3091,6 +3284,11 @@ function M.refresh(reason, position_override)
     local components = refresh_data.components
     local current_buffer_id = refresh_data.current_buffer_id
     local active_group = refresh_data.active_group
+    local pinned_buffers = get_pinned_buffer_ids()
+    local pinned_set = {}
+    for _, buf_id in ipairs(pinned_buffers) do
+        pinned_set[buf_id] = true
+    end
 
     -- Handle picking mode detection and timer management
     local is_picking = detect_and_manage_picking_mode(refresh_data.bufferline_state, components)
@@ -3100,12 +3298,26 @@ function M.refresh(reason, position_override)
     if is_picking then
         local all_group_buffers = {}
         local active_group_id = active_group and active_group.id or nil
+        local seen_buffers = {}
+        local function add_unique_buffer(buf_id, group_id)
+            if not buf_id or seen_buffers[buf_id] then
+                return
+            end
+            seen_buffers[buf_id] = true
+            table.insert(all_group_buffers, {buffer_id = buf_id, group_id = group_id})
+        end
+
+        for _, buf_id in ipairs(pinned_buffers) do
+            if api.nvim_buf_is_valid(buf_id) then
+                add_unique_buffer(buf_id, "pinned")
+            end
+        end
 
         -- Collect all buffers from history
         if active_group and active_group.history then
             for _, buf_id in ipairs(active_group.history) do
                 if api.nvim_buf_is_valid(buf_id) then
-                    table.insert(all_group_buffers, {buffer_id = buf_id, group_id = active_group_id})
+                    add_unique_buffer(buf_id, active_group_id)
                 end
             end
         end
@@ -3114,7 +3326,7 @@ function M.refresh(reason, position_override)
         for _, group in ipairs(groups.get_all_groups()) do
             for _, buf_id in ipairs(group.buffers or {}) do
                 if api.nvim_buf_is_valid(buf_id) then
-                    table.insert(all_group_buffers, {buffer_id = buf_id, group_id = group.id})
+                    add_unique_buffer(buf_id, group.id)
                 end
             end
         end
@@ -3146,9 +3358,11 @@ function M.refresh(reason, position_override)
             local name_map = build_name_map(unique_buffer_ids, window_width)
             local hint_items = {}
             for _, buf_id in ipairs(unique_buffer_ids) do
+                local pin_char = state_module.get_buffer_pin_char(buf_id)
                 table.insert(hint_items, {
                     id = buf_id,
                     name = name_map[buf_id] or "",
+                    hint = pin_char
                 })
             end
 
@@ -3211,14 +3425,23 @@ function M.refresh(reason, position_override)
 
     local active_buffer_line = nil
     if state_module.get_layout_mode() == "horizontal" then
-        render_horizontal_layout(active_group, components, current_buffer_id, is_picking, lines_text, line_types, line_infos, line_buffer_ranges, buffer_hints)
+        render_horizontal_layout(active_group, components, current_buffer_id, is_picking, lines_text, line_types, line_infos, line_buffer_ranges, buffer_hints, pinned_buffers, pinned_set)
     else
+        local pinned_target_line = render_pinned_section(pinned_buffers, current_buffer_id, is_picking, lines_text, new_line_map, group_header_lines, line_types, all_components, line_components, line_group_context, line_infos, buffer_hints)
+        if pinned_target_line then
+            active_buffer_line = pinned_target_line
+        end
+
         -- Render current group's history first (at the top)
-        render_current_group_history(active_group, current_buffer_id, is_picking, lines_text, new_line_map, group_header_lines, line_types, all_components, line_components, line_group_context, line_infos, components, buffer_hints)
+        render_current_group_history(active_group, current_buffer_id, is_picking, lines_text, new_line_map, group_header_lines, line_types, all_components, line_components, line_group_context, line_infos, components, buffer_hints, pinned_set)
 
         -- Render all groups with their buffers (without applying highlights yet)
         local remaining_components = nil
-        remaining_components, active_buffer_line = render_all_groups(active_group, components, current_buffer_id, is_picking, lines_text, new_line_map, group_header_lines, line_types, all_components, line_components, line_group_context, line_infos, buffer_hints)
+        local group_active_line = nil
+        remaining_components, group_active_line = render_all_groups(active_group, components, current_buffer_id, is_picking, lines_text, new_line_map, group_header_lines, line_types, all_components, line_components, line_group_context, line_infos, buffer_hints, pinned_set)
+        if group_active_line then
+            active_buffer_line = group_active_line
+        end
         if remaining_components then
             components = remaining_components
         end
@@ -3244,6 +3467,9 @@ function M.refresh(reason, position_override)
     
     -- Re-setup highlights after clearing to ensure they're available
     setup_highlights()
+    if pinned_buffers and #pinned_buffers > 0 then
+        setup_pick_highlights()
+    end
     
     -- Force set path highlights if they're empty (fix for reload protection issue)
     local path_hl = api.nvim_get_hl(0, {name = config_module.HIGHLIGHTS.PATH})
@@ -4367,8 +4593,11 @@ function M.handle_selection(captured_buffer_id, captured_line_number, captured_c
     
     -- STEP 1: Determine buffer group management
     local buffer_group = groups.find_buffer_group(bufnr)
+    local is_pinned_click = (clicked_group_id == "pinned")
     
-    if clicked_group_id and current_active_group and clicked_group_id == current_active_group.id then
+    if is_pinned_click then
+        -- Pinned buffers never change the active group or history
+    elseif clicked_group_id and current_active_group and clicked_group_id == current_active_group.id then
         -- Clicking within current active group - ensure buffer is in the group
         if not buffer_group or buffer_group.id ~= current_active_group.id then
             -- Add the buffer to current active group (useful for history items)
@@ -4423,9 +4652,11 @@ function M.handle_selection(captured_buffer_id, captured_line_number, captured_c
 
     -- STEP 3: Update group's current_buffer tracking
     -- Get the updated active group (might have changed after group switching)
-    local updated_active_group = groups.get_active_group()
-    if updated_active_group then
-        updated_active_group.current_buffer = bufnr
+    if not is_pinned_click then
+        local updated_active_group = groups.get_active_group()
+        if updated_active_group then
+            updated_active_group.current_buffer = bufnr
+        end
     end
     
     -- Provide visual feedback for history clicks
@@ -4436,9 +4667,11 @@ function M.handle_selection(captured_buffer_id, captured_line_number, captured_c
     end
     
     -- Restore buffer state for the newly selected buffer (for within-group state preservation)
-    vim.schedule(function()
-        groups.restore_buffer_state_for_current_group(bufnr)
-    end)
+    if not is_pinned_click then
+        vim.schedule(function()
+            groups.restore_buffer_state_for_current_group(bufnr)
+        end)
+    end
 end
 
 
@@ -5138,12 +5371,24 @@ function M.switch_to_group_buffer(position)
         return false
     end
 
-    if position < 1 or position > #buffers then
-        vim.notify(string.format("Group position %d not available (1-%d)", position, #buffers), vim.log.levels.WARN)
+    local visible_buffers = {}
+    for _, buf_id in ipairs(buffers) do
+        if buf_id and api.nvim_buf_is_valid(buf_id) and not is_buffer_pinned(buf_id) then
+            table.insert(visible_buffers, buf_id)
+        end
+    end
+
+    if #visible_buffers == 0 then
+        vim.notify("No buffers in current group", vim.log.levels.WARN)
         return false
     end
 
-    local buffer_id = buffers[position]
+    if position < 1 or position > #visible_buffers then
+        vim.notify(string.format("Group position %d not available (1-%d)", position, #visible_buffers), vim.log.levels.WARN)
+        return false
+    end
+
+    local buffer_id = visible_buffers[position]
     if not buffer_id or not api.nvim_buf_is_valid(buffer_id) then
         vim.notify("Group buffer is no longer valid", vim.log.levels.WARN)
         return false

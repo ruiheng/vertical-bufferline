@@ -32,7 +32,7 @@ buffer groups by editing a temporary text buffer and applying the result.
   - A file path on its own line.
   - Absolute paths are the default.
   - Relative paths are allowed and are resolved against the current working directory.
-  - Optional flags can be appended in a bracket list: `path/to/file.lua [pin]`
+- Optional flags can be appended in a bracket list: `path/to/file.lua [pin]` or `path/to/file.lua [pin=a]`
 - Comment line:
   - Lines starting with `#` are comments and ignored.
   - If a real file path starts with `#`, use a relative path like `./#file` to avoid comment parsing.
@@ -95,6 +95,7 @@ When a buffer has no file path, use a buffer-number entry:
 ```
 [Group] Scratch
 buf:12 [pin]  # quickfix
+buf:13 [pin=a]  # stable pick char for pinned buffer
 ```
 
 Rules:
