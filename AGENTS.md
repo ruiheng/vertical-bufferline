@@ -7,6 +7,10 @@ These rules apply to all work in this repository.
 - Treat a user message of `git commit` as explicit approval to commit, and write an appropriate commit message.
 - If unsure whether a change needs approval, ask first.
 
+## Git Commit Messages
+- Use Conventional Commits format: `type(scope): subject`.
+- Keep the subject imperative and concise; add body for context when needed.
+
 ## Safety
 - Do not revert or delete unrelated user changes unless explicitly asked.
 - If unexpected changes appear, stop and ask how to proceed.
