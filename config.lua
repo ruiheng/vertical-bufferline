@@ -150,7 +150,7 @@ M.DEFAULTS = {
     -- Group management
     auto_create_groups = true,
     auto_add_new_buffers = true,
-    group_scope = "window",  -- "global" or "window" (window-scope disabled when bufferline is active)
+    group_scope = "global",  -- "global" or "window" (window-scope disabled when bufferline is active)
     inherit_on_new_window = false,  -- Copy groups from previous window when creating a new window context
 
     -- Session management
