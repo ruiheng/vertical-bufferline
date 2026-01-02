@@ -2613,16 +2613,13 @@ local function calculate_cursor_based_offset(content_length, target_line)
     end
 
     -- Safely get cursor position and window info
-    local success, cursor_line, main_height, sidebar_height, topline = pcall(function()
-        local cursor_pos = api.nvim_win_get_cursor(main_win)
+    local success, cursor_row, main_height, sidebar_height = pcall(function()
+        local row = vim.api.nvim_win_call(main_win, function()
+            return vim.fn.winline()
+        end)
         local main_h = api.nvim_win_get_height(main_win)
         local sidebar_h = api.nvim_win_get_height(sidebar_win)
-
-        -- Get scroll position safely
-        local view = vim.api.nvim_win_call(main_win, vim.fn.winsaveview)
-        local top = view.topline or 1
-
-        return cursor_pos[1], main_h, sidebar_h, top
+        return row, main_h, sidebar_h
     end)
 
     if not success then
@@ -2630,7 +2627,7 @@ local function calculate_cursor_based_offset(content_length, target_line)
     end
 
     -- Calculate cursor position relative to visible area
-    local cursor_relative_to_window = cursor_line - topline + 1
+    local cursor_relative_to_window = cursor_row
 
     -- Calculate desired offset with conservative bounds
     local desired_offset = nil
@@ -2835,13 +2832,13 @@ local function finalize_buffer_display(lines_text, new_line_map, line_group_cont
         and target_line then
         local main_win = get_main_window_id()
         if main_win and api.nvim_win_is_valid(main_win) then
-            local ok, cursor_line, topline = pcall(function()
-                local cursor_pos = api.nvim_win_get_cursor(main_win)
-                local view = vim.api.nvim_win_call(main_win, vim.fn.winsaveview)
-                return cursor_pos[1], (view.topline or 1)
+            local ok, cursor_row = pcall(function()
+                return vim.api.nvim_win_call(main_win, function()
+                    return vim.fn.winline()
+                end)
             end)
             if ok then
-                local cursor_relative = cursor_line - topline + 1
+                local cursor_relative = cursor_row
                 offset = math.max(0, cursor_relative - target_line)
                 local win_id = state_module.get_win_id()
                 if win_id and api.nvim_win_is_valid(win_id) then
