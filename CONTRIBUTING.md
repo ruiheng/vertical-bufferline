@@ -211,6 +211,18 @@ Run the floating mode check:
 nvim --headless -u NONE -i NONE -n "+lua dofile('scripts/floating_mode_check.lua')"
 ```
 
+Run the edit-mode round trip check:
+
+```bash
+nvim --headless -u NONE -i NONE -n "+lua dofile('scripts/edit_mode_roundtrip_check.lua')"
+```
+
+Run the pick/highlight smoke check:
+
+```bash
+nvim --headless -u NONE -i NONE -n "+lua dofile('scripts/pick_highlight_smoke_check.lua')"
+```
+
 ### Manual/Debug Scripts
 
 These are interactive or IDE-focused helpers and are not part of automated testing:
