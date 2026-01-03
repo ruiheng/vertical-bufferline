@@ -15,7 +15,7 @@ local state = {
     last_height = nil, -- Remember the last height before closing sidebar (top/bottom)
     current_position = nil, -- Track current sidebar position ("left"/"right"/"top"/"bottom")
     line_to_buffer_id = {}, -- Maps a line number in our window to a buffer ID
-    hint_to_buffer_id = {}, -- Maps a hint character to a buffer ID
+    pick_char_to_buffer_id = {}, -- Maps a pick char to a buffer ID
     line_group_context = {}, -- Maps a line number to the group ID it belongs to
     line_buffer_ranges = {}, -- Maps a line to buffer ranges for hit testing
     group_header_lines = {}, -- Maps line numbers to group header information
@@ -215,19 +215,19 @@ function M.clear_line_buffer_ranges()
 end
 
 -- Hint to buffer mapping
-function M.get_hint_to_buffer_id()
-    return state.hint_to_buffer_id
+function M.get_pick_char_to_buffer_id()
+    return state.pick_char_to_buffer_id
 end
 
-function M.set_hint_to_buffer_id(mapping)
+function M.set_pick_char_to_buffer_id(mapping)
     if type(mapping) ~= "table" then
-        error("hint_to_buffer_id must be table, got: " .. type(mapping))
+        error("pick_char_to_buffer_id must be table, got: " .. type(mapping))
     end
-    state.hint_to_buffer_id = mapping
+    state.pick_char_to_buffer_id = mapping
 end
 
-function M.clear_hint_mapping()
-    state.hint_to_buffer_id = {}
+function M.clear_pick_char_mapping()
+    state.pick_char_to_buffer_id = {}
 end
 
 -- Line group context mapping
@@ -417,7 +417,7 @@ function M.set_extended_picking_mode(pick_mode)
     state.extended_picking.pick_mode = pick_mode
 end
 
-function M.set_extended_picking_hints(line_hints, hint_lines, bufferline_hints)
+function M.set_extended_picking_pick_chars(line_hints, hint_lines, bufferline_hints)
     state.extended_picking.line_hints = line_hints or {}
     state.extended_picking.hint_lines = hint_lines or {}
     state.extended_picking.bufferline_hints = bufferline_hints or {}
@@ -442,7 +442,7 @@ function M.reset_state()
     state.last_height = nil
     state.current_position = nil
     state.line_to_buffer_id = {}
-    state.hint_to_buffer_id = {}
+    state.pick_char_to_buffer_id = {}
     state.line_buffer_ranges = {}
     state.was_picking = false
     state.session_loading = false
@@ -499,7 +499,7 @@ function M.get_state_summary()
         session_loading = state.session_loading,
         has_highlight_timer = state.highlight_timer ~= nil,
         line_mappings_count = vim.tbl_count(state.line_to_buffer_id),
-        hint_mappings_count = vim.tbl_count(state.hint_to_buffer_id),
+        pick_char_mappings_count = vim.tbl_count(state.pick_char_to_buffer_id),
         is_valid_window = is_valid_win_id(state.win_id),
         is_valid_buffer = is_valid_buf_id(state.buf_id),
     }

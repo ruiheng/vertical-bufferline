@@ -1273,13 +1273,13 @@ function M.setup()
         end
     })
 
-    -- Debug pick mode hints
+    -- Debug pick mode pick chars
     vim.api.nvim_create_user_command("VBufferLineDebugPickMode", function()
         logger.enable(vim.fn.expand("~/vbl-pick-debug.log"), "DEBUG")
         vim.notify("VBL pick mode debug logging enabled: ~/vbl-pick-debug.log\nNow enter pick mode and check the log file", vim.log.levels.INFO)
     end, {
         nargs = 0,
-        desc = "Enable debug logging for pick mode hints"
+        desc = "Enable debug logging for pick chars in pick mode"
     })
 
     -- Pick mode commands removed - using VBufferLinePick and VBufferLinePickClose defined earlier

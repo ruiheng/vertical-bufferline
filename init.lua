@@ -423,8 +423,8 @@ end
 -- Extended picking mode implementation
 local PICK_ALPHABET = "asdfjklghqwertyuiopzxcvbnmASDFJKLGHQWERTYUIOPZXCVBNM"
 
--- Generate multi-character hint for overflow cases
-local function generate_multi_char_hint(overflow_index)
+-- Generate multi-character pick char for overflow cases
+local function generate_multi_char_pick_char(overflow_index)
     -- Use two-character combinations: aa, ab, ac, ..., ba, bb, bc, ...
     local base_chars = PICK_ALPHABET
     local base = #base_chars
@@ -437,13 +437,13 @@ local function generate_multi_char_hint(overflow_index)
     return first_char .. second_char
 end
 
--- Generate buffer hints based on buffer_id (for direct insertion during rendering)
+-- Generate buffer pick chars based on buffer_id (for direct insertion during rendering)
 -- @param all_group_buffers table List of {buffer_id, group_id} tuples in render order
--- @param bufferline_components table Bufferline components with existing hints
+-- @param bufferline_components table Bufferline components with existing pick chars
 -- @param active_group_id string|nil Active group ID
--- @param include_active_group boolean Whether to generate hints for active group buffers
--- @return table buffer_id -> hint_char mapping
-local function generate_buffer_hints(all_group_buffers, bufferline_components, active_group_id, include_active_group)
+-- @param include_active_group boolean Whether to generate pick chars for active group buffers
+-- @return table buffer_id -> pick_char mapping
+local function generate_buffer_pick_chars(all_group_buffers, bufferline_components, active_group_id, include_active_group)
     local buffer_hints = {}
     local used_chars = {}
 
@@ -458,7 +458,7 @@ local function generate_buffer_hints(all_group_buffers, bufferline_components, a
         end
     end
 
-    -- Extract existing bufferline hints (these take priority)
+    -- Extract existing bufferline pick chars (these take priority)
     for _, component in ipairs(bufferline_components or {}) do
         local ok, element = pcall(function() return component:as_element() end)
         local letter = nil
@@ -483,7 +483,7 @@ local function generate_buffer_hints(all_group_buffers, bufferline_components, a
         end
     end
 
-    -- If no bufferline hints exist and we should include active group, reset to allow all chars
+    -- If no bufferline pick chars exist and we should include active group, reset to allow all chars
     if include_active_group and next(buffer_hints) == nil then
         used_chars = {}
         available_chars = {}
@@ -492,13 +492,13 @@ local function generate_buffer_hints(all_group_buffers, bufferline_components, a
         end
     end
 
-    -- Assign hints to buffers that don't have them yet
+    -- Assign pick chars to buffers that don't have them yet
     local char_index = 1
     for _, entry in ipairs(all_group_buffers) do
         local buffer_id = entry.buffer_id
         local group_id = entry.group_id
 
-        -- Skip if buffer already has a hint from bufferline
+        -- Skip if buffer already has a pick char from bufferline
         if buffer_hints[buffer_id] then
             goto continue
         end
@@ -508,14 +508,14 @@ local function generate_buffer_hints(all_group_buffers, bufferline_components, a
             goto continue
         end
 
-        -- Assign hint
+        -- Assign pick char
         if char_index <= #available_chars then
             local hint_char = available_chars[char_index]
             buffer_hints[buffer_id] = hint_char
             char_index = char_index + 1
         else
-            -- Handle overflow: assign multi-character hints
-            local multi_char_hint = generate_multi_char_hint(char_index - #available_chars)
+            -- Handle overflow: assign multi-character pick chars
+            local multi_char_hint = generate_multi_char_pick_char(char_index - #available_chars)
             if not used_chars[multi_char_hint] then
                 buffer_hints[buffer_id] = multi_char_hint
                 used_chars[multi_char_hint] = true
@@ -530,12 +530,12 @@ local function generate_buffer_hints(all_group_buffers, bufferline_components, a
 end
 
 -- Legacy function for backward compatibility (used by highlight system)
-local function generate_extended_hints(bufferline_components, line_to_buffer, line_group_context, active_group_id, include_active_group)
+local function generate_extended_pick_chars(bufferline_components, line_to_buffer, line_group_context, active_group_id, include_active_group)
     local line_hints = {}
     local hint_lines = {}
     local bufferline_hints = {}
 
-    -- Extract existing bufferline hints
+    -- Extract existing bufferline pick chars
     local used_chars = {}
     for _, component in ipairs(bufferline_components or {}) do
         local ok, element = pcall(function() return component:as_element() end)
@@ -561,12 +561,12 @@ local function generate_extended_hints(bufferline_components, line_to_buffer, li
         end
     end
 
-    -- No bufferline: reset used_chars so we can assign hints to all lines
+    -- No bufferline: reset used_chars so we can assign pick chars to all lines
     if include_active_group and next(bufferline_hints) == nil then
         used_chars = {}
     end
 
-    -- Assign hints to non-active group lines with deterministic ordering
+    -- Assign pick chars to non-active group lines with deterministic ordering
     local char_index = 1
 
     -- Create sorted list of line numbers for deterministic ordering
@@ -579,7 +579,7 @@ local function generate_extended_hints(bufferline_components, line_to_buffer, li
     end
     table.sort(sorted_lines)
 
-    -- Assign hints in deterministic order
+    -- Assign pick chars in deterministic order
     for _, line_num in ipairs(sorted_lines) do
         if char_index <= #available_chars then
             local hint_char = available_chars[char_index]
@@ -587,8 +587,8 @@ local function generate_extended_hints(bufferline_components, line_to_buffer, li
             hint_lines[hint_char] = line_num
             char_index = char_index + 1
         else
-            -- Handle overflow: assign multi-character hints
-            local multi_char_hint = generate_multi_char_hint(char_index - #available_chars)
+            -- Handle overflow: assign multi-character pick chars
+            local multi_char_hint = generate_multi_char_pick_char(char_index - #available_chars)
             if not used_chars[multi_char_hint] and not hint_lines[multi_char_hint] then
                 line_hints[line_num] = multi_char_hint
                 hint_lines[multi_char_hint] = line_num
@@ -601,14 +601,14 @@ local function generate_extended_hints(bufferline_components, line_to_buffer, li
     return line_hints, hint_lines, bufferline_hints
 end
 
--- Helper function to find line number by hint character
-local function find_line_by_hint(hint_char)
+-- Helper function to find line number by pick char
+local function find_line_by_pick_char(hint_char)
     local extended_picking = state_module.get_extended_picking_state()
     return extended_picking.hint_lines[hint_char]
 end
 
--- Helper function to check if a prefix matches any hint
-local function has_hint_prefix(prefix)
+-- Helper function to check if a prefix matches any pick char
+local function has_pick_char_prefix(prefix)
     local extended_picking = state_module.get_extended_picking_state()
     for hint_char, _ in pairs(extended_picking.hint_lines) do
         if hint_char:sub(1, #prefix) == prefix then
@@ -636,7 +636,7 @@ local function read_pick_input()
         if hint_lines[input] then
             return input
         end
-        if not has_hint_prefix(input) then
+        if not has_pick_char_prefix(input) then
             return input
         end
     end
@@ -840,7 +840,7 @@ local function start_extended_picking(mode_type)
                 end
 
                 -- Check if this could be a prefix
-                if not has_hint_prefix(input_buffer) then
+                if not has_pick_char_prefix(input_buffer) then
                     -- Invalid input, reset
                     input_buffer = ""
                 end
@@ -852,14 +852,14 @@ local function start_extended_picking(mode_type)
     end)
 end
 
-local function rebuild_extended_picking_hints()
+local function rebuild_extended_picking_pick_chars()
     if not extended_picking_state.active then
         return
     end
 
     if state_module.get_layout_mode() == "horizontal" then
         local existing = state_module.get_extended_picking_state()
-        state_module.set_extended_picking_hints({}, existing.hint_lines or {}, existing.bufferline_hints or {})
+        state_module.set_extended_picking_pick_chars({}, existing.hint_lines or {}, existing.bufferline_hints or {})
         extended_picking_state.extended_hints = {}
         return
     end
@@ -875,7 +875,7 @@ local function rebuild_extended_picking_hints()
     local line_to_buffer = state_module.get_line_to_buffer_id()
     local line_group_context = state_module.get_line_group_context()
 
-    local line_hints, hint_lines, bufferline_hints = generate_extended_hints(
+    local line_hints, hint_lines, bufferline_hints = generate_extended_pick_chars(
         components,
         line_to_buffer,
         line_group_context,
@@ -883,7 +883,7 @@ local function rebuild_extended_picking_hints()
         not bufferline_integration.is_available()
     )
 
-    state_module.set_extended_picking_hints(line_hints, hint_lines, bufferline_hints)
+    state_module.set_extended_picking_pick_chars(line_hints, hint_lines, bufferline_hints)
     extended_picking_state.extended_hints = line_hints
 end
 
@@ -896,7 +896,7 @@ local function run_manual_pick(mode_type)
     start_extended_picking(mode_type)
     M.refresh("manual_pick")
 
-    rebuild_extended_picking_hints()
+    rebuild_extended_picking_pick_chars()
     M.refresh("manual_pick_hints")
 
     local input = read_pick_input()
@@ -1181,7 +1181,7 @@ local function detect_and_manage_picking_mode(bufferline_state, components)
         local line_to_buffer = state_module.get_line_to_buffer_id()
         local line_group_context = state_module.get_line_group_context()
         
-        local line_hints, hint_lines, bufferline_hints = generate_extended_hints(
+        local line_hints, hint_lines, bufferline_hints = generate_extended_pick_chars(
             components,
             line_to_buffer,
             line_group_context,
@@ -1193,7 +1193,7 @@ local function detect_and_manage_picking_mode(bufferline_state, components)
         local pick_mode = detect_pick_mode() or state_module.get_extended_picking_state().pick_mode or "switch"
         state_module.set_extended_picking_active(true)
         state_module.set_extended_picking_mode(pick_mode)
-        state_module.set_extended_picking_hints(line_hints, hint_lines, bufferline_hints)
+        state_module.set_extended_picking_pick_chars(line_hints, hint_lines, bufferline_hints)
 
         -- Start highlight application timer during picking mode
         local timer = vim.loop.new_timer()
@@ -1540,7 +1540,7 @@ local function build_menu_lines(items, include_hint)
     return lines
 end
 
-local function assign_menu_hints(items, buffer_hints, opts)
+local function assign_menu_pick_chars(items, buffer_hints, opts)
     opts = opts or {}
     local reserved = opts.reserved or { j = true, k = true, q = true }
     local used = {}
@@ -1551,7 +1551,7 @@ local function assign_menu_hints(items, buffer_hints, opts)
         end
     end
 
-    local function is_available_hint(hint)
+    local function is_available_pick_char(hint)
         if not hint or #hint ~= 1 then
             return false
         end
@@ -1571,9 +1571,9 @@ local function assign_menu_hints(items, buffer_hints, opts)
                     local lower = ch:lower()
                     local upper = ch:upper()
                     local picked = nil
-                    if is_available_hint(lower) then
+                    if is_available_pick_char(lower) then
                         picked = lower
-                    elseif lower ~= upper and is_available_hint(upper) then
+                    elseif lower ~= upper and is_available_pick_char(upper) then
                         picked = upper
                     end
                     if picked then
@@ -1590,7 +1590,7 @@ local function assign_menu_hints(items, buffer_hints, opts)
     for _, item in ipairs(items) do
         if not item.hint then
             local hint = buffer_hints and buffer_hints[item.id] or nil
-            if hint and is_available_hint(hint) then
+            if hint and is_available_pick_char(hint) then
                 item.hint = hint
                 used[hint] = true
             end
@@ -1601,7 +1601,7 @@ local function assign_menu_hints(items, buffer_hints, opts)
     local available = {}
     for i = 1, #PICK_ALPHABET do
         local char = PICK_ALPHABET:sub(i, i)
-        if is_available_hint(char) then
+        if is_available_pick_char(char) then
             table.insert(available, char)
         end
     end
@@ -1676,7 +1676,7 @@ local function setup_menu_mappings(items, on_select_item, include_hint, title_of
         end
         if include_hint and item.hint then
             api.nvim_buf_set_keymap(buf_id, "n", item.hint,
-                string.format(":lua require('vertical-bufferline').menu_select_by_hint('%s')<CR>", item.hint),
+                string.format(":lua require('vertical-bufferline').menu_select_by_pick_char('%s')<CR>", item.hint),
                 keymap_opts)
         end
     end
@@ -3331,7 +3331,7 @@ function M.refresh(reason, position_override)
             end
         end
 
-        buffer_hints = generate_buffer_hints(
+        buffer_hints = generate_buffer_pick_chars(
             all_group_buffers,
             components,
             active_group_id,
@@ -3366,7 +3366,7 @@ function M.refresh(reason, position_override)
                 })
             end
 
-            assign_menu_hints(hint_items, buffer_hints)
+            assign_menu_pick_chars(hint_items, buffer_hints)
             local remapped_hints = {}
             for _, item in ipairs(hint_items) do
                 if item.hint then
@@ -3383,7 +3383,7 @@ function M.refresh(reason, position_override)
         end
 
         -- Store in state for input handling
-        state_module.set_extended_picking_hints({}, hint_to_buffer, buffer_hints)
+        state_module.set_extended_picking_pick_chars({}, hint_to_buffer, buffer_hints)
 
         -- CRITICAL: Write hints to component.letter so existing code can read them!
         -- Create a component lookup map first
@@ -3410,7 +3410,7 @@ function M.refresh(reason, position_override)
         end
 
         -- Also clear state
-        state_module.set_extended_picking_hints({}, {}, {})
+        state_module.set_extended_picking_pick_chars({}, {}, {})
     end
 
     local lines_text = {}
@@ -3644,7 +3644,7 @@ function M.apply_extended_picking_highlights()
             
             if hint_pos then
                 local highlight_start = hint_pos - 1  -- Convert to 0-based
-                local highlight_end = hint_pos  -- Highlight just the hint character
+                local highlight_end = hint_pos  -- Highlight just the pick char
                 
                 -- Apply highlight with both namespace and without
                 api.nvim_buf_add_highlight(state_module.get_buf_id(), 0, pick_highlight_group, line_num - 1, highlight_start, highlight_end)
@@ -3766,10 +3766,10 @@ function M.menu_select_by_index(index)
     close_menu()
 end
 
-function M.menu_select_by_hint(hint)
+function M.menu_select_by_pick_char(pick_char)
     local items = M._menu_items or {}
     for _, item in ipairs(items) do
-        if item.hint == hint then
+        if item.hint == pick_char then
             if M._menu_on_select_item then
                 M._menu_on_select_item(item)
             end
@@ -3845,8 +3845,8 @@ function M.open_buffer_menu()
     for _, buf_id in ipairs(buffer_ids) do
         table.insert(all_group_buffers, { buffer_id = buf_id, group_id = active_group.id })
     end
-    local buffer_hints = generate_buffer_hints(all_group_buffers, {}, active_group.id, true)
-    assign_menu_hints(items, buffer_hints)
+    local buffer_hints = generate_buffer_pick_chars(all_group_buffers, {}, active_group.id, true)
+    assign_menu_pick_chars(items, buffer_hints)
 
     local lines = build_menu_lines(items, true)
     open_menu(lines, "Buffers")
@@ -3969,7 +3969,7 @@ function M.open_history_menu()
     for _, buf_id in ipairs(stable_buffer_ids) do
         table.insert(all_group_buffers, { buffer_id = buf_id, group_id = active_group.id })
     end
-    local buffer_hints = generate_buffer_hints(all_group_buffers, {}, active_group.id, true)
+    local buffer_hints = generate_buffer_pick_chars(all_group_buffers, {}, active_group.id, true)
     local stable_items = {}
     for _, buf_id in ipairs(stable_buffer_ids) do
         table.insert(stable_items, {
@@ -3977,7 +3977,7 @@ function M.open_history_menu()
             name = name_map[buf_id] or "",
         })
     end
-    assign_menu_hints(stable_items, buffer_hints)
+    assign_menu_pick_chars(stable_items, buffer_hints)
 
     local hint_map = {}
     for _, item in ipairs(stable_items) do

@@ -210,7 +210,7 @@ The visible ordinal corresponds to bufferline's ordinal numbers (for example, if
 - `└─ 3 📋 src/config.json` - Tree structure with smart disambiguation for duplicate names
 
 ### Picking Mode Integration
-When using `:BufferLinePick` (bufferline.nvim) or `:VBufferLinePick` (built-in), the sidebar shows hint characters:
+When using `:BufferLinePick` (bufferline.nvim) or `:VBufferLinePick` (built-in), the sidebar shows pick chars:
 ```
 ├─ a ► 1 🌙 App.tsx
 ├─ s 2 📄 Button.jsx
