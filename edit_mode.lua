@@ -175,7 +175,6 @@ local function build_edit_lines()
         "# Vertical Bufferline edit mode",
         "# CWD: " .. vim.fn.getcwd(),
         "# Lines starting with # are comments",
-        "# Insert file path (<C-p>): picker = " .. picker_name,
         "",
         "# Example:",
         "# [Group] Notes  # Group header, name optional",
@@ -183,6 +182,8 @@ local function build_edit_lines()
         "# docs/guide.md [pin]  # Pin buffer",
         "# /home/user/projects/app/src/main.lua [pin=a]  # Absolute path with stable pick char",
         "",
+        "# <C-p>: use file picker to insert files. picker = " .. picker_name,
+        "# zc,zo... to control code folding",
         "# :w or :wq to apply, :q! to discard",
         "",
     }
@@ -230,7 +231,7 @@ end
 function M.foldexpr(lnum)
     local line = vim.fn.getline(lnum)
     if line:match("^%[Group%]") then
-        return ">" .. lnum
+        return ">1"
     end
 
     if lnum == 1 then

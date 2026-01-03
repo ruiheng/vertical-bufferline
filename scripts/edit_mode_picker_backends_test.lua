@@ -46,12 +46,12 @@ local function open_and_assert_header(picker)
     })
     require('vertical-bufferline.edit_mode').open()
     local buf = vim.api.nvim_get_current_buf()
-    local lines = vim.api.nvim_buf_get_lines(buf, 0, 8, false)
+    local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
     local expected = "picker = " .. picker
     local actual = nil
     local found = false
     for _, line in ipairs(lines) do
-        if line:find("# Insert file path", 1, true) then
+        if line:find("# <C-p>:", 1, true) then
             actual = line
         end
         if line:find(expected, 1, true) then
