@@ -243,6 +243,19 @@ local function format_insert_path(path, cwd)
     return abs
 end
 
+local function list_files_under_cwd(cwd)
+    local paths = vim.fn.globpath(cwd, "**/*", false, true)
+    local files = {}
+    for _, path in ipairs(paths) do
+        local stat = vim.loop.fs_stat(path)
+        if stat and stat.type == "file" then
+            table.insert(files, path)
+        end
+    end
+    table.sort(files)
+    return files
+end
+
 local function insert_paths_into_buffer(paths, buf_id)
     if not paths or #paths == 0 then
         return
@@ -265,15 +278,78 @@ local function insert_paths_into_buffer(paths, buf_id)
     api.nvim_win_set_cursor(0, { row + #paths - 1, 0 })
 end
 
+local function insert_paths_in_edit_buffer(paths, target_buf)
+    if not paths or #paths == 0 then
+        return
+    end
+    vim.schedule(function()
+        local win = edit_state.win_id
+        if win and api.nvim_win_is_valid(win) then
+            api.nvim_set_current_win(win)
+        end
+        local buf = target_buf
+        if not (buf and api.nvim_buf_is_valid(buf)) then
+            buf = api.nvim_get_current_buf()
+        end
+        insert_paths_into_buffer(paths, buf)
+    end)
+end
+
 function M.telescope_insert_paths()
     if not in_edit_buffer() then
         vim.notify("VBL edit mode is not active", vim.log.levels.WARN)
         return
     end
 
+    local target_buf = api.nvim_get_current_buf()
     local ok_builtin, builtin = pcall(require, "telescope.builtin")
     if not ok_builtin then
-        vim.notify("Telescope not available", vim.log.levels.WARN)
+        local ok_pick, pick = pcall(require, "mini.pick")
+        if ok_pick and pick and pick.start then
+            local cwd = vim.fn.getcwd()
+            local items = list_files_under_cwd(cwd)
+            if #items == 0 then
+                vim.notify("No files found under current directory", vim.log.levels.WARN)
+                return
+            end
+            local prev_ignorecase = vim.o.ignorecase
+            local prev_smartcase = vim.o.smartcase
+            vim.o.ignorecase = true
+            vim.o.smartcase = false
+            local restore_group = api.nvim_create_augroup("VBufferLineEditMiniPick", { clear = true })
+            api.nvim_create_autocmd("User", {
+                group = restore_group,
+                pattern = "MiniPickStop",
+                once = true,
+                callback = function()
+                    vim.o.ignorecase = prev_ignorecase
+                    vim.o.smartcase = prev_smartcase
+                end,
+            })
+            local function build_paths(entries)
+                local paths = {}
+                for _, entry in ipairs(entries or {}) do
+                    if type(entry) == "string" then
+                        table.insert(paths, format_insert_path(entry, cwd))
+                    end
+                end
+                return paths
+            end
+            pick.start({
+                source = {
+                    name = "VBL edit: insert file (Tab to mark, Enter to insert)",
+                    items = items,
+                    choose = function(item)
+                        insert_paths_in_edit_buffer(build_paths({ item }), target_buf)
+                    end,
+                    choose_marked = function(entries)
+                        insert_paths_in_edit_buffer(build_paths(entries), target_buf)
+                    end,
+                },
+            })
+            return
+        end
+        vim.notify("Telescope or mini.pick not available", vim.log.levels.WARN)
         return
     end
 
@@ -315,7 +391,7 @@ function M.telescope_insert_paths()
                 actions.close(prompt_bufnr)
                 local paths = build_paths(entries)
                 if #paths > 0 then
-                    insert_paths_into_buffer(paths, api.nvim_get_current_buf())
+                    insert_paths_in_edit_buffer(paths, target_buf)
                 end
             end
 
