@@ -398,6 +398,14 @@ The algorithm automatically determines the minimal path suffix needed to uniquel
 
 ## Configuration
 
+## Testing
+
+Run all automated checks:
+
+```bash
+scripts/run_checks.sh
+```
+
 ### Lazy.nvim Setup (Full Options)
 
 ```lua

@@ -121,6 +121,12 @@ docs(readme): update installation instructions
 
 ### Automated Testing
 
+Recommended entry point:
+
+```bash
+scripts/run_checks.sh
+```
+
 Run the window-scope sanity check:
 
 ```bash
@@ -143,12 +149,6 @@ Run the edit-mode folding check:
 
 ```bash
 nvim --headless -u NONE -i NONE -n "+lua dofile('scripts/edit_mode_fold_check.lua')"
-```
-
-Run all automated checks:
-
-```bash
-scripts/run_checks.sh
 ```
 
 ### Manual/Debug Scripts
