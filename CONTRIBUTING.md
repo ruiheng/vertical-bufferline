@@ -151,6 +151,24 @@ Run the edit-mode folding check:
 nvim --headless -u NONE -i NONE -n "+lua dofile('scripts/edit_mode_fold_check.lua')"
 ```
 
+Run the basic lifecycle check:
+
+```bash
+nvim --headless -u NONE -i NONE -n "+lua dofile('scripts/basic_lifecycle_check.lua')"
+```
+
+Run the group operations check:
+
+```bash
+nvim --headless -u NONE -i NONE -n "+lua dofile('scripts/group_ops_check.lua')"
+```
+
+Run the history behavior check:
+
+```bash
+nvim --headless -u NONE -i NONE -n "+lua dofile('scripts/history_behavior_check.lua')"
+```
+
 ### Manual/Debug Scripts
 
 These are interactive or IDE-focused helpers and are not part of automated testing:
