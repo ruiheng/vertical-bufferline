@@ -793,11 +793,13 @@ local function start_extended_picking(mode_type)
         -- Save current mode and switch to a safe state
         local saved_mode = vim.api.nvim_get_mode().mode
 
+        local prompt_label = mode_type == "close" and "Pick a buffer to close" or "Pick buffer"
+
         -- Input loop - check state_module directly each iteration
         while state_module.get_extended_picking_state().is_active do
             local extended_picking = state_module.get_extended_picking_state()
             -- Prompt for input (non-blocking)
-            vim.api.nvim_echo({{string.format("Pick buffer [%s]: ", input_buffer), "Question"}}, false, {})
+            vim.api.nvim_echo({{string.format("%s [%s]: ", prompt_label, input_buffer), "Question"}}, false, {})
 
             -- Get a single character without echo
             local ok, char_code = pcall(vim.fn.getchar)
