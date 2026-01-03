@@ -169,6 +169,24 @@ Run the history behavior check:
 nvim --headless -u NONE -i NONE -n "+lua dofile('scripts/history_behavior_check.lua')"
 ```
 
+Run the global scope check:
+
+```bash
+nvim --headless -u NONE -i NONE -n "+lua dofile('scripts/global_scope_check.lua')"
+```
+
+Run the inherit-on-new-window check:
+
+```bash
+nvim --headless -u NONE -i NONE -n "+lua dofile('scripts/inherit_on_new_window_check.lua')"
+```
+
+Run the buffer cleanup check:
+
+```bash
+nvim --headless -u NONE -i NONE -n "+lua dofile('scripts/buffer_cleanup_check.lua')"
+```
+
 ### Manual/Debug Scripts
 
 These are interactive or IDE-focused helpers and are not part of automated testing:
