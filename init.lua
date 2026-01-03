@@ -5226,28 +5226,23 @@ M.cycle_show_history = M.cycle_show_history_setting
 --- @field user_config.edit_mode? table Edit-mode settings
 --- @return nil
 function M.setup(user_config)
+    local function merge_known_table(dst, src)
+        for nested_key, nested_value in pairs(src or {}) do
+            if dst[nested_key] ~= nil then
+                dst[nested_key] = nested_value
+            end
+        end
+    end
+
     if user_config then
         -- Merge user configuration with defaults
         for key, value in pairs(user_config) do
-            if config_module.settings[key] ~= nil then
+            if key == "session" and type(value) == "table" then
+                merge_known_table(config_module.settings.session, value)
+            elseif key == "edit_mode" and type(value) == "table" then
+                merge_known_table(config_module.settings.edit_mode, value)
+            elseif config_module.settings[key] ~= nil then
                 config_module.settings[key] = value
-            end
-        end
-
-        -- Handle nested session configuration
-        if user_config.session then
-            for key, value in pairs(user_config.session) do
-                if config_module.settings.session[key] ~= nil then
-                    config_module.settings.session[key] = value
-                end
-            end
-        end
-
-        if user_config.edit_mode then
-            for key, value in pairs(user_config.edit_mode) do
-                if config_module.settings.edit_mode[key] ~= nil then
-                    config_module.settings.edit_mode[key] = value
-                end
             end
         end
     end

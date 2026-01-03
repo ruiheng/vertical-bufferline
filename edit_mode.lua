@@ -111,11 +111,57 @@ end
 
 --- Build edit lines and return them with initial cursor position
 --- @return table lines, number initial_cursor_line
+local function get_edit_mode_picker()
+    local picker = config_module.settings.edit_mode and config_module.settings.edit_mode.picker or "auto"
+    if picker == nil or picker == "" then
+        return "auto"
+    end
+    return picker
+end
+
+local function resolve_picker_status()
+    local picker = get_edit_mode_picker()
+    local has_telescope = pcall(require, "telescope.builtin")
+    local has_minipick = pcall(require, "mini.pick")
+
+    if picker == "auto" then
+        if has_telescope then
+            return "telescope", nil
+        end
+        if has_minipick then
+            return "mini.pick", nil
+        end
+        return "none", "Install telescope.nvim or mini.nvim (mini.pick) for file picking."
+    end
+
+    if picker == "telescope" then
+        if has_telescope then
+            return "telescope", nil
+        end
+        return "none", "Configured picker not available: telescope.nvim."
+    end
+
+    if picker == "mini.pick" then
+        if has_minipick then
+            return "mini.pick", nil
+        end
+        return "none", "Configured picker not available: mini.nvim (mini.pick)."
+    end
+
+    if picker == "none" then
+        return "none", nil
+    end
+
+    return "none", "Unknown picker: " .. tostring(picker)
+end
+
 local function build_edit_lines()
+    local picker_name, picker_hint = resolve_picker_status()
     local lines = {
         "# Vertical Bufferline edit mode",
         "# CWD: " .. vim.fn.getcwd(),
         "# Lines starting with # are comments",
+        "# Insert file path (<C-p>): picker = " .. picker_name,
         "",
         "# Example:",
         "# [Group] Notes  # Group header, name optional",
@@ -126,6 +172,9 @@ local function build_edit_lines()
         "# :w or :wq to apply, :q! to discard",
         "",
     }
+    if picker_hint then
+        table.insert(lines, 5, "# " .. picker_hint)
+    end
 
     local group_list = groups.get_all_groups()
     add_missing_modified_buffers(group_list)
@@ -295,6 +344,16 @@ local function insert_paths_in_edit_buffer(paths, target_buf)
     end)
 end
 
+local function apply_insert_path_keymap(buf_id)
+    local insert_path_key = config_module.settings.edit_mode
+        and config_module.settings.edit_mode.insert_path_key
+    if insert_path_key and insert_path_key ~= "" then
+        vim.keymap.set({ "n", "i" }, insert_path_key, function()
+            require('vertical-bufferline.edit_mode').telescope_insert_paths()
+        end, { buffer = buf_id, silent = true, nowait = true, desc = "Insert file path (VBL edit)" })
+    end
+end
+
 function M.telescope_insert_paths()
     if not in_edit_buffer() then
         vim.notify("VBL edit mode is not active", vim.log.levels.WARN)
@@ -303,9 +362,17 @@ function M.telescope_insert_paths()
 
     local target_buf = api.nvim_get_current_buf()
     local ok_builtin, builtin = pcall(require, "telescope.builtin")
-    if not ok_builtin then
+    local picker = get_edit_mode_picker()
+    local allow_telescope = picker == "auto" or picker == "telescope"
+    local allow_minipick = picker == "auto" or picker == "mini.pick"
+
+    if not ok_builtin and allow_telescope then
+        allow_telescope = false
+    end
+
+    if not allow_telescope then
         local ok_pick, pick = pcall(require, "mini.pick")
-        if ok_pick and pick and pick.start then
+        if allow_minipick and ok_pick and pick and pick.start then
             local cwd = vim.fn.getcwd()
             local items = list_files_under_cwd(cwd)
             if #items == 0 then
@@ -349,7 +416,11 @@ function M.telescope_insert_paths()
             })
             return
         end
-        vim.notify("Telescope or mini.pick not available", vim.log.levels.WARN)
+        if picker == "auto" then
+            vim.notify("Telescope or mini.pick not available", vim.log.levels.WARN)
+        else
+            vim.notify("Configured picker not available: " .. picker, vim.log.levels.WARN)
+        end
         return
     end
 
@@ -742,15 +813,16 @@ local function setup_edit_buffer(buf_id)
     vim.bo[buf_id].modifiable = true
     vim.bo[buf_id].filetype = "vertical-bufferline-edit"
     vim.bo[buf_id].buflisted = false
-    local insert_path_key = config_module.settings.edit_mode
-        and config_module.settings.edit_mode.insert_path_key
-    if insert_path_key and insert_path_key ~= "" then
-        vim.keymap.set({ "n", "i" }, insert_path_key, function()
-            require('vertical-bufferline.edit_mode').telescope_insert_paths()
-        end, { buffer = buf_id, silent = true, desc = "Insert file path (VBL edit)" })
-    end
+    apply_insert_path_keymap(buf_id)
 
     local group = vim.api.nvim_create_augroup("VBufferLineEditModal", { clear = true })
+    api.nvim_create_autocmd("BufEnter", {
+        group = group,
+        buffer = buf_id,
+        callback = function()
+            apply_insert_path_keymap(buf_id)
+        end,
+    })
     api.nvim_create_autocmd("WinLeave", {
         group = group,
         callback = function()
@@ -807,6 +879,7 @@ end
 
 function M.open()
     if edit_state.buf_id and api.nvim_buf_is_valid(edit_state.buf_id) then
+        apply_insert_path_keymap(edit_state.buf_id)
         if edit_state.win_id and api.nvim_win_is_valid(edit_state.win_id) then
             api.nvim_set_current_win(edit_state.win_id)
         else

@@ -197,6 +197,7 @@ M.DEFAULTS = {
     -- Edit-mode settings
     edit_mode = {
         insert_path_key = "<C-p>",
+        picker = "auto",
     },
 }
 
