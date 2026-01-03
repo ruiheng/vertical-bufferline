@@ -618,10 +618,12 @@ local function apply_edit_buffer(buf_id)
 
     local target_group_id = nil
     local prev_buf_valid = prev_buf and api.nvim_buf_is_valid(prev_buf)
+    local prev_buf_in_group = false
     if prev_buf_valid then
         local group = groups.find_buffer_group(prev_buf)
         if group then
             target_group_id = group.id
+            prev_buf_in_group = true
         end
     end
 
@@ -644,7 +646,7 @@ local function apply_edit_buffer(buf_id)
             vim.o.hidden = prev_hidden
         end
 
-        if prev_buf_valid then
+        if prev_buf_valid and prev_buf_in_group then
             pcall(api.nvim_set_current_buf, prev_buf)
         end
     end)
