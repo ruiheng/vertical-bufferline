@@ -7,6 +7,35 @@ local groups = require('vertical-bufferline.groups')
 local logger = require('vertical-bufferline.logger')
 local utils = require('vertical-bufferline.utils')
 
+local profile_state = {
+    enabled = vim.g.vbl_sync_profile == true or vim.g.vbl_sync_profile == 1,
+    stats = {}
+}
+
+local function profile_start()
+    if not profile_state.enabled then
+        return nil
+    end
+    return vim.loop.hrtime()
+end
+
+local function profile_end(label, start_time)
+    if not start_time then
+        return
+    end
+    local elapsed_ms = (vim.loop.hrtime() - start_time) / 1e6
+    local stat = profile_state.stats[label]
+    if not stat then
+        stat = { count = 0, total_ms = 0, max_ms = 0 }
+        profile_state.stats[label] = stat
+    end
+    stat.count = stat.count + 1
+    stat.total_ms = stat.total_ms + elapsed_ms
+    if elapsed_ms > stat.max_ms then
+        stat.max_ms = elapsed_ms
+    end
+end
+
 -- Simple state
 local sync_timer = nil
 local is_enabled = false
@@ -16,6 +45,13 @@ local sync_target_group_id = nil
 local last_buffer_state = {}
 -- Cache last current buffer for detecting current buffer changes
 local last_current_buffer = nil
+-- Cache last target buffer set for diff-based updates
+local last_target_buffer_set = nil
+-- Track buffers seen during set_bufferline_buffers() to catch new buffers
+local last_seen_buffers = {}
+-- Debounce bufferline refresh to avoid redundant redraws during rapid switches
+local bufferline_refresh_seq = 0
+local bufferline_refresh_delay_ms = 30
 -- No longer need global cache - position info is stored in each group
 
 -- Prevent reload protection
@@ -32,6 +68,18 @@ end
 
 function M.is_available()
     return is_bufferline_available()
+end
+
+function M.set_profile_enabled(enabled)
+    profile_state.enabled = enabled and true or false
+end
+
+function M.get_profile_stats()
+    return vim.deepcopy(profile_state.stats)
+end
+
+function M.reset_profile_stats()
+    profile_state.stats = {}
 end
 
 
@@ -57,17 +105,21 @@ local function get_bufferline_sorted_buffers()
         return {}
     end
 
+    local t_total = profile_start()
     local bufferline_utils = require('bufferline.utils')
     local bufferline_state = require('bufferline.state')
     
     -- Get all valid buffers from bufferline
     local all_valid_buffers = {}
     if bufferline_utils and bufferline_utils.get_valid_buffers then
+        local t_valid = profile_start()
         all_valid_buffers = bufferline_utils.get_valid_buffers()
+        profile_end("bufferline.get_valid_buffers", t_valid)
     end
     
     -- If bufferline has a custom sort order, use it
     if bufferline_state and bufferline_state.custom_sort then
+        local t_sort = profile_start()
         local custom_sort = bufferline_state.custom_sort
         local reverse_lookup = {}
         for i, buf_id in ipairs(custom_sort) do
@@ -87,11 +139,14 @@ local function get_bufferline_sorted_buffers()
             if not b_rank then return true end
             return a_rank < b_rank
         end)
-        
+
+        profile_end("bufferline.custom_sort", t_sort)
+        profile_end("bufferline.get_sorted_buffers", t_total)
         return sorted_buffers
     end
     
     -- Fallback to default order
+    profile_end("bufferline.get_sorted_buffers", t_total)
     return all_valid_buffers
 end
 
@@ -102,6 +157,7 @@ local function get_real_position_info()
         return {}
     end
 
+    local t_total = profile_start()
     local state = require('bufferline.state')
     local all_buffers = state.components or {}
     local visible_buffers = state.visible_components or {}
@@ -120,7 +176,8 @@ local function get_real_position_info()
     for buffer_id, local_pos in pairs(visible_positions) do
         position_info[buffer_id] = local_pos
     end
-    
+
+    profile_end("bufferline.get_position_info", t_total)
     return position_info
 end
 
@@ -166,6 +223,7 @@ local function sync_bufferline_to_group()
         return
     end
 
+    local t_total = profile_start()
     -- Get all valid buffer list from bufferline with proper ordering
     local all_valid_buffers = get_bufferline_sorted_buffers()
 
@@ -173,14 +231,17 @@ local function sync_bufferline_to_group()
     local bufferline_ok, bufferline = pcall(require, 'bufferline')
     local bufferline_buffer_ids = {}
     if bufferline_ok then
+        local t_elements = profile_start()
         local elements = bufferline.get_elements().elements
         for _, elem in ipairs(elements) do
             table.insert(bufferline_buffer_ids, elem.id)
         end
+        profile_end("sync.get_elements", t_elements)
     end
 
     -- Filter out special buffers (based on buftype)
     local filtered_buffer_ids = {}
+    local t_filter = profile_start()
     for _, buf_id in ipairs(all_valid_buffers) do
         local should_include = not is_special_buffer(buf_id)
 
@@ -188,12 +249,14 @@ local function sync_bufferline_to_group()
             table.insert(filtered_buffer_ids, buf_id)
         end
     end
+    profile_end("sync.filter_buffers", t_filter)
 
     local target_group = groups.find_group_by_id(sync_target_group_id)
 
     if target_group then
         -- Build current buffer state snapshot (including ID and name)
         local current_buffer_state = {}
+        local t_state = profile_start()
         for _, buf_id in ipairs(filtered_buffer_ids) do
             if vim.api.nvim_buf_is_valid(buf_id) then
                 current_buffer_state[buf_id] = vim.api.nvim_buf_get_name(buf_id)
@@ -205,6 +268,7 @@ local function sync_bufferline_to_group()
         local names_changed = not vim.deep_equal(last_buffer_state, current_buffer_state)
         local current_buf = vim.api.nvim_get_current_buf()
         local current_buffer_changed = last_current_buffer ~= current_buf
+        profile_end("sync.build_state", t_state)
 
         -- Log the change detection details
         logger.log_sync_state("sync", "change_detection", 
@@ -243,6 +307,7 @@ local function sync_bufferline_to_group()
             -- If user removes buffer from bufferline, it should also be removed from VBL
 
             -- Update buffers and automatically sync history
+            local t_update = profile_start()
             groups.update_group_buffers(sync_target_group_id, merged_buffers)
 
             -- Sync group history with current buffer (only when current buffer is actually in the group)
@@ -250,6 +315,7 @@ local function sync_bufferline_to_group()
             if current_buffer_in_group then
                 groups.sync_group_history_with_current(sync_target_group_id, current_buffer_in_group)
             end
+            profile_end("sync.update_group", t_update)
 
             -- Trigger event to notify that group content has been updated
             vim.api.nvim_exec_autocmds("User", {
@@ -260,12 +326,14 @@ local function sync_bufferline_to_group()
             -- Actively refresh sidebar display
             local vbl = require('vertical-bufferline')
             if vbl.state and vbl.state.is_sidebar_open and vbl.refresh then
+                local t_refresh = profile_start()
                 logger.info("sync", "triggering VBL refresh", {
                     reason = "bufferline_sync",
                     sidebar_open = vbl.state.is_sidebar_open,
                     current_buffer_in_group = current_buffer_in_group
                 })
                 vbl.refresh("bufferline_sync")
+                profile_end("sync.refresh_sidebar", t_refresh)
             else
                 logger.warn("sync", "VBL refresh not available", {
                     vbl_exists = vbl ~= nil,
@@ -276,6 +344,8 @@ local function sync_bufferline_to_group()
             end
         end
     end
+
+    profile_end("sync.total", t_total)
 end
 
 
@@ -286,9 +356,12 @@ function M.set_bufferline_buffers(buffer_list)
         return
     end
 
+    local t_total = profile_start()
     -- Control bufferline's buffer visibility to match target group
     -- Get all buffers for visibility control
+    local t_list = profile_start()
     local all_buffers = vim.api.nvim_list_bufs()
+    profile_end("set_bufferline.list_bufs", t_list)
 
     -- Create buffer set for fast lookup
     local target_buffer_set = {}
@@ -297,22 +370,55 @@ function M.set_bufferline_buffers(buffer_list)
     end
 
     -- Update buffer visibility based on target list
-    for _, buf_id in ipairs(all_buffers) do
-        if vim.api.nvim_buf_is_valid(buf_id) then
-            if target_buffer_set[buf_id] then
-                -- Ensure target buffer is listed
-                pcall(vim.api.nvim_buf_set_option, buf_id, 'buflisted', true)
-            else
-                -- Hide buffers not in target list
+    local t_apply = profile_start()
+    if not last_target_buffer_set then
+        -- First run: full sync to establish baseline
+        local current_seen = {}
+        for _, buf_id in ipairs(all_buffers) do
+            current_seen[buf_id] = true
+            if vim.api.nvim_buf_is_valid(buf_id) then
+                if target_buffer_set[buf_id] then
+                    pcall(vim.api.nvim_buf_set_option, buf_id, 'buflisted', true)
+                else
+                    pcall(vim.api.nvim_buf_set_option, buf_id, 'buflisted', false)
+                end
+            end
+        end
+        last_seen_buffers = current_seen
+    else
+        -- Handle newly created buffers since last run
+        local current_seen = {}
+        for _, buf_id in ipairs(all_buffers) do
+            current_seen[buf_id] = true
+            if not last_seen_buffers[buf_id] and vim.api.nvim_buf_is_valid(buf_id) then
+                local should_list = target_buffer_set[buf_id] == true
+                pcall(vim.api.nvim_buf_set_option, buf_id, 'buflisted', should_list)
+            end
+        end
+
+        -- Unlist buffers removed from the target set
+        for buf_id, _ in pairs(last_target_buffer_set) do
+            if not target_buffer_set[buf_id] and vim.api.nvim_buf_is_valid(buf_id) then
                 pcall(vim.api.nvim_buf_set_option, buf_id, 'buflisted', false)
             end
         end
+
+        -- List buffers newly added to the target set
+        for buf_id, _ in pairs(target_buffer_set) do
+            if not last_target_buffer_set[buf_id] and vim.api.nvim_buf_is_valid(buf_id) then
+                pcall(vim.api.nvim_buf_set_option, buf_id, 'buflisted', true)
+            end
+        end
+
+        last_seen_buffers = current_seen
     end
+    profile_end("set_bufferline.apply_listed", t_apply)
 
     -- Force bufferline to follow our buffer order
     if #buffer_list > 1 then
         -- Use vim.schedule to ensure bufferline state is updated first
         vim.schedule(function()
+            local t_sort = profile_start()
             local ok, bufferline = pcall(require, 'bufferline')
             if ok and bufferline.sort_buffers_by then
                 -- Force bufferline to sort according to our buffer_list order
@@ -322,6 +428,7 @@ function M.set_bufferline_buffers(buffer_list)
                     return index_a < index_b
                 end)
             end
+            profile_end("set_bufferline.sort", t_sort)
         end)
     end
 
@@ -339,13 +446,26 @@ function M.set_bufferline_buffers(buffer_list)
     end
 
     -- Refresh bufferline
-    local ok_ui, bufferline_ui = pcall(require, 'bufferline.ui')
-    if ok_ui and bufferline_ui.refresh then
-        bufferline_ui.refresh()
-    end
+    bufferline_refresh_seq = bufferline_refresh_seq + 1
+    local refresh_seq = bufferline_refresh_seq
+    vim.defer_fn(function()
+        if refresh_seq ~= bufferline_refresh_seq then
+            return
+        end
+        local t_refresh = profile_start()
+        local ok_ui, bufferline_ui = pcall(require, 'bufferline.ui')
+        if ok_ui and bufferline_ui.refresh then
+            bufferline_ui.refresh()
+        end
+        profile_end("set_bufferline.refresh", t_refresh)
+    end, bufferline_refresh_delay_ms)
 
     -- 3. Point the pointer to the new group (set by caller)
     -- This step is completed by the set_sync_target function
+
+    last_target_buffer_set = target_buffer_set
+
+    profile_end("set_bufferline.total", t_total)
 end
 
 --- Handle empty group display: create or switch to an empty temporary buffer
