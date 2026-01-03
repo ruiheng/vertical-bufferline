@@ -1302,33 +1302,37 @@ function M.setup(opts)
         end
     end, config_module.UI.AUTO_SAVE_DELAY)
 
-    if is_window_scope_enabled() then
-        vim.api.nvim_create_autocmd("WinEnter", {
-            pattern = "*",
-            callback = function(args)
-                local win_id = args.win or api.nvim_get_current_win()
-                if type(win_id) ~= "number" then
-                    return
-                end
-                M.activate_window_context(win_id, {
-                    seed_on_create = true,
-                    seed_buffer_id = api.nvim_win_get_buf(win_id),
-                })
-            end,
-            desc = "Activate VBL group context for window",
-        })
+    vim.api.nvim_create_autocmd("WinEnter", {
+        pattern = "*",
+        callback = function(args)
+            if not is_window_scope_enabled() then
+                return
+            end
+            local win_id = args.win or api.nvim_get_current_win()
+            if type(win_id) ~= "number" then
+                return
+            end
+            M.activate_window_context(win_id, {
+                seed_on_create = true,
+                seed_buffer_id = api.nvim_win_get_buf(win_id),
+            })
+        end,
+        desc = "Activate VBL group context for window",
+    })
 
-        vim.api.nvim_create_autocmd("WinClosed", {
-            pattern = "*",
-            callback = function(args)
-                local win_id = tonumber(args.match)
-                if win_id then
-                    group_contexts[win_id] = nil
-                end
-            end,
-            desc = "Remove VBL group context for closed window",
-        })
-    end
+    vim.api.nvim_create_autocmd("WinClosed", {
+        pattern = "*",
+        callback = function(args)
+            if not is_window_scope_enabled() then
+                return
+            end
+            local win_id = tonumber(args.match)
+            if win_id then
+                group_contexts[win_id] = nil
+            end
+        end,
+        desc = "Remove VBL group context for closed window",
+    })
 end
 
 --- Switch to group by display number (for quick switch shortcuts)
