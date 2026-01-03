@@ -314,6 +314,25 @@ local function resolve_entry(path, buffer_maps, cwd, warnings, line_number)
     end
     candidate = candidate or (abs and buffer_maps.abs[abs]) or buffer_maps.raw[path]
 
+    if not candidate and abs then
+        local stat = vim.loop.fs_stat(abs)
+        local buf_id = vim.fn.bufadd(abs)
+        if buf_id and buf_id > 0 then
+            local real_path = vim.loop.fs_realpath(abs) or abs
+            buffer_maps.real[real_path] = buffer_maps.real[real_path] or buf_id
+            buffer_maps.abs[abs] = buffer_maps.abs[abs] or buf_id
+            buffer_maps.raw[path] = buffer_maps.raw[path] or buf_id
+            if not stat then
+                table.insert(warnings, string.format(
+                    "Line %d: file not found on disk; created buffer for %s",
+                    line_number,
+                    path
+                ))
+            end
+            return buf_id
+        end
+    end
+
     if not candidate then
         table.insert(warnings, string.format("Line %d: buffer path not found: %s", line_number, path))
     end
