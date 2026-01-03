@@ -145,6 +145,20 @@ Run the edit-mode folding check:
 nvim --headless -u NONE -i NONE -n "+lua dofile('scripts/edit_mode_fold_check.lua')"
 ```
 
+Run all automated checks:
+
+```bash
+scripts/run_checks.sh
+```
+
+### Manual/Debug Scripts
+
+These are interactive or IDE-focused helpers and are not part of automated testing:
+
+- `scripts/manual/pick_mode_debug.lua`
+- `scripts/manual/pick_highlights_debug.lua`
+- `scripts/manual/emmylua_annotations.lua`
+
 ## Submitting Changes
 
 ### Pull Request Process

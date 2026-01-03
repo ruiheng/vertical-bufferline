@@ -15,6 +15,7 @@ TestSession.vim
 # 测试文件
 test_*.lua
 *_test.lua
+!scripts/*_test.lua
 
 # 临时编辑器文件
 *~

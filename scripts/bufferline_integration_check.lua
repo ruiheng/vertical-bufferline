@@ -14,7 +14,13 @@ end
 local function add_bufferline_rtp()
     local cwd = vim.fn.getcwd()
     local bufferline_path = cwd .. "/vendor/bufferline.nvim"
+    if vim.fn.isdirectory(bufferline_path) == 0 then
+        print("SKIP: vendor/bufferline.nvim not found")
+        vim.cmd("qa")
+        return false
+    end
     vim.opt.rtp:append(bufferline_path)
+    return true
 end
 
 local function write_temp_file(lines)
@@ -24,7 +30,9 @@ local function write_temp_file(lines)
 end
 
 add_rtp_root()
-add_bufferline_rtp()
+if not add_bufferline_rtp() then
+    return
+end
 
 require('bufferline').setup({})
 
