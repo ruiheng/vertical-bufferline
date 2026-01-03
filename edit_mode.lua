@@ -111,78 +111,62 @@ end
 
 --- Build edit lines and return them with initial cursor position
 --- @return table lines, number initial_cursor_line
-local function get_edit_mode_picker()
+local function normalize_picker_preference()
     local picker = config_module.settings.edit_mode and config_module.settings.edit_mode.picker or "auto"
     if picker == nil or picker == "" then
-        return "auto"
+        picker = "auto"
     end
-    return picker
+    if type(picker) == "table" then
+        local ordered = {}
+        for _, name in ipairs(picker) do
+            if type(name) == "string" and name ~= "" then
+                table.insert(ordered, name)
+            end
+        end
+        return ordered
+    end
+    if type(picker) == "string" then
+        if picker == "auto" then
+            return { "telescope", "snacks", "fzf-lua", "mini.pick" }
+        end
+        return { picker }
+    end
+    return { "telescope", "snacks", "fzf-lua", "mini.pick" }
 end
 
 local function resolve_picker_status()
-    local picker = get_edit_mode_picker()
-    local has_telescope = (picker == "auto" or picker == "telescope")
-        and pcall(require, "telescope.builtin")
-        or false
-    local has_snacks = (picker == "auto" or picker == "snacks")
-        and pcall(require, "snacks")
-        or false
-    local has_fzf_lua = (picker == "auto" or picker == "fzf-lua")
-        and pcall(require, "fzf-lua")
-        or false
-    local has_minipick = (picker == "auto" or picker == "mini.pick")
-        and pcall(require, "mini.pick")
-        or false
-
-    if picker == "auto" then
-        if has_telescope then
-            return "telescope", nil
+    local preferences = normalize_picker_preference()
+    local missing = {}
+    for _, name in ipairs(preferences) do
+        if name == "none" then
+            return "none", nil
         end
-        if has_snacks then
-            return "snacks", nil
+        if name == "telescope" then
+            if pcall(require, "telescope.builtin") then
+                return "telescope", nil
+            end
+            table.insert(missing, "telescope.nvim")
+        elseif name == "snacks" then
+            if pcall(require, "snacks") then
+                return "snacks", nil
+            end
+            table.insert(missing, "snacks.nvim")
+        elseif name == "fzf-lua" then
+            if pcall(require, "fzf-lua") then
+                return "fzf-lua", nil
+            end
+            table.insert(missing, "fzf-lua")
+        elseif name == "mini.pick" then
+            if pcall(require, "mini.pick") then
+                return "mini.pick", nil
+            end
+            table.insert(missing, "mini.nvim (mini.pick)")
         end
-        if has_fzf_lua then
-            return "fzf-lua", nil
-        end
-        if has_minipick then
-            return "mini.pick", nil
-        end
-        return "none", "Install telescope.nvim, snacks.nvim, fzf-lua, or mini.nvim (mini.pick) for file picking."
     end
-
-    if picker == "telescope" then
-        if has_telescope then
-            return "telescope", nil
-        end
-        return "none", "Configured picker not available: telescope.nvim."
+    if #missing > 0 then
+        return "none", "No configured picker available. Install: " .. table.concat(missing, ", ")
     end
-
-    if picker == "snacks" then
-        if has_snacks then
-            return "snacks", nil
-        end
-        return "none", "Configured picker not available: snacks.nvim."
-    end
-
-    if picker == "fzf-lua" then
-        if has_fzf_lua then
-            return "fzf-lua", nil
-        end
-        return "none", "Configured picker not available: fzf-lua."
-    end
-
-    if picker == "mini.pick" then
-        if has_minipick then
-            return "mini.pick", nil
-        end
-        return "none", "Configured picker not available: mini.nvim (mini.pick)."
-    end
-
-    if picker == "none" then
-        return "none", nil
-    end
-
-    return "none", "Unknown picker: " .. tostring(picker)
+    return "none", "No picker configured."
 end
 
 local function build_edit_lines()
@@ -467,30 +451,15 @@ function M.telescope_insert_paths()
 
     local target_buf = api.nvim_get_current_buf()
     local ok_builtin, builtin = pcall(require, "telescope.builtin")
-    local picker = get_edit_mode_picker()
-    local allow_telescope = picker == "auto" or picker == "telescope"
-    local allow_snacks = picker == "auto" or picker == "snacks"
-    local allow_fzf_lua = picker == "auto" or picker == "fzf-lua"
-    local allow_minipick = picker == "auto" or picker == "mini.pick"
-
-    if not ok_builtin and allow_telescope then
-        allow_telescope = false
-    end
-
-    if not allow_telescope then
-        if allow_snacks and open_snacks_picker(target_buf) then
-            return
-        end
-        if allow_fzf_lua and open_fzf_lua_picker(target_buf) then
-            return
-        end
+    local preferences = normalize_picker_preference()
+    local function try_minipick()
         local ok_pick, pick = pcall(require, "mini.pick")
-        if allow_minipick and ok_pick and pick and pick.start then
+        if ok_pick and pick and pick.start then
             local cwd = vim.fn.getcwd()
             local items = list_files_under_cwd(cwd)
             if #items == 0 then
                 vim.notify("No files found under current directory", vim.log.levels.WARN)
-                return
+                return true
             end
             local prev_ignorecase = vim.o.ignorecase
             local prev_smartcase = vim.o.smartcase
@@ -527,13 +496,36 @@ function M.telescope_insert_paths()
                     end,
                 },
             })
-            return
+            return true
         end
-        if picker == "auto" then
-            vim.notify("No supported picker available", vim.log.levels.WARN)
-        else
-            vim.notify("Configured picker not available: " .. picker, vim.log.levels.WARN)
+        return false
+    end
+
+    local use_telescope = false
+    for _, name in ipairs(preferences) do
+        if name == "none" then
+            break
+        elseif name == "telescope" then
+            if ok_builtin then
+                use_telescope = true
+                break
+            end
+        elseif name == "snacks" then
+            if open_snacks_picker(target_buf) then
+                return
+            end
+        elseif name == "fzf-lua" then
+            if open_fzf_lua_picker(target_buf) then
+                return
+            end
+        elseif name == "mini.pick" then
+            if try_minipick() then
+                return
+            end
         end
+    end
+    if not use_telescope then
+        vim.notify("No supported picker available", vim.log.levels.WARN)
         return
     end
 
