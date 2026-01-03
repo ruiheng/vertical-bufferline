@@ -151,6 +151,12 @@ Run the edit-mode folding check:
 nvim --headless -u NONE -i NONE -n "+lua dofile('scripts/edit_mode_fold_check.lua')"
 ```
 
+Run the position switch cmdheight check:
+
+```bash
+nvim --headless -u NONE -i NONE -n "+lua dofile('scripts/position_switch_cmdheight_check.lua')"
+```
+
 Run the basic lifecycle check:
 
 ```bash
@@ -185,6 +191,24 @@ Run the buffer cleanup check:
 
 ```bash
 nvim --headless -u NONE -i NONE -n "+lua dofile('scripts/buffer_cleanup_check.lua')"
+```
+
+Run the align-with-cursor check:
+
+```bash
+nvim --headless -u NONE -i NONE -n "+lua dofile('scripts/align_with_cursor_check.lua')"
+```
+
+Run the path display check:
+
+```bash
+nvim --headless -u NONE -i NONE -n "+lua dofile('scripts/path_display_check.lua')"
+```
+
+Run the floating mode check:
+
+```bash
+nvim --headless -u NONE -i NONE -n "+lua dofile('scripts/floating_mode_check.lua')"
 ```
 
 ### Manual/Debug Scripts
