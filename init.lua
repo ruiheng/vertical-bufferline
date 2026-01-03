@@ -5223,6 +5223,7 @@ M.cycle_show_history = M.cycle_show_history_setting
 --- @field user_config.history_auto_threshold_horizontal? number Min files for auto mode (top/bottom) (default: 10)
 --- @field user_config.history_display_count? number Max history items to display (default: 7)
 --- @field user_config.session? table Session integration settings
+--- @field user_config.edit_mode? table Edit-mode settings
 --- @return nil
 function M.setup(user_config)
     if user_config then
@@ -5238,6 +5239,14 @@ function M.setup(user_config)
             for key, value in pairs(user_config.session) do
                 if config_module.settings.session[key] ~= nil then
                     config_module.settings.session[key] = value
+                end
+            end
+        end
+
+        if user_config.edit_mode then
+            for key, value in pairs(user_config.edit_mode) do
+                if config_module.settings.edit_mode[key] ~= nil then
+                    config_module.settings.edit_mode[key] = value
                 end
             end
         end

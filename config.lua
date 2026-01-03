@@ -193,6 +193,11 @@ M.DEFAULTS = {
         confirm_restore = true,             -- Ask for confirmation before restoring
         global_variable = "VerticalBufferlineSession"  -- Global variable name for session data
     },
+
+    -- Edit-mode settings
+    edit_mode = {
+        insert_path_key = "<C-p>",
+    },
 }
 
 -- Runtime settings (mutable)

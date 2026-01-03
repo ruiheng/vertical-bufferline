@@ -7,6 +7,7 @@ local api = vim.api
 
 local groups = require('vertical-bufferline.groups')
 local bufferline_integration = require('vertical-bufferline.bufferline-integration')
+local config_module = require('vertical-bufferline.config')
 local state_module = require('vertical-bufferline.state')
 
 local edit_state = {
@@ -202,6 +203,126 @@ local function normalize_path(path, cwd)
 
     local real = vim.loop.fs_realpath(abs)
     return real, abs
+end
+
+local function is_telescope_filetype(filetype)
+    return type(filetype) == "string" and filetype:match("^Telescope") ~= nil
+end
+
+local function has_telescope_window()
+    for _, win_id in ipairs(api.nvim_list_wins()) do
+        if api.nvim_win_is_valid(win_id) then
+            local buf_id = api.nvim_win_get_buf(win_id)
+            local ft = api.nvim_get_option_value("filetype", { buf = buf_id })
+            if is_telescope_filetype(ft) then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+local function is_under_dir(path, dir)
+    if not path or not dir then
+        return false
+    end
+    if path == dir then
+        return true
+    end
+    local dir_with_sep = dir:match("[/\\]$") and dir or (dir .. "/")
+    return path:sub(1, #dir_with_sep) == dir_with_sep
+end
+
+local function format_insert_path(path, cwd)
+    local abs = vim.fn.fnamemodify(path, ":p")
+    local abs_real = vim.loop.fs_realpath(abs) or abs
+    local cwd_real = vim.loop.fs_realpath(cwd) or cwd
+    if is_under_dir(abs_real, cwd_real) then
+        return vim.fn.fnamemodify(abs, ":.")
+    end
+    return abs
+end
+
+local function insert_paths_into_buffer(paths, buf_id)
+    if not paths or #paths == 0 then
+        return
+    end
+    local cursor = api.nvim_win_get_cursor(0)
+    local row = cursor[1]
+    local line = api.nvim_buf_get_lines(buf_id, row - 1, row, false)[1] or ""
+    if line == "" or line:match("^%s*#") then
+        api.nvim_buf_set_lines(buf_id, row - 1, row, false, { paths[1] })
+        if #paths > 1 then
+            local rest = {}
+            for i = 2, #paths do
+                table.insert(rest, paths[i])
+            end
+            api.nvim_buf_set_lines(buf_id, row, row, false, rest)
+        end
+    else
+        api.nvim_buf_set_lines(buf_id, row, row, false, paths)
+    end
+    api.nvim_win_set_cursor(0, { row + #paths - 1, 0 })
+end
+
+function M.telescope_insert_paths()
+    if not in_edit_buffer() then
+        vim.notify("VBL edit mode is not active", vim.log.levels.WARN)
+        return
+    end
+
+    local ok_builtin, builtin = pcall(require, "telescope.builtin")
+    if not ok_builtin then
+        vim.notify("Telescope not available", vim.log.levels.WARN)
+        return
+    end
+
+    local ok_actions, actions = pcall(require, "telescope.actions")
+    local ok_state, action_state = pcall(require, "telescope.actions.state")
+    if not (ok_actions and ok_state) then
+        vim.notify("Telescope actions not available", vim.log.levels.WARN)
+        return
+    end
+
+    local cwd = vim.fn.getcwd()
+    builtin.find_files({
+        prompt_title = "VBL edit: insert file (Tab to multi-select, Enter to insert)",
+        attach_mappings = function(prompt_bufnr, _)
+            local function build_paths(entries)
+                local paths = {}
+                for _, entry in ipairs(entries) do
+                    local entry_path = entry.path or entry.filename or entry.value or entry[1]
+                    if entry_path and entry_path ~= "" then
+                        table.insert(paths, format_insert_path(entry_path, cwd))
+                    end
+                end
+                return paths
+            end
+
+            local function insert_selection()
+                local picker = action_state.get_current_picker(prompt_bufnr)
+                local multi = picker:get_multi_selection()
+                local entries = {}
+                if multi and #multi > 0 then
+                    entries = multi
+                else
+                    local entry = action_state.get_selected_entry()
+                    if entry then
+                        entries = { entry }
+                    end
+                end
+
+                actions.close(prompt_bufnr)
+                local paths = build_paths(entries)
+                if #paths > 0 then
+                    insert_paths_into_buffer(paths, api.nvim_get_current_buf())
+                end
+            end
+
+            actions.select_default:replace(insert_selection)
+            return true
+        end,
+    })
 end
 
 local function build_buffer_maps()
@@ -543,6 +664,13 @@ local function setup_edit_buffer(buf_id)
     vim.bo[buf_id].modifiable = true
     vim.bo[buf_id].filetype = "vertical-bufferline-edit"
     vim.bo[buf_id].buflisted = false
+    local insert_path_key = config_module.settings.edit_mode
+        and config_module.settings.edit_mode.insert_path_key
+    if insert_path_key and insert_path_key ~= "" then
+        vim.keymap.set({ "n", "i" }, insert_path_key, function()
+            require('vertical-bufferline.edit_mode').telescope_insert_paths()
+        end, { buffer = buf_id, silent = true, desc = "Insert file path (VBL edit)" })
+    end
 
     local group = vim.api.nvim_create_augroup("VBufferLineEditModal", { clear = true })
     api.nvim_create_autocmd("WinLeave", {
@@ -551,6 +679,9 @@ local function setup_edit_buffer(buf_id)
             local win = edit_state.win_id
             if win and api.nvim_win_is_valid(win) then
                 vim.schedule(function()
+                    if has_telescope_window() then
+                        return
+                    end
                     if api.nvim_win_is_valid(win) then
                         api.nvim_set_current_win(win)
                     end
