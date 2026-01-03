@@ -114,8 +114,15 @@ local function build_edit_lines()
     local lines = {
         "# Vertical Bufferline edit mode",
         "# CWD: " .. vim.fn.getcwd(),
-        "# :w or :wq to apply, :q! to discard",
         "# Lines starting with # are comments",
+        "",
+        "# Example:",
+        "# [Group] Notes  # Group header, name optional",
+        "# README.md  # Relative path",
+        "# docs/guide.md [pin]  # Pin buffer",
+        "# /home/user/projects/app/src/main.lua [pin=a]  # Absolute path with stable pick char",
+        "",
+        "# :w or :wq to apply, :q! to discard",
         "",
     }
 
