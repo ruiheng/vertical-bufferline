@@ -121,17 +121,33 @@ end
 
 local function resolve_picker_status()
     local picker = get_edit_mode_picker()
-    local has_telescope = pcall(require, "telescope.builtin")
-    local has_minipick = pcall(require, "mini.pick")
+    local has_telescope = (picker == "auto" or picker == "telescope")
+        and pcall(require, "telescope.builtin")
+        or false
+    local has_snacks = (picker == "auto" or picker == "snacks")
+        and pcall(require, "snacks")
+        or false
+    local has_fzf_lua = (picker == "auto" or picker == "fzf-lua")
+        and pcall(require, "fzf-lua")
+        or false
+    local has_minipick = (picker == "auto" or picker == "mini.pick")
+        and pcall(require, "mini.pick")
+        or false
 
     if picker == "auto" then
         if has_telescope then
             return "telescope", nil
         end
+        if has_snacks then
+            return "snacks", nil
+        end
+        if has_fzf_lua then
+            return "fzf-lua", nil
+        end
         if has_minipick then
             return "mini.pick", nil
         end
-        return "none", "Install telescope.nvim or mini.nvim (mini.pick) for file picking."
+        return "none", "Install telescope.nvim, snacks.nvim, fzf-lua, or mini.nvim (mini.pick) for file picking."
     end
 
     if picker == "telescope" then
@@ -139,6 +155,20 @@ local function resolve_picker_status()
             return "telescope", nil
         end
         return "none", "Configured picker not available: telescope.nvim."
+    end
+
+    if picker == "snacks" then
+        if has_snacks then
+            return "snacks", nil
+        end
+        return "none", "Configured picker not available: snacks.nvim."
+    end
+
+    if picker == "fzf-lua" then
+        if has_fzf_lua then
+            return "fzf-lua", nil
+        end
+        return "none", "Configured picker not available: fzf-lua."
     end
 
     if picker == "mini.pick" then
@@ -254,16 +284,21 @@ local function normalize_path(path, cwd)
     return real, abs
 end
 
-local function is_telescope_filetype(filetype)
-    return type(filetype) == "string" and filetype:match("^Telescope") ~= nil
+local function is_picker_filetype(filetype)
+    if type(filetype) ~= "string" then
+        return false
+    end
+    return filetype:match("^Telescope") ~= nil
+        or filetype:match("^snacks_picker") ~= nil
+        or filetype:match("^fzf") ~= nil
 end
 
-local function has_telescope_window()
+local function has_picker_window()
     for _, win_id in ipairs(api.nvim_list_wins()) do
         if api.nvim_win_is_valid(win_id) then
             local buf_id = api.nvim_win_get_buf(win_id)
             local ft = api.nvim_get_option_value("filetype", { buf = buf_id })
-            if is_telescope_filetype(ft) then
+            if is_picker_filetype(ft) then
                 return true
             end
         end
@@ -354,6 +389,76 @@ local function apply_insert_path_keymap(buf_id)
     end
 end
 
+local function open_snacks_picker(target_buf)
+    local ok_snacks, snacks = pcall(require, "snacks")
+    if not ok_snacks or not (snacks and snacks.picker) then
+        return false
+    end
+
+    local cwd = vim.fn.getcwd()
+    local picker_util = snacks.picker.util
+    snacks.picker("files", {
+        cwd = cwd,
+        title = "VBL edit: insert file (Tab to mark, Enter to insert)",
+        confirm = function(picker)
+            local selected = picker:selected({ fallback = true })
+            local paths = {}
+            for _, item in ipairs(selected or {}) do
+                local path = picker_util and picker_util.path(item) or item.file or item.path or item.text
+                if path and path ~= "" then
+                    table.insert(paths, format_insert_path(path, cwd))
+                end
+            end
+            picker:close()
+            if #paths > 0 then
+                insert_paths_in_edit_buffer(paths, target_buf)
+            end
+        end,
+    })
+    return true
+end
+
+local function open_fzf_lua_picker(target_buf)
+    local ok_fzf, fzf_lua = pcall(require, "fzf-lua")
+    if not ok_fzf or not fzf_lua then
+        return false
+    end
+
+    local cwd = vim.fn.getcwd()
+    local function normalize_entry(entry)
+        if type(entry) ~= "string" then
+            return nil
+        end
+        local cleaned = entry:gsub("^%s+", "")
+        local tab_pos = cleaned:find("\t")
+        if tab_pos then
+            cleaned = cleaned:sub(tab_pos + 1)
+        end
+        return cleaned ~= "" and cleaned or nil
+    end
+
+    fzf_lua.files({
+        cwd = cwd,
+        prompt = "VBL edit> ",
+        fzf_opts = { ["--multi"] = "" },
+        actions = {
+            ["default"] = function(selected)
+                local paths = {}
+                for _, entry in ipairs(selected or {}) do
+                    local path = normalize_entry(entry)
+                    if path then
+                        table.insert(paths, format_insert_path(path, cwd))
+                    end
+                end
+                if #paths > 0 then
+                    insert_paths_in_edit_buffer(paths, target_buf)
+                end
+            end,
+        },
+    })
+    return true
+end
+
 function M.telescope_insert_paths()
     if not in_edit_buffer() then
         vim.notify("VBL edit mode is not active", vim.log.levels.WARN)
@@ -364,6 +469,8 @@ function M.telescope_insert_paths()
     local ok_builtin, builtin = pcall(require, "telescope.builtin")
     local picker = get_edit_mode_picker()
     local allow_telescope = picker == "auto" or picker == "telescope"
+    local allow_snacks = picker == "auto" or picker == "snacks"
+    local allow_fzf_lua = picker == "auto" or picker == "fzf-lua"
     local allow_minipick = picker == "auto" or picker == "mini.pick"
 
     if not ok_builtin and allow_telescope then
@@ -371,6 +478,12 @@ function M.telescope_insert_paths()
     end
 
     if not allow_telescope then
+        if allow_snacks and open_snacks_picker(target_buf) then
+            return
+        end
+        if allow_fzf_lua and open_fzf_lua_picker(target_buf) then
+            return
+        end
         local ok_pick, pick = pcall(require, "mini.pick")
         if allow_minipick and ok_pick and pick and pick.start then
             local cwd = vim.fn.getcwd()
@@ -417,7 +530,7 @@ function M.telescope_insert_paths()
             return
         end
         if picker == "auto" then
-            vim.notify("Telescope or mini.pick not available", vim.log.levels.WARN)
+            vim.notify("No supported picker available", vim.log.levels.WARN)
         else
             vim.notify("Configured picker not available: " .. picker, vim.log.levels.WARN)
         end
@@ -829,7 +942,7 @@ local function setup_edit_buffer(buf_id)
             local win = edit_state.win_id
             if win and api.nvim_win_is_valid(win) then
                 vim.schedule(function()
-                    if has_telescope_window() then
+                    if has_picker_window() then
                         return
                     end
                     if api.nvim_win_is_valid(win) then
