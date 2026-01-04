@@ -115,8 +115,10 @@ Note: `BufferLineGoToBuffer` and `BufferLinePick` are provided by bufferline.nvi
 ## Commands
 
 ### Edit Mode
-- `:VBufferLineEdit` - Open a modal edit buffer to batch-edit groups (apply with `:w`, discard by closing the window)
-- Edit entries accept `[pin]` or `[pin=a]` to mark pinned buffers and optional stable pick chars.
+- `:VBufferLineEdit` - Fast, modal batch editor for groups: reorder everything in one pass without leaving Vim.
+- Great for large refactors: move buffers across groups, duplicate entries into multiple groups, and assign stable pick chars with `[pin]` / `[pin=a]`.
+- Safe and forgiving: unsaved buffers are preserved, and invalid lines are skipped with warnings instead of aborting.
+- Built-in file insertion: use the edit picker (Telescope/snacks/fzf-lua/mini.pick) to add files quickly.
 
 ### Group Operations
 - `:VBufferLineCreateGroup [name]` - Create new group with optional name
