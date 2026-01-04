@@ -181,6 +181,7 @@ local function build_edit_lines()
         "# README.md  # Relative path",
         "# docs/guide.md [pin]  # Pin buffer",
         "# /home/user/projects/app/src/main.lua [pin=a]  # Absolute path with stable pick char",
+        "# notes/new_file.md [new]  # Create buffer for a missing file",
         "",
         "# <C-p>: use file picker to insert files. picker = " .. picker_name,
         "# zc,zo... to control code folding",
@@ -610,6 +611,8 @@ local function parse_flags(raw, warnings, line_number)
         for flag in flag_str:gmatch("%S+") do
             if flag == "pin" then
                 flags.pin = true
+            elseif flag == "new" then
+                flags.new = true
             else
                 local pin_char = flag:match("^pin=(.+)$")
                 if pin_char ~= nil then
@@ -629,7 +632,7 @@ local function parse_flags(raw, warnings, line_number)
     end
 
     for flag, _ in pairs(flags) do
-        if flag ~= "pin" and flag ~= "pin_char" then
+        if flag ~= "pin" and flag ~= "pin_char" and flag ~= "new" then
             table.insert(warnings, string.format("Line %d: unknown flag '%s' ignored", line_number, flag))
         end
     end
@@ -670,7 +673,7 @@ local function parse_lines(lines)
     return group_specs, warnings
 end
 
-local function resolve_entry(path, buffer_maps, cwd, warnings, line_number)
+local function resolve_entry(path, flags, buffer_maps, cwd, warnings, line_number)
     local buf_id = path:match("^buf:(%d+)$")
     if buf_id then
         local id = tonumber(buf_id)
@@ -690,6 +693,14 @@ local function resolve_entry(path, buffer_maps, cwd, warnings, line_number)
 
     if not candidate and abs then
         local stat = vim.loop.fs_stat(abs)
+        if not stat and not (flags and flags.new) then
+            table.insert(warnings, string.format(
+                "Line %d: file not found on disk (use [new] to create): %s",
+                line_number,
+                path
+            ))
+            return nil
+        end
         local buf_id = vim.fn.bufadd(abs)
         if buf_id and buf_id > 0 then
             local real_path = vim.loop.fs_realpath(abs) or abs
@@ -734,7 +745,7 @@ local function build_group_buffers(group_specs)
                 goto continue
             end
 
-            local buf_id = resolve_entry(path, buffer_maps, cwd, warnings, entry.line)
+            local buf_id = resolve_entry(path, flags, buffer_maps, cwd, warnings, entry.line)
             if buf_id then
                 if seen[buf_id] then
                     table.insert(warnings, string.format("Line %d: duplicate buffer in group '%s'", entry.line, spec.name))
