@@ -4222,7 +4222,7 @@ function M.apply_extended_picking_highlights()
     local active_group = groups.get_active_group()
     local active_group_id = active_group and active_group.id or nil
 
-    -- Apply highlights to all lines with hints
+    -- Apply highlights to all lines with hints (including duplicate buffer lines)
     local line_hints = extended_picking.line_hints or {}
     if (not next(line_hints)) and extended_picking.hint_lines then
         line_hints = {}
@@ -4230,17 +4230,26 @@ function M.apply_extended_picking_highlights()
             for line_num, mapped_buf in pairs(line_to_buffer) do
                 if mapped_buf == buf_id then
                     line_hints[line_num] = hint_char
-                    break
                 end
             end
         end
     end
 
     local cached_hints = pick_display_cache.hints_by_line or {}
-
+    local highlight_lines = {}
+    for line_num, hint_info in pairs(cached_hints) do
+        highlight_lines[line_num] = { hint = hint_info.hint, pos = hint_info.pos }
+    end
     for line_num, hint_char in pairs(line_hints) do
+        if not highlight_lines[line_num] then
+            highlight_lines[line_num] = { hint = hint_char, pos = nil }
+        end
+    end
+
+    for line_num, hint_info in pairs(highlight_lines) do
+        local hint_char = hint_info.hint
         local buffer_id = line_to_buffer[line_num]
-        if buffer_id then
+        if buffer_id and hint_char then
             -- Choose appropriate pick highlight based on buffer state
             local pick_highlight_group
             if buffer_id == current_buffer_id then
@@ -4250,8 +4259,7 @@ function M.apply_extended_picking_highlights()
             end
             local is_prefix_match = input_prefix ~= "" and hint_char:sub(1, #input_prefix) == input_prefix
 
-            local hint_info = cached_hints[line_num]
-            if hint_info and hint_info.pos then
+            if hint_info.pos then
                 local highlight_start = hint_info.pos - 1
                 local highlight_end = highlight_start + #hint_char
 
