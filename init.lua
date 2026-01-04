@@ -739,19 +739,28 @@ local function get_pick_char_match(prefix)
     local extended_picking = state_module.get_extended_picking_state()
     local match = nil
     local count = 0
-    for hint_char, _ in pairs(extended_picking.hint_lines) do
+    local matched_buffers = {}
+    local line_to_buffer = state_module.get_line_to_buffer_id()
+
+    for hint_char, line_num in pairs(extended_picking.hint_lines) do
         if hint_char:sub(1, #prefix) == prefix then
-            count = count + 1
-            if count == 1 then
-                match = hint_char
-            else
-                match = nil
-                break
+            local buffer_id = line_to_buffer and line_to_buffer[line_num] or nil
+            if buffer_id and not matched_buffers[buffer_id] then
+                matched_buffers[buffer_id] = true
+                count = count + 1
+                if count == 1 then
+                    match = hint_char
+                else
+                    match = nil
+                    break
+                end
             end
         end
     end
     return count, match
 end
+
+M._get_pick_char_match = get_pick_char_match
 
 -- Read user input for pick mode
 local function read_pick_input()
