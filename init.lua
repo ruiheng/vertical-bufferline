@@ -44,6 +44,10 @@ local filename_utils = require('vertical-bufferline.filename_utils')
 local logger = require('vertical-bufferline.logger')
 local layout = require('vertical-bufferline.layout')
 
+local capture_pick_display_state
+local update_pick_display
+local restore_pick_display
+
 if not package.preload["telescope._extensions.vertical_bufferline"] then
     package.preload["telescope._extensions.vertical_bufferline"] = function()
         return require('vertical-bufferline.telescope_extension')
@@ -52,6 +56,7 @@ end
 
 -- Namespace for our highlights
 local ns_id = api.nvim_create_namespace("VerticalBufferline")
+local pick_input_ns_id = api.nvim_create_namespace("VerticalBufferlinePickInput")
 
 local switch_to_buffer_in_main_window
 
@@ -74,6 +79,14 @@ local menu_state = {
     buf_id = nil,
     prev_win_id = nil,
     augroup = nil,
+    title = nil,
+    items = nil,
+    filtered_items = nil,
+    include_hint = false,
+    title_offset = 0,
+    max_digits = 1,
+    input_buffer = "",
+    input_mode = nil,
 }
 
 local function close_menu(opts)
@@ -95,6 +108,14 @@ local function close_menu(opts)
     menu_state.win_id = nil
     menu_state.buf_id = nil
     menu_state.prev_win_id = nil
+    menu_state.title = nil
+    menu_state.items = nil
+    menu_state.filtered_items = nil
+    menu_state.include_hint = false
+    menu_state.title_offset = 0
+    menu_state.max_digits = 1
+    menu_state.input_buffer = ""
+    menu_state.input_mode = nil
 end
 
 -- Setup highlight groups function
@@ -270,6 +291,7 @@ local function setup_highlights()
         bold = true,
         default = true
     })
+    api.nvim_set_hl(0, config_module.HIGHLIGHTS.MENU_INPUT_PREFIX, { link = "Comment", default = true })
 
     -- Recent Files header highlight removed - kept subtle without special highlighting
 end
@@ -421,20 +443,96 @@ local function get_pinned_buffer_ids()
 end
 
 -- Extended picking mode implementation
-local PICK_ALPHABET = "asdfjklghqwertyuiopzxcvbnmASDFJKLGHQWERTYUIOPZXCVBNM"
+local DEFAULT_PICK_CHARS = "asdfjklghqwertyuiopzxcvbnmASDFJKLGHQWERTYUIOPZXCVBNM"
+
+local function get_pick_chars()
+    local chars = config_module.settings.pick_chars
+    if type(chars) ~= "string" or chars == "" then
+        return DEFAULT_PICK_CHARS
+    end
+    return chars
+end
+
+local function get_pick_char_sets()
+    local base_chars = get_pick_chars()
+    local prefix_chars = {}
+    for i = 1, #base_chars do
+        local ch = base_chars:sub(i, i)
+        if not ch:match("%d") then
+            table.insert(prefix_chars, ch)
+        end
+    end
+    if #prefix_chars == 0 then
+        base_chars = DEFAULT_PICK_CHARS
+        prefix_chars = {}
+        for i = 1, #base_chars do
+            local ch = base_chars:sub(i, i)
+            if not ch:match("%d") then
+                table.insert(prefix_chars, ch)
+            end
+        end
+    end
+    return base_chars, prefix_chars
+end
+
+local function get_pick_char_lists()
+    local base_chars, prefix_chars = get_pick_char_sets()
+    local base_list = {}
+    local base_set = {}
+    for i = 1, #base_chars do
+        local ch = base_chars:sub(i, i)
+        table.insert(base_list, ch)
+        base_set[ch] = true
+    end
+    local prefix_list = {}
+    for _, ch in ipairs(prefix_chars) do
+        if base_set[ch] then
+            table.insert(prefix_list, ch)
+        end
+    end
+    return base_list, prefix_list
+end
+
+local function generate_variable_pick_char(index, base_list, prefix_list)
+    if type(index) ~= "number" or index < 1 then
+        return ""
+    end
+    local base = #base_list
+    local prefix_base = #prefix_list
+    if base == 0 or prefix_base == 0 then
+        return ""
+    end
+
+    local remaining = index
+    local length = 2
+    while true do
+        local count = prefix_base * (base ^ (length - 1))
+        if remaining <= count then
+            break
+        end
+        remaining = remaining - count
+        length = length + 1
+    end
+
+    local remainder = remaining - 1
+    local first_index = math.floor(remainder / (base ^ (length - 1))) + 1
+    remainder = remainder % (base ^ (length - 1))
+
+    local chars = { prefix_list[first_index] }
+    for position = 2, length do
+        local power = base ^ (length - position)
+        local idx = math.floor(remainder / power) + 1
+        remainder = remainder % power
+        table.insert(chars, base_list[idx])
+    end
+
+    return table.concat(chars)
+end
 
 -- Generate multi-character pick char for overflow cases
 local function generate_multi_char_pick_char(overflow_index)
-    -- Use two-character combinations: aa, ab, ac, ..., ba, bb, bc, ...
-    local base_chars = PICK_ALPHABET
-    local base = #base_chars
-    local first_char_index = math.floor((overflow_index - 1) / base) + 1
-    local second_char_index = ((overflow_index - 1) % base) + 1
-    
-    local first_char = base_chars:sub(first_char_index, first_char_index)
-    local second_char = base_chars:sub(second_char_index, second_char_index)
-    
-    return first_char .. second_char
+    local base_list, prefix_list = get_pick_char_lists()
+    return generate_variable_pick_char(overflow_index, base_list, prefix_list)
 end
 
 -- Generate buffer pick chars based on buffer_id (for direct insertion during rendering)
@@ -475,9 +573,9 @@ local function generate_buffer_pick_chars(all_group_buffers, bufferline_componen
     end
 
     -- Generate available character pool
+    local _, prefix_chars = get_pick_char_sets()
     local available_chars = {}
-    for i = 1, #PICK_ALPHABET do
-        local char = PICK_ALPHABET:sub(i, i)
+    for _, char in ipairs(prefix_chars) do
         if not used_chars[char] then
             table.insert(available_chars, char)
         end
@@ -487,13 +585,17 @@ local function generate_buffer_pick_chars(all_group_buffers, bufferline_componen
     if include_active_group and next(buffer_hints) == nil then
         used_chars = {}
         available_chars = {}
-        for i = 1, #PICK_ALPHABET do
-            table.insert(available_chars, PICK_ALPHABET:sub(i, i))
+        local _, reset_prefix_chars = get_pick_char_sets()
+        for _, char in ipairs(reset_prefix_chars) do
+            table.insert(available_chars, char)
         end
     end
 
     -- Assign pick chars to buffers that don't have them yet
     local char_index = 1
+    local overflow_index = 1
+    local overflow_index = 1
+    local overflow_index = 1
     for _, entry in ipairs(all_group_buffers) do
         local buffer_id = entry.buffer_id
         local group_id = entry.group_id
@@ -512,14 +614,21 @@ local function generate_buffer_pick_chars(all_group_buffers, bufferline_componen
         if char_index <= #available_chars then
             local hint_char = available_chars[char_index]
             buffer_hints[buffer_id] = hint_char
+            used_chars[hint_char] = true
             char_index = char_index + 1
         else
-            -- Handle overflow: assign multi-character pick chars
-            local multi_char_hint = generate_multi_char_pick_char(char_index - #available_chars)
-            if not used_chars[multi_char_hint] then
-                buffer_hints[buffer_id] = multi_char_hint
-                used_chars[multi_char_hint] = true
-                char_index = char_index + 1
+            -- Handle overflow: assign multi-character pick chars (variable length)
+            while true do
+                local multi_char_hint = generate_multi_char_pick_char(overflow_index)
+                overflow_index = overflow_index + 1
+                if multi_char_hint == "" then
+                    break
+                end
+                if not used_chars[multi_char_hint] then
+                    buffer_hints[buffer_id] = multi_char_hint
+                    used_chars[multi_char_hint] = true
+                    break
+                end
             end
         end
 
@@ -553,9 +662,9 @@ local function generate_extended_pick_chars(bufferline_components, line_to_buffe
     end
 
     -- Generate available character pool
+    local _, prefix_chars = get_pick_char_sets()
     local available_chars = {}
-    for i = 1, #PICK_ALPHABET do
-        local char = PICK_ALPHABET:sub(i, i)
+    for _, char in ipairs(prefix_chars) do
         if not used_chars[char] then
             table.insert(available_chars, char)
         end
@@ -568,6 +677,7 @@ local function generate_extended_pick_chars(bufferline_components, line_to_buffe
 
     -- Assign pick chars to non-active group lines with deterministic ordering
     local char_index = 1
+    local overflow_index = 1
 
     -- Create sorted list of line numbers for deterministic ordering
     local sorted_lines = {}
@@ -585,16 +695,23 @@ local function generate_extended_pick_chars(bufferline_components, line_to_buffe
             local hint_char = available_chars[char_index]
             line_hints[line_num] = hint_char
             hint_lines[hint_char] = line_num
+            used_chars[hint_char] = true
             char_index = char_index + 1
         else
-            -- Handle overflow: assign multi-character pick chars
-            local multi_char_hint = generate_multi_char_pick_char(char_index - #available_chars)
-            if not used_chars[multi_char_hint] and not hint_lines[multi_char_hint] then
-                line_hints[line_num] = multi_char_hint
-                hint_lines[multi_char_hint] = line_num
-                used_chars[multi_char_hint] = true
+            -- Handle overflow: assign multi-character pick chars (variable length)
+            while true do
+                local multi_char_hint = generate_multi_char_pick_char(overflow_index)
+                overflow_index = overflow_index + 1
+                if multi_char_hint == "" then
+                    break
+                end
+                if not used_chars[multi_char_hint] and not hint_lines[multi_char_hint] then
+                    line_hints[line_num] = multi_char_hint
+                    hint_lines[multi_char_hint] = line_num
+                    used_chars[multi_char_hint] = true
+                    break
+                end
             end
-            char_index = char_index + 1
         end
     end
 
@@ -618,6 +735,24 @@ local function has_pick_char_prefix(prefix)
     return false
 end
 
+local function get_pick_char_match(prefix)
+    local extended_picking = state_module.get_extended_picking_state()
+    local match = nil
+    local count = 0
+    for hint_char, _ in pairs(extended_picking.hint_lines) do
+        if hint_char:sub(1, #prefix) == prefix then
+            count = count + 1
+            if count == 1 then
+                match = hint_char
+            else
+                match = nil
+                break
+            end
+        end
+    end
+    return count, match
+end
+
 -- Read user input for pick mode
 local function read_pick_input()
     local input = ""
@@ -632,13 +767,42 @@ local function read_pick_input()
         if char == "\027" then  -- ESC
             return nil
         end
+        if char == "\r" or char == "\n" then
+            if hint_lines[input] then
+                return input
+            end
+            goto continue
+        end
+        if #char ~= 1 then
+            goto continue
+        end
+        local pick_chars = get_pick_chars()
+        if not pick_chars:find(char, 1, true) then
+            goto continue
+        end
+        if input == "" then
+            local _, prefix_chars = get_pick_char_sets()
+            local is_prefix = false
+            for _, prefix_char in ipairs(prefix_chars) do
+                if prefix_char == char then
+                    is_prefix = true
+                    break
+                end
+            end
+            if not is_prefix then
+                goto continue
+            end
+        end
         input = input .. char
-        if hint_lines[input] then
+        update_pick_display(input)
+        local match_count, match_hint = get_pick_char_match(input)
+        if match_count == 1 and match_hint then
+            return match_hint
+        end
+        if match_count == 0 then
             return input
         end
-        if not has_pick_char_prefix(input) then
-            return input
-        end
+        ::continue::
     end
 end
 
@@ -687,6 +851,9 @@ local function exit_extended_picking()
 
     -- Deactivate extended picking in state module
     state_module.set_extended_picking_active(false)
+    state_module.set_extended_picking_input_prefix("")
+    restore_pick_display()
+    update_pick_display("")
     -- DON'T reset was_picking here - let detect_and_manage_picking_mode handle it
     -- This ensures proper cleanup in the next refresh cycle
 end
@@ -779,12 +946,14 @@ local function start_extended_picking(mode_type)
     state_module.set_extended_picking_active(true)
     state_module.set_extended_picking_mode(mode_type)
     state_module.set_was_picking(false)  -- Reset to trigger hint generation
+    state_module.set_extended_picking_input_prefix("")
 
     -- Setup pick highlights before rendering
     setup_pick_highlights()
 
     -- Trigger refresh to generate hints and render with pick letters
     M.refresh("vbl_pick_mode_start")
+    capture_pick_display_state()
 
     -- Use a blocking input loop in a coroutine to prevent keys from reaching vim
     vim.schedule(function()
@@ -793,13 +962,14 @@ local function start_extended_picking(mode_type)
         -- Save current mode and switch to a safe state
         local saved_mode = vim.api.nvim_get_mode().mode
 
-        local prompt_label = mode_type == "close" and "Pick a buffer to close" or "Pick buffer"
+        local prompt_label = mode_type == "close" and "Pick buffer (enter to confirm) [close]" or "Pick buffer (enter to confirm)"
 
         -- Input loop - check state_module directly each iteration
         while state_module.get_extended_picking_state().is_active do
             local extended_picking = state_module.get_extended_picking_state()
             -- Prompt for input (non-blocking)
             vim.api.nvim_echo({{string.format("%s [%s]: ", prompt_label, input_buffer), "Question"}}, false, {})
+            vim.cmd("redraw")
 
             -- Get a single character without echo
             local ok, char_code = pcall(vim.fn.getchar)
@@ -823,11 +993,19 @@ local function start_extended_picking(mode_type)
                 break
             end
 
-            -- Only handle single printable characters
-            if type(char) == "string" and #char == 1 and char:match("[%w]") then
-                input_buffer = input_buffer .. char
+            if char == "\027" then
+                exit_extended_picking()
+                vim.schedule(function()
+                    M.refresh("vbl_pick_mode_end")
+                    vim.api.nvim_echo({{"", "Normal"}}, false, {})  -- Clear prompt
+                    vim.defer_fn(function()
+                        M.refresh_cursor_alignment()
+                    end, 150)
+                end)
+                break
+            end
 
-                -- Check if we have a complete hint
+            if char == "\r" or char == "\n" then
                 if extended_picking.hint_lines[input_buffer] then
                     local success = handle_extended_picking_key(input_buffer)
                     exit_extended_picking()
@@ -840,13 +1018,61 @@ local function start_extended_picking(mode_type)
                     end)
                     break
                 end
+                goto continue
+            end
 
-                -- Check if this could be a prefix
-                if not has_pick_char_prefix(input_buffer) then
-                    -- Invalid input, reset
-                    input_buffer = ""
+            -- Only handle single printable characters
+            if type(char) == "string" and #char == 1 then
+                local pick_chars = get_pick_chars()
+                if not pick_chars:find(char, 1, true) then
+                    goto continue
+                end
+                if input_buffer == "" then
+                    local _, prefix_chars = get_pick_char_sets()
+                    local is_prefix = false
+                    for _, prefix_char in ipairs(prefix_chars) do
+                        if prefix_char == char then
+                            is_prefix = true
+                            break
+                        end
+                    end
+                    if not is_prefix then
+                        goto continue
+                    end
+                end
+
+                input_buffer = input_buffer .. char
+                update_pick_display(input_buffer)
+                M.apply_extended_picking_highlights()
+                vim.cmd("redraw")
+
+                local match_count, match_hint = get_pick_char_match(input_buffer)
+                if match_count == 1 and match_hint then
+                    local success = handle_extended_picking_key(match_hint)
+                    exit_extended_picking()
+                    vim.schedule(function()
+                        M.refresh("vbl_pick_mode_end")
+                        vim.api.nvim_echo({{"", "Normal"}}, false, {})  -- Clear prompt
+                        vim.defer_fn(function()
+                            M.refresh_cursor_alignment()
+                        end, 150)
+                    end)
+                    break
+                end
+
+                if match_count == 0 then
+                    exit_extended_picking()
+                    vim.schedule(function()
+                        M.refresh("vbl_pick_mode_end")
+                        vim.api.nvim_echo({{"", "Normal"}}, false, {})  -- Clear prompt
+                        vim.defer_fn(function()
+                            M.refresh_cursor_alignment()
+                        end, 150)
+                    end)
+                    break
                 end
             end
+            ::continue::
         end
 
         -- Clear the prompt
@@ -900,6 +1126,7 @@ local function run_manual_pick(mode_type)
 
     rebuild_extended_picking_pick_chars()
     M.refresh("manual_pick_hints")
+    capture_pick_display_state()
 
     local input = read_pick_input()
     if input then
@@ -1166,7 +1393,8 @@ local function detect_and_manage_picking_mode(bufferline_state, components)
                 break
             end
         end
-    elseif state_module.get_extended_picking_state().is_active then
+    end
+    if state_module.get_extended_picking_state().is_active then
         is_picking = true
     end
 
@@ -1308,6 +1536,134 @@ end
 local renderer = require('vertical-bufferline.renderer')
 local components = require('vertical-bufferline.components')
 
+local pick_display_cache = {
+    buf_id = nil,
+    lines = nil,
+    hints_by_line = nil,
+}
+
+capture_pick_display_state = function()
+    local buf_id = state_module.get_buf_id()
+    if not buf_id or not api.nvim_buf_is_valid(buf_id) then
+        return
+    end
+
+    local lines = api.nvim_buf_get_lines(buf_id, 0, -1, false)
+    local line_to_buffer = state_module.get_line_to_buffer_id()
+    local hint_lines = state_module.get_extended_picking_state().hint_lines or {}
+    local hints_by_line = {}
+    local hints_by_buffer = {}
+
+    for hint, buf_id_for_hint in pairs(hint_lines) do
+        local line_nums = {}
+        for ln, mapped_buf in pairs(line_to_buffer) do
+            if mapped_buf == buf_id_for_hint then
+                table.insert(line_nums, ln)
+            end
+        end
+        if #line_nums > 0 then
+            for _, line_num in ipairs(line_nums) do
+                local line = lines[line_num]
+                if line then
+                    local pos = line:find(hint, 1, true)
+                    if pos then
+                        hints_by_line[line_num] = { hint = hint, pos = pos }
+                        hints_by_buffer[buf_id_for_hint] = hints_by_buffer[buf_id_for_hint] or {}
+                        table.insert(hints_by_buffer[buf_id_for_hint], { line_num = line_num, pos = pos, hint = hint })
+                    end
+                end
+            end
+        end
+    end
+
+    pick_display_cache = {
+        buf_id = buf_id,
+        lines = lines,
+        hints_by_line = hints_by_line,
+        hints_by_buffer = hints_by_buffer,
+    }
+end
+
+update_pick_display = function(prefix)
+    local normalized_prefix = prefix or ""
+    state_module.set_extended_picking_input_prefix(normalized_prefix)
+    if normalized_prefix == "" then
+        restore_pick_display()
+        M.apply_extended_picking_highlights()
+        return
+    end
+
+    local cache = pick_display_cache
+    if not cache.lines or not cache.buf_id or not api.nvim_buf_is_valid(cache.buf_id) then
+        M.apply_extended_picking_highlights()
+        return
+    end
+
+    local updated_lines = {}
+    local updated = false
+    local prefix_len = #normalized_prefix
+    local enter_indicator = "⏎"
+
+    for i, line in ipairs(cache.lines) do
+        local hint_info = cache.hints_by_line and cache.hints_by_line[i]
+        local hint = hint_info and hint_info.hint or nil
+        local hint_pos = hint_info and hint_info.pos or nil
+
+        if hint and hint_pos then
+            if hint:sub(1, prefix_len) == normalized_prefix then
+                local start_idx = hint_pos
+                local end_idx = start_idx + prefix_len - 1
+                if hint == normalized_prefix then
+                    local replaced = line:sub(1, start_idx - 1)
+                        .. enter_indicator
+                        .. string.rep(" ", #hint - 1)
+                        .. line:sub(start_idx + #hint)
+                    updated_lines[i] = replaced
+                else
+                    local replaced = line:sub(1, start_idx - 1)
+                        .. string.rep(" ", prefix_len)
+                        .. line:sub(end_idx + 1)
+                    updated_lines[i] = replaced
+                end
+                updated = true
+            else
+                local start_idx = hint_pos
+                local end_idx = start_idx + #hint - 1
+                local replaced = line:sub(1, start_idx - 1)
+                    .. string.rep(" ", #hint)
+                    .. line:sub(end_idx + 1)
+                updated_lines[i] = replaced
+                updated = true
+            end
+        else
+            updated_lines[i] = line
+        end
+    end
+
+    if updated then
+        api.nvim_buf_set_option(cache.buf_id, "modifiable", true)
+        api.nvim_buf_set_lines(cache.buf_id, 0, -1, false, updated_lines)
+        api.nvim_buf_set_option(cache.buf_id, "modifiable", false)
+    end
+
+    M.apply_extended_picking_highlights()
+end
+
+restore_pick_display = function()
+    local cache = pick_display_cache
+    if not cache.lines or not cache.buf_id or not api.nvim_buf_is_valid(cache.buf_id) then
+        pick_display_cache = { buf_id = nil, lines = nil, hints_by_line = nil }
+        return
+    end
+
+    api.nvim_buf_set_option(cache.buf_id, 'modifiable', true)
+    api.nvim_buf_set_lines(cache.buf_id, 0, -1, false, cache.lines)
+    api.nvim_buf_set_option(cache.buf_id, 'modifiable', false)
+    pick_display_cache = { buf_id = nil, lines = nil, hints_by_line = nil }
+end
+
+M._update_pick_display = update_pick_display
+
 local function build_component_list_from_buffers(buffer_ids, buffer_hints, window_width)
     local valid_buffers = {}
     for _, buf_id in ipairs(buffer_ids or {}) do
@@ -1334,6 +1690,18 @@ local function build_component_list_from_buffers(buffer_ids, buffer_hints, windo
     return list
 end
 
+local function build_pick_parts(letter, is_current, is_visible, highlight_override)
+    local display_letter = letter
+    local extended_picking = state_module.get_extended_picking_state()
+    if extended_picking and extended_picking.is_active and type(display_letter) == "string" then
+        local max_len = extended_picking.max_hint_len or 1
+        if #display_letter < max_len then
+            display_letter = display_letter .. string.rep(" ", max_len - #display_letter)
+        end
+    end
+    return components.create_pick_letter(display_letter, is_current, is_visible, highlight_override)
+end
+
 local function build_horizontal_item_parts(component, number_index, max_digits, is_current, is_visible, is_picking, force_pick_letter, reserve_pick_space)
     local parts = {}
 
@@ -1350,7 +1718,7 @@ local function build_horizontal_item_parts(component, number_index, max_digits, 
     if is_picking or force_pick_letter or reserve_pick_space then
         local letter = component.letter
         if letter then
-            local pick_parts = components.create_pick_letter(letter, is_current, is_visible, opts.pick_highlight_group)
+            local pick_parts = build_pick_parts(letter, is_current, is_visible, force_pick_letter and config_module.HIGHLIGHTS.PICK or nil)
             for _, part in ipairs(pick_parts) do
                 table.insert(parts, part)
             end
@@ -1476,6 +1844,7 @@ local function open_menu(lines, title)
     menu_state.win_id = win_id
     menu_state.buf_id = buf_id
     menu_state.augroup = api.nvim_create_augroup("VerticalBufferlineMenu", { clear = true })
+    menu_state.title = title or ""
 
     api.nvim_create_autocmd({ "WinLeave", "BufLeave", "BufHidden" }, {
         group = menu_state.augroup,
@@ -1489,7 +1858,7 @@ local function open_menu(lines, title)
     local keymap_opts = { noremap = true, silent = true, nowait = true }
     api.nvim_buf_set_keymap(buf_id, "n", "<Esc>", ":lua require('vertical-bufferline').close_menu()<CR>", keymap_opts)
     api.nvim_buf_set_keymap(buf_id, "n", "q", ":lua require('vertical-bufferline').close_menu()<CR>", keymap_opts)
-    api.nvim_buf_set_keymap(buf_id, "n", "<CR>", ":lua require('vertical-bufferline').menu_select_current_line()<CR>", keymap_opts)
+    api.nvim_buf_set_keymap(buf_id, "n", "<CR>", ":lua require('vertical-bufferline').menu_confirm_input()<CR>", keymap_opts)
     api.nvim_buf_set_keymap(buf_id, "n", "j", "j", keymap_opts)
     api.nvim_buf_set_keymap(buf_id, "n", "k", "k", keymap_opts)
 
@@ -1529,13 +1898,45 @@ local function can_open_popup_menu()
     return groups.find_buffer_group(buf_id) ~= nil
 end
 
-local function build_menu_lines(items, include_hint)
+local function build_menu_lines(items, include_hint, max_digits)
     local lines = {}
-    local max_digits = #tostring(#items)
+    local digits = max_digits or #tostring(#items)
+
+    -- Get input prefix for hint display
+    local input_prefix = state_module.get_extended_picking_state().input_prefix or ""
+    local max_hint_len = 1
+    for _, item in ipairs(items or {}) do
+        if item.hint and #item.hint > max_hint_len then
+            max_hint_len = #item.hint
+        end
+    end
+
     for i, item in ipairs(items) do
-        local num = tostring(i)
-        local padding = string.rep(" ", max_digits - #num)
-        local hint = include_hint and item.hint and (item.hint .. " ") or ""
+        local menu_index = item.menu_index or i
+        item.menu_index = menu_index
+        local num = tostring(menu_index)
+        local padding = string.rep(" ", digits - #num)
+
+        -- Process hint with prefix removal
+        local hint = ""
+        if include_hint and item.hint then
+            local display_hint = item.hint
+            local hint_spaces = 1  -- Default space after hint
+
+            -- Remove prefix if it matches
+            if input_prefix ~= "" and item.hint:sub(1, #input_prefix) == input_prefix then
+                display_hint = item.hint:sub(#input_prefix + 1)
+                -- Add extra spaces to maintain alignment (removed chars + default space)
+                local removed = #item.hint - #display_hint
+                hint_spaces = removed + 1
+            end
+
+            if #display_hint < max_hint_len then
+                display_hint = display_hint .. string.rep(" ", max_hint_len - #display_hint)
+            end
+            hint = display_hint .. string.rep(" ", hint_spaces)
+        end
+
         local name = item.name or "[No Name]"
         table.insert(lines, string.format("%s%s %s%s", padding, num, hint, name))
     end
@@ -1546,10 +1947,50 @@ local function assign_menu_pick_chars(items, buffer_hints, opts)
     opts = opts or {}
     local reserved = opts.reserved or { j = true, k = true, q = true }
     local used = {}
+    local used_single = {}
+    local base_chars, prefix_chars = get_pick_char_sets()
+    local base_list = {}
+    local prefix_list = {}
+    local base_set = {}
+    local prefix_set = {}
+    for i = 1, #base_chars do
+        local ch = base_chars:sub(i, i)
+        if not reserved[ch] then
+            table.insert(base_list, ch)
+            base_set[ch] = true
+        end
+    end
+    for _, ch in ipairs(prefix_chars) do
+        if base_set[ch] then
+            table.insert(prefix_list, ch)
+        end
+    end
+    if #prefix_list == 0 then
+        base_chars = DEFAULT_PICK_CHARS
+        base_list = {}
+        prefix_list = {}
+        base_set = {}
+        for i = 1, #base_chars do
+            local ch = base_chars:sub(i, i)
+            if not reserved[ch] then
+                table.insert(base_list, ch)
+                base_set[ch] = true
+                if not ch:match("%d") then
+                    table.insert(prefix_list, ch)
+                end
+            end
+        end
+    end
+    for _, ch in ipairs(prefix_list) do
+        prefix_set[ch] = true
+    end
 
     for _, item in ipairs(items) do
-        if item.hint and #item.hint == 1 then
+        if item.hint and item.hint ~= "" then
             used[item.hint] = true
+            if #item.hint == 1 then
+                used_single[item.hint] = true
+            end
         end
     end
 
@@ -1557,10 +1998,30 @@ local function assign_menu_pick_chars(items, buffer_hints, opts)
         if not hint or #hint ~= 1 then
             return false
         end
-        if reserved[hint] or used[hint] then
+        if reserved[hint] or used_single[hint] then
             return false
         end
-        return PICK_ALPHABET:find(hint, 1, true) ~= nil
+        return prefix_set[hint] == true
+    end
+
+    local function is_available_hint(hint)
+        if type(hint) ~= "string" or hint == "" then
+            return false
+        end
+        if used[hint] then
+            return false
+        end
+        local first_char = hint:sub(1, 1)
+        if not prefix_set[first_char] then
+            return false
+        end
+        for i = 1, #hint do
+            local ch = hint:sub(i, i)
+            if not base_set[ch] then
+                return false
+            end
+        end
+        return true
     end
 
     -- Assign based on filename letters (left to right), try lower then upper
@@ -1581,6 +2042,7 @@ local function assign_menu_pick_chars(items, buffer_hints, opts)
                     if picked then
                         item.hint = picked
                         used[picked] = true
+                        used_single[picked] = true
                         break
                     end
                 end
@@ -1592,27 +2054,48 @@ local function assign_menu_pick_chars(items, buffer_hints, opts)
     for _, item in ipairs(items) do
         if not item.hint then
             local hint = buffer_hints and buffer_hints[item.id] or nil
-            if hint and is_available_pick_char(hint) then
+            if hint and is_available_hint(hint) then
                 item.hint = hint
                 used[hint] = true
+                if #hint == 1 then
+                    used_single[hint] = true
+                end
             end
         end
+        ::continue::
     end
 
-    -- Fallback to remaining available characters in PICK_ALPHABET order
+    -- Fallback to remaining available characters in prefix order
     local available = {}
-    for i = 1, #PICK_ALPHABET do
-        local char = PICK_ALPHABET:sub(i, i)
+    for _, char in ipairs(prefix_list) do
         if is_available_pick_char(char) then
             table.insert(available, char)
         end
     end
 
     local next_index = 1
+    local multi_index = 1
     for _, item in ipairs(items) do
         if not item.hint then
-            item.hint = available[next_index]
-            next_index = next_index + 1
+            if next_index <= #available then
+                item.hint = available[next_index]
+                used[item.hint] = true
+                used_single[item.hint] = true
+                next_index = next_index + 1
+            else
+                while true do
+                    local multi = generate_variable_pick_char(multi_index, base_list, prefix_list)
+                    multi_index = multi_index + 1
+                    if multi == "" then
+                        break
+                    end
+                    if is_available_hint(multi) then
+                        item.hint = multi
+                        used[multi] = true
+                        break
+                    end
+                end
+            end
         end
     end
 end
@@ -1637,28 +2120,112 @@ local function build_name_map(buffer_ids, window_width)
     return name_map
 end
 
-local function apply_menu_highlights(items, include_hint, title_offset)
+local function apply_menu_highlights(items, include_hint, title_offset, max_digits)
     local buf_id = menu_state.buf_id
     if not buf_id or not api.nvim_buf_is_valid(buf_id) then
         return
     end
 
-    local max_digits = #tostring(#items)
+    local digits = max_digits or #tostring(#items)
     local line_offset = title_offset or 0
+    local input = menu_state.input_buffer or ""
+    local input_mode = menu_state.input_mode
     for i, item in ipairs(items) do
-        local num = tostring(i)
-        local padding = max_digits - #num
+        local menu_index = item.menu_index or i
+        local num = tostring(menu_index)
+        local padding = digits - #num
         local line = line_offset + (i - 1)
         local num_start = padding
         local num_end = padding + #num
         api.nvim_buf_add_highlight(buf_id, 0, "Number", line, num_start, num_end)
+        if input ~= "" and input_mode == "index" and num:sub(1, #input) == input then
+            local prefix_end = num_start + #input
+            api.nvim_buf_add_highlight(buf_id, 0, config_module.HIGHLIGHTS.MENU_INPUT_PREFIX, line, num_start, prefix_end)
+        end
 
         if include_hint and item.hint then
             local hint_start = padding + #num + 1
             local hint_end = hint_start + #item.hint
             api.nvim_buf_add_highlight(buf_id, 0, "Special", line, hint_start, hint_end)
+            if input ~= "" and input_mode == "hint" and item.hint:sub(1, #input) == input then
+                local prefix_end = hint_start + #input
+                api.nvim_buf_add_highlight(buf_id, 0, config_module.HIGHLIGHTS.MENU_INPUT_PREFIX, line, hint_start, prefix_end)
+            end
         end
     end
+end
+
+local function collect_menu_hint_chars(items)
+    local chars = {}
+    for _, item in ipairs(items) do
+        if item.hint and type(item.hint) == "string" then
+            for i = 1, #item.hint do
+                chars[item.hint:sub(i, i)] = true
+            end
+        end
+    end
+    return chars
+end
+
+local function refresh_menu_display(items)
+    local buf_id = menu_state.buf_id
+    if not buf_id or not api.nvim_buf_is_valid(buf_id) then
+        return
+    end
+
+    local title = menu_state.title or ""
+    local lines = build_menu_lines(items, menu_state.include_hint, menu_state.max_digits)
+    local final_lines = {}
+    if title ~= "" then
+        table.insert(final_lines, title)
+    end
+    for _, line in ipairs(lines) do
+        table.insert(final_lines, line)
+    end
+
+    api.nvim_buf_set_option(buf_id, 'modifiable', true)
+    api.nvim_buf_set_lines(buf_id, 0, -1, false, final_lines)
+    api.nvim_buf_set_option(buf_id, 'modifiable', false)
+
+    api.nvim_buf_clear_namespace(buf_id, 0, 0, -1)
+    if title ~= "" then
+        api.nvim_buf_add_highlight(buf_id, 0, "Title", 0, 0, -1)
+    end
+    apply_menu_highlights(items, menu_state.include_hint, menu_state.title_offset, menu_state.max_digits)
+
+    local win_id = menu_state.win_id
+    if win_id and api.nvim_win_is_valid(win_id) then
+        local win_config = api.nvim_win_get_config(win_id)
+        win_config.height = #final_lines
+        api.nvim_win_set_config(win_id, win_config)
+        local target_line = 1
+        if #items > 0 then
+            target_line = (menu_state.title_offset or 0) + 1
+        end
+        api.nvim_win_set_cursor(win_id, { math.min(target_line, math.max(1, #final_lines)), 0 })
+    end
+end
+
+local function get_menu_matches(input, mode)
+    local items = menu_state.items or {}
+    local matches = {}
+    if input == "" then
+        return items
+    end
+    for _, item in ipairs(items) do
+        if mode == "index" then
+            local index = tostring(item.menu_index or "")
+            if index:sub(1, #input) == input then
+                table.insert(matches, item)
+            end
+        else
+            local hint = item.hint
+            if hint and hint:sub(1, #input) == input then
+                table.insert(matches, item)
+            end
+        end
+    end
+    return matches
 end
 
 local function setup_menu_mappings(items, on_select_item, include_hint, title_offset)
@@ -1669,6 +2236,12 @@ local function setup_menu_mappings(items, on_select_item, include_hint, title_of
 
     local keymap_opts = { noremap = true, silent = true, nowait = true }
 
+    for i, item in ipairs(items) do
+        if not item.menu_index then
+            item.menu_index = i
+        end
+    end
+
     local allow_direct_digits = #items <= 9
     for i, item in ipairs(items) do
         if allow_direct_digits and i <= 9 then
@@ -1676,9 +2249,21 @@ local function setup_menu_mappings(items, on_select_item, include_hint, title_of
                 string.format(":lua require('vertical-bufferline').menu_select_by_index(%d)<CR>", i),
                 keymap_opts)
         end
-        if include_hint and item.hint then
-            api.nvim_buf_set_keymap(buf_id, "n", item.hint,
-                string.format(":lua require('vertical-bufferline').menu_select_by_pick_char('%s')<CR>", item.hint),
+    end
+
+    if not allow_direct_digits then
+        for digit = 0, 9 do
+            api.nvim_buf_set_keymap(buf_id, "n", tostring(digit),
+                string.format(":lua require('vertical-bufferline').menu_handle_input('%d')<CR>", digit),
+                keymap_opts)
+        end
+    end
+
+    if include_hint then
+        local hint_chars = collect_menu_hint_chars(items)
+        for ch, _ in pairs(hint_chars) do
+            api.nvim_buf_set_keymap(buf_id, "n", ch,
+                string.format(":lua require('vertical-bufferline').menu_handle_input('%s')<CR>", ch),
                 keymap_opts)
         end
     end
@@ -1686,6 +2271,13 @@ local function setup_menu_mappings(items, on_select_item, include_hint, title_of
     M._menu_items = items
     M._menu_on_select_item = on_select_item
     M._menu_title_offset = title_offset or 0
+    menu_state.items = items
+    menu_state.filtered_items = items
+    menu_state.include_hint = include_hint or false
+    menu_state.title_offset = title_offset or 0
+    menu_state.max_digits = #tostring(#items)
+    menu_state.input_buffer = ""
+    menu_state.input_mode = nil
 end
 
 -- Create individual buffer line with proper formatting and highlights
@@ -1741,7 +2333,7 @@ local function create_buffer_line(component, j, total_components, current_buffer
 
         if letter then
             has_pick = true
-            local pick_parts = components.create_pick_letter(letter, is_current, is_visible, force_pick_letter and config_module.HIGHLIGHTS.PICK or nil)
+            local pick_parts = build_pick_parts(letter, is_current, is_visible, opts.force_pick_letter and config_module.HIGHLIGHTS.PICK or nil)
             for _, part in ipairs(pick_parts) do
                 table.insert(parts, part)
             end
@@ -3607,13 +4199,13 @@ function M.apply_extended_picking_highlights()
     if bufferline_integration.is_available() then
         local bufferline_state = require('bufferline.state')
         if not bufferline_state.is_picking then return end
-    else
-        -- Without bufferline, pick hints are rendered directly in the line.
-        return
     end
 
     -- Re-setup highlights to ensure they're current
     setup_pick_highlights()
+    local input_prefix = state_module.get_extended_picking_state().input_prefix or ""
+
+    api.nvim_buf_clear_namespace(state_module.get_buf_id(), pick_input_ns_id, 0, -1)
 
     local extended_picking = state_module.get_extended_picking_state()
     if not extended_picking.is_active then
@@ -3623,13 +4215,30 @@ function M.apply_extended_picking_highlights()
     end
 
     local current_buffer_id = get_main_window_current_buffer()
+    local input_prefix = extended_picking.input_prefix or ""
+
     local line_to_buffer = state_module.get_line_to_buffer_id()
     local line_group_context = state_module.get_line_group_context()
     local active_group = groups.get_active_group()
     local active_group_id = active_group and active_group.id or nil
 
     -- Apply highlights to all lines with hints
-    for line_num, hint_char in pairs(extended_picking.line_hints) do
+    local line_hints = extended_picking.line_hints or {}
+    if (not next(line_hints)) and extended_picking.hint_lines then
+        line_hints = {}
+        for hint_char, buf_id in pairs(extended_picking.hint_lines) do
+            for line_num, mapped_buf in pairs(line_to_buffer) do
+                if mapped_buf == buf_id then
+                    line_hints[line_num] = hint_char
+                    break
+                end
+            end
+        end
+    end
+
+    local cached_hints = pick_display_cache.hints_by_line or {}
+
+    for line_num, hint_char in pairs(line_hints) do
         local buffer_id = line_to_buffer[line_num]
         if buffer_id then
             -- Choose appropriate pick highlight based on buffer state
@@ -3639,25 +4248,59 @@ function M.apply_extended_picking_highlights()
             else
                 pick_highlight_group = config_module.HIGHLIGHTS.PICK
             end
+            local is_prefix_match = input_prefix ~= "" and hint_char:sub(1, #input_prefix) == input_prefix
 
-            -- Get the actual line text to find the hint position
-            local line_text = api.nvim_buf_get_lines(state_module.get_buf_id(), line_num - 1, line_num, false)[1] or ""
-            local hint_pos = line_text:find(vim.pesc(hint_char))
-            
-            if hint_pos then
-                local highlight_start = hint_pos - 1  -- Convert to 0-based
-                local highlight_end = hint_pos  -- Highlight just the pick char
-                
-                -- Apply highlight with both namespace and without
+            local hint_info = cached_hints[line_num]
+            if hint_info and hint_info.pos then
+                local highlight_start = hint_info.pos - 1
+                local highlight_end = highlight_start + #hint_char
+
+                if input_prefix ~= "" then
+                    if not is_prefix_match then
+                        goto continue_highlight
+                    end
+                    if hint_char == input_prefix then
+                        highlight_end = highlight_start + 1
+                    else
+                        local prefix_len = #input_prefix
+                        highlight_start = highlight_start + prefix_len
+                        if highlight_start >= highlight_end then
+                            goto continue_highlight
+                        end
+                    end
+                end
+
                 api.nvim_buf_add_highlight(state_module.get_buf_id(), 0, pick_highlight_group, line_num - 1, highlight_start, highlight_end)
                 api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, pick_highlight_group, line_num - 1, highlight_start, highlight_end)
+            else
+                -- Fallback: try to find the hint in the line text
+                local line_text = api.nvim_buf_get_lines(state_module.get_buf_id(), line_num - 1, line_num, false)[1] or ""
+                local hint_pos = line_text:find(vim.pesc(hint_char))
+                if hint_pos then
+                    local highlight_start = hint_pos - 1
+                    local highlight_end = highlight_start + #hint_char
+
+                    if input_prefix ~= "" then
+                        if not is_prefix_match then
+                            goto continue_highlight
+                        end
+                        if hint_char == input_prefix then
+                            highlight_end = highlight_start + 1
+                        else
+                            local prefix_len = #input_prefix
+                            highlight_start = highlight_start + prefix_len
+                            if highlight_start >= highlight_end then
+                                goto continue_highlight
+                            end
+                        end
+                    end
+
+                    api.nvim_buf_add_highlight(state_module.get_buf_id(), 0, pick_highlight_group, line_num - 1, highlight_start, highlight_end)
+                    api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, pick_highlight_group, line_num - 1, highlight_start, highlight_end)
+                end
             end
         end
-    end
-
-    -- Also apply original bufferline highlights for active group buffers
-    if bufferline_integration.is_available() then
-        M.apply_picking_highlights()
+        ::continue_highlight::
     end
 
     vim.cmd("redraw!")
@@ -3677,6 +4320,7 @@ function M.apply_picking_highlights()
 
     -- Re-setup highlights to ensure they're current
     setup_pick_highlights()
+    api.nvim_buf_clear_namespace(state_module.get_buf_id(), pick_input_ns_id, 0, -1)
 
     -- Get current components
     local components = bufferline_state.components
@@ -3724,16 +4368,31 @@ function M.apply_picking_highlights()
                         else
                             pick_highlight_group = config_module.HIGHLIGHTS.PICK
                         end
+                        local is_prefix_match = input_prefix ~= "" and letter:sub(1, #input_prefix) == input_prefix
 
                         -- Get the actual line text to find the letter position
                         local line_text = api.nvim_buf_get_lines(state_module.get_buf_id(), actual_line_number - 1, actual_line_number, false)[1] or ""
                         local letter_pos = line_text:find(vim.pesc(letter))
                         
                         if letter_pos then
-                            local highlight_start = letter_pos - 1  -- Convert to 0-based
-                            local highlight_end = letter_pos  -- Highlight just the letter
+                            local highlight_start = letter_pos - 1
+                            local highlight_end = highlight_start + #letter
+
+                            if input_prefix ~= "" then
+                                if not is_prefix_match then
+                                    goto continue_picking
+                                end
+                                if letter == input_prefix then
+                                    highlight_end = highlight_start + 1
+                                else
+                                    local prefix_len = #input_prefix
+                                    highlight_start = highlight_start + prefix_len
+                                    if highlight_start >= highlight_end then
+                                        goto continue_picking
+                                    end
+                                end
+                            end
                             
-                            -- Apply highlight with both namespace and without
                             api.nvim_buf_add_highlight(state_module.get_buf_id(), 0, pick_highlight_group, actual_line_number - 1, highlight_start, highlight_end)
                             api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, pick_highlight_group, actual_line_number - 1, highlight_start, highlight_end)
                         end
@@ -3741,6 +4400,7 @@ function M.apply_picking_highlights()
                 end
             end
         end
+        ::continue_picking::
     end
     
     -- Apply extended hints for non-active group buffers
@@ -3797,6 +4457,79 @@ function M.menu_select_current_line()
     local cursor = api.nvim_win_get_cursor(win_id)
     local line_index = cursor[1] - (M._menu_title_offset or 0)
     M.menu_select_by_index(line_index)
+end
+
+function M.menu_handle_input(char)
+    if not menu_state.win_id or not menu_state.buf_id then
+        return
+    end
+
+    local is_digit = char:match("%d") ~= nil
+    local pick_chars = get_pick_chars()
+    local is_pick_char = pick_chars:find(char, 1, true) ~= nil
+
+    if not menu_state.input_mode then
+        if is_digit then
+            menu_state.input_mode = "index"
+        elseif is_pick_char then
+            menu_state.input_mode = "hint"
+        else
+            return
+        end
+    end
+
+    if menu_state.input_mode == "index" and not is_digit then
+        return
+    end
+    if menu_state.input_mode == "hint" and not is_pick_char then
+        return
+    end
+
+    local current = menu_state.input_buffer or ""
+    local next_input = current .. char
+    local matches = get_menu_matches(next_input, menu_state.input_mode)
+    if #matches == 0 then
+        return
+    end
+
+    menu_state.input_buffer = next_input
+    menu_state.filtered_items = matches
+    refresh_menu_display(matches)
+
+    if #matches == 1 then
+        local match = matches[1]
+        M.menu_select_by_index(match.menu_index or 1)
+    end
+end
+
+function M.menu_confirm_input()
+    local input = menu_state.input_buffer or ""
+    if input == "" then
+        M.menu_select_current_line()
+        return
+    end
+
+    local mode = menu_state.input_mode
+    if mode == "index" then
+        local target = tonumber(input)
+        if target then
+            M.menu_select_by_index(target)
+            return
+        end
+    elseif mode == "hint" then
+        local items = menu_state.items or {}
+        for _, item in ipairs(items) do
+            if item.hint == input then
+                M.menu_select_by_index(item.menu_index or 1)
+                return
+            end
+        end
+    end
+
+    local matches = menu_state.filtered_items or {}
+    if #matches == 1 then
+        M.menu_select_by_index(matches[1].menu_index or 1)
+    end
 end
 
 function M.open_buffer_menu()

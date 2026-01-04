@@ -30,7 +30,9 @@ local state = {
         pick_mode = nil,  -- "switch" or "close"
         line_hints = {},  -- line_number -> hint_char
         hint_lines = {},  -- hint_char -> line_number
-        bufferline_hints = {}  -- existing bufferline hints for reference
+        bufferline_hints = {},  -- existing bufferline hints for reference
+        input_prefix = "",
+        max_hint_len = 1
     },
 
     -- Pin state (fallback when bufferline.nvim is not available)
@@ -410,6 +412,8 @@ function M.set_extended_picking_active(is_active)
         state.extended_picking.line_hints = {}
         state.extended_picking.hint_lines = {}
         state.extended_picking.bufferline_hints = {}
+        state.extended_picking.input_prefix = ""
+        state.extended_picking.max_hint_len = 1
     end
 end
 
@@ -421,6 +425,28 @@ function M.set_extended_picking_pick_chars(line_hints, hint_lines, bufferline_hi
     state.extended_picking.line_hints = line_hints or {}
     state.extended_picking.hint_lines = hint_lines or {}
     state.extended_picking.bufferline_hints = bufferline_hints or {}
+
+    local max_len = 1
+    for _, hint in pairs(state.extended_picking.line_hints) do
+        if type(hint) == "string" and #hint > max_len then
+            max_len = #hint
+        end
+    end
+    for hint, _ in pairs(state.extended_picking.hint_lines) do
+        if type(hint) == "string" and #hint > max_len then
+            max_len = #hint
+        end
+    end
+    for _, hint in pairs(state.extended_picking.bufferline_hints) do
+        if type(hint) == "string" and #hint > max_len then
+            max_len = #hint
+        end
+    end
+    state.extended_picking.max_hint_len = max_len
+end
+
+function M.set_extended_picking_input_prefix(prefix)
+    state.extended_picking.input_prefix = prefix or ""
 end
 
 -- Composite state checks

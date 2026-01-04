@@ -131,6 +131,8 @@ M.HIGHLIGHTS = {
     HORIZONTAL_NUMBER = "VBufferLineHorizontalNumber",
     HORIZONTAL_NUMBER_CURRENT = "VBufferLineHorizontalNumberCurrent",
     HORIZONTAL_CURRENT = "VBufferLineHorizontalCurrent",
+
+    MENU_INPUT_PREFIX = "VBufferLineMenuInputPrefix",
 }
 
 -- Event names for autocmds
@@ -161,6 +163,7 @@ M.DEFAULTS = {
     max_height = 10,  -- Legacy: retained for compatibility (not used for top/bottom)
     show_inactive_group_buffers = false,  -- Show buffer list for inactive groups (default: only show active group)
     show_icons = false,  -- Show file type icons (emoji)
+    pick_chars = "asdfjklghqwertyuiopzxcvbnmASDFJKLGHQWERTYUIOPZXCVBNM",  -- Pick hint characters (first char never numeric)
     position = "left",  -- Sidebar position: "left", "right", "top", "bottom"
     show_tree_lines = false,  -- Show tree-style connection lines
     floating = false,  -- Use floating window (right side, focusable=false) instead of split window
