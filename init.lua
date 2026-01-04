@@ -974,6 +974,14 @@ local function start_extended_picking(mode_type)
             -- Get a single character without echo
             local ok, char_code = pcall(vim.fn.getchar)
             if not ok then
+                exit_extended_picking()
+                vim.schedule(function()
+                    M.refresh("vbl_pick_mode_end")
+                    vim.api.nvim_echo({{"", "Normal"}}, false, {})  -- Clear prompt
+                    vim.defer_fn(function()
+                        M.refresh_cursor_alignment()
+                    end, 150)
+                end)
                 break
             end
 
@@ -1005,6 +1013,19 @@ local function start_extended_picking(mode_type)
                 break
             end
 
+            -- Handle Ctrl-C (char code 3)
+            if char_code == 3 or char == "\003" then
+                exit_extended_picking()
+                vim.schedule(function()
+                    M.refresh("vbl_pick_mode_end")
+                    vim.api.nvim_echo({{"", "Normal"}}, false, {})  -- Clear prompt
+                    vim.defer_fn(function()
+                        M.refresh_cursor_alignment()
+                    end, 150)
+                end)
+                break
+            end
+
             if char == "\r" or char == "\n" then
                 if extended_picking.hint_lines[input_buffer] then
                     local success = handle_extended_picking_key(input_buffer)
@@ -1018,13 +1039,32 @@ local function start_extended_picking(mode_type)
                     end)
                     break
                 end
-                goto continue
+                exit_extended_picking()
+                vim.schedule(function()
+                    M.refresh("vbl_pick_mode_end")
+                    vim.api.nvim_echo({{"", "Normal"}}, false, {})  -- Clear prompt
+                    vim.defer_fn(function()
+                        M.refresh_cursor_alignment()
+                    end, 150)
+                end)
+                break
             end
 
             -- Only handle single printable characters
             if type(char) == "string" and #char == 1 then
                 local pick_chars = get_pick_chars()
                 if not pick_chars:find(char, 1, true) then
+                    if input_buffer ~= "" then
+                        exit_extended_picking()
+                        vim.schedule(function()
+                            M.refresh("vbl_pick_mode_end")
+                            vim.api.nvim_echo({{"", "Normal"}}, false, {})  -- Clear prompt
+                            vim.defer_fn(function()
+                                M.refresh_cursor_alignment()
+                            end, 150)
+                        end)
+                        break
+                    end
                     goto continue
                 end
                 if input_buffer == "" then
