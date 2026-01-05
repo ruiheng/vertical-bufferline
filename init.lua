@@ -131,6 +131,7 @@ local function setup_highlights()
     local operator_attrs = vim.api.nvim_get_hl(0, {name = 'Operator'})
     local warning_attrs = vim.api.nvim_get_hl(0, {name = 'WarningMsg'})
     local special_attrs = vim.api.nvim_get_hl(0, {name = 'Special'})
+    local number_attrs = vim.api.nvim_get_hl(0, {name = 'Number'})
     local cursorline_attrs = vim.api.nvim_get_hl(0, {name = 'CursorLine'})
     local statusline_attrs = vim.api.nvim_get_hl(0, {name = 'StatusLine'})
     local normal_attrs = vim.api.nvim_get_hl(0, {name = 'Normal'})
@@ -234,6 +235,15 @@ local function setup_highlights()
         bold = true
     })
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.FILENAME_VISIBLE, { link = "String", bold = true })
+
+    -- Buffer numbering highlights - keep distinct from filenames
+    api.nvim_set_hl(0, config_module.HIGHLIGHTS.BUFFER_NUMBER, { link = "Number" })
+    api.nvim_set_hl(0, config_module.HIGHLIGHTS.BUFFER_NUMBER_VISIBLE, { link = "Number", bold = true })
+    api.nvim_set_hl(0, config_module.HIGHLIGHTS.BUFFER_NUMBER_CURRENT, {
+        fg = number_attrs.fg or title_attrs.fg or config_module.COLORS.WHITE,
+        bg = current_bg,
+        bold = true
+    })
     
     -- Dual numbering highlights - different styles for easy distinction
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.NUMBER_LOCAL, { link = "Number", bold = true })      -- Local: bright, bold

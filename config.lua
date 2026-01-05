@@ -115,6 +115,11 @@ M.HIGHLIGHTS = {
     FILENAME = "VBufferLineFilename",
     FILENAME_CURRENT = "VBufferLineFilenameCurrent",
     FILENAME_VISIBLE = "VBufferLineFilenameVisible",
+
+    -- Buffer numbering highlights (numbers shown before filenames)
+    BUFFER_NUMBER = "VBufferLineBufferNumber",
+    BUFFER_NUMBER_CURRENT = "VBufferLineBufferNumberCurrent",
+    BUFFER_NUMBER_VISIBLE = "VBufferLineBufferNumberVisible",
     
     -- Prefix highlights for first-line minimal prefixes (different from full path)
     PREFIX = "VBufferLinePrefix",

@@ -54,11 +54,11 @@ function M.create_smart_numbering(local_pos, global_pos, max_local_digits, max_g
     -- Determine highlight based on buffer state
     local number_highlight
     if is_current then
-        number_highlight = config_module.HIGHLIGHTS.FILENAME_CURRENT
+        number_highlight = config_module.HIGHLIGHTS.BUFFER_NUMBER_CURRENT
     elseif is_visible then
-        number_highlight = config_module.HIGHLIGHTS.FILENAME_VISIBLE
+        number_highlight = config_module.HIGHLIGHTS.BUFFER_NUMBER_VISIBLE
     else
-        number_highlight = config_module.HIGHLIGHTS.FILENAME
+        number_highlight = config_module.HIGHLIGHTS.BUFFER_NUMBER
     end
 
     -- Case 1: No local info exists for any buffer in group - show only global
@@ -133,11 +133,11 @@ function M.create_simple_numbering(position, max_digits, is_current, is_visible)
     -- Determine highlight based on buffer state
     local number_highlight
     if is_current then
-        number_highlight = config_module.HIGHLIGHTS.FILENAME_CURRENT
+        number_highlight = config_module.HIGHLIGHTS.BUFFER_NUMBER_CURRENT
     elseif is_visible then
-        number_highlight = config_module.HIGHLIGHTS.FILENAME_VISIBLE
+        number_highlight = config_module.HIGHLIGHTS.BUFFER_NUMBER_VISIBLE
     else
-        number_highlight = config_module.HIGHLIGHTS.FILENAME
+        number_highlight = config_module.HIGHLIGHTS.BUFFER_NUMBER
     end
 
     return {
