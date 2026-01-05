@@ -44,6 +44,7 @@ state.set_extended_picking_active(true)
 state.set_extended_picking_mode("switch")
 state.set_was_picking(false)
 vbl.refresh("pick_visual_setup")
+vbl._capture_pick_display_state()
 vbl._update_pick_display("")
 
 local target_buf = nil
@@ -101,14 +102,11 @@ vbl._update_pick_display(prefix)
 vim.wait(20)
 
 local after_line = vim.api.nvim_buf_get_lines(sidebar_buf, target_line - 1, target_line, false)[1] or ""
-local prefix_spaces = string.rep(" ", #prefix)
-assert_ok(after_line:sub(hint_pos, hint_pos + #prefix - 1) == prefix_spaces, "expected prefix to be replaced with spaces")
-assert_ok(after_line:sub(hint_pos + #prefix, hint_pos + #target_hint - 1) == target_hint:sub(2), "expected suffix to remain after prefix input")
+assert_ok(after_line:sub(hint_pos, hint_pos + #target_hint - 1) == target_hint, "expected hint to remain visible after prefix input")
 
 if nonmatch_hint then
     local after_nonmatch = vim.api.nvim_buf_get_lines(sidebar_buf, nonmatch_line - 1, nonmatch_line, false)[1] or ""
-    local expected_spaces = string.rep(" ", #nonmatch_hint)
-    assert_ok(after_nonmatch:sub(nonmatch_pos, nonmatch_pos + #nonmatch_hint - 1) == expected_spaces, "expected non-matching hint to be blanked")
+    assert_ok(after_nonmatch:sub(nonmatch_pos, nonmatch_pos + #nonmatch_hint - 1) == nonmatch_hint, "expected non-matching hint to remain visible")
 end
 
 vbl.close_sidebar()

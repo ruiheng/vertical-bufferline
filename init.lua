@@ -87,6 +87,7 @@ local menu_state = {
     max_digits = 1,
     input_buffer = "",
     input_mode = nil,
+    current_buffer_id = nil,
 }
 
 local function close_menu(opts)
@@ -116,6 +117,7 @@ local function close_menu(opts)
     menu_state.max_digits = 1
     menu_state.input_buffer = ""
     menu_state.input_mode = nil
+    menu_state.current_buffer_id = nil
 end
 
 -- Setup highlight groups function
@@ -1633,6 +1635,8 @@ capture_pick_display_state = function()
     }
 end
 
+M._capture_pick_display_state = capture_pick_display_state
+
 update_pick_display = function(prefix)
     local normalized_prefix = prefix or ""
     state_module.set_extended_picking_input_prefix(normalized_prefix)
@@ -1947,18 +1951,58 @@ local function can_open_popup_menu()
     return groups.find_buffer_group(buf_id) ~= nil
 end
 
-local function build_menu_lines(items, include_hint, max_digits)
-    local lines = {}
-    local digits = max_digits or #tostring(#items)
-
-    -- Get input prefix for hint display
-    local input_prefix = state_module.get_extended_picking_state().input_prefix or ""
+local function get_menu_max_hint_len(items)
     local max_hint_len = 1
     for _, item in ipairs(items or {}) do
         if item.hint and #item.hint > max_hint_len then
             max_hint_len = #item.hint
         end
     end
+    return max_hint_len
+end
+
+local function build_menu_hint_text(item, include_hint, input_prefix, max_hint_len)
+    if not include_hint or not item.hint then
+        return ""
+    end
+
+    local display_hint = item.hint
+    local hint_spaces = 1
+
+    if input_prefix ~= "" and item.hint:sub(1, #input_prefix) == input_prefix then
+        display_hint = item.hint:sub(#input_prefix + 1)
+        local removed = #item.hint - #display_hint
+        hint_spaces = removed + 1
+    end
+
+    if #display_hint < max_hint_len then
+        display_hint = display_hint .. string.rep(" ", max_hint_len - #display_hint)
+    end
+
+    return display_hint .. string.rep(" ", hint_spaces)
+end
+
+local function build_menu_modified_text(item)
+    if not item or not item.is_modified then
+        return ""
+    end
+
+    local parts = components.create_modified_indicator(true, false)
+    if #parts == 0 then
+        return ""
+    end
+
+    local rendered = renderer.render_line(parts)
+    return rendered and rendered.text or ""
+end
+
+local function build_menu_lines(items, include_hint, max_digits)
+    local lines = {}
+    local digits = max_digits or #tostring(#items)
+
+    -- Get input prefix for hint display
+    local input_prefix = state_module.get_extended_picking_state().input_prefix or ""
+    local max_hint_len = get_menu_max_hint_len(items)
 
     for i, item in ipairs(items) do
         local menu_index = item.menu_index or i
@@ -1966,28 +2010,10 @@ local function build_menu_lines(items, include_hint, max_digits)
         local num = tostring(menu_index)
         local padding = string.rep(" ", digits - #num)
 
-        -- Process hint with prefix removal
-        local hint = ""
-        if include_hint and item.hint then
-            local display_hint = item.hint
-            local hint_spaces = 1  -- Default space after hint
-
-            -- Remove prefix if it matches
-            if input_prefix ~= "" and item.hint:sub(1, #input_prefix) == input_prefix then
-                display_hint = item.hint:sub(#input_prefix + 1)
-                -- Add extra spaces to maintain alignment (removed chars + default space)
-                local removed = #item.hint - #display_hint
-                hint_spaces = removed + 1
-            end
-
-            if #display_hint < max_hint_len then
-                display_hint = display_hint .. string.rep(" ", max_hint_len - #display_hint)
-            end
-            hint = display_hint .. string.rep(" ", hint_spaces)
-        end
-
+        local hint = build_menu_hint_text(item, include_hint, input_prefix, max_hint_len)
         local name = item.name or "[No Name]"
-        table.insert(lines, string.format("%s%s %s%s", padding, num, hint, name))
+        local modified_text = build_menu_modified_text(item)
+        table.insert(lines, string.format("%s%s %s%s%s", padding, num, hint, name, modified_text))
     end
     return lines
 end
@@ -2169,7 +2195,7 @@ local function build_name_map(buffer_ids, window_width)
     return name_map
 end
 
-local function apply_menu_highlights(items, include_hint, title_offset, max_digits)
+local function apply_menu_highlights(items, include_hint, title_offset, max_digits, current_buffer_id)
     local buf_id = menu_state.buf_id
     if not buf_id or not api.nvim_buf_is_valid(buf_id) then
         return
@@ -2179,6 +2205,8 @@ local function apply_menu_highlights(items, include_hint, title_offset, max_digi
     local line_offset = title_offset or 0
     local input = menu_state.input_buffer or ""
     local input_mode = menu_state.input_mode
+    local input_prefix = state_module.get_extended_picking_state().input_prefix or ""
+    local max_hint_len = get_menu_max_hint_len(items)
     for i, item in ipairs(items) do
         local menu_index = item.menu_index or i
         local num = tostring(menu_index)
@@ -2199,6 +2227,20 @@ local function apply_menu_highlights(items, include_hint, title_offset, max_digi
             if input ~= "" and input_mode == "hint" and item.hint:sub(1, #input) == input then
                 local prefix_end = hint_start + #input
                 api.nvim_buf_add_highlight(buf_id, 0, config_module.HIGHLIGHTS.MENU_INPUT_PREFIX, line, hint_start, prefix_end)
+            end
+        end
+
+        if item.is_modified then
+            local modified_text = build_menu_modified_text(item)
+            if modified_text ~= "" then
+                local hint = build_menu_hint_text(item, include_hint, input_prefix, max_hint_len)
+                local name = item.name or "[No Name]"
+                local modified_start = padding + #num + 1 + #hint + #name
+                local modified_end = modified_start + #modified_text
+                local hl_group = (current_buffer_id and item.id == current_buffer_id)
+                    and config_module.HIGHLIGHTS.MODIFIED_CURRENT
+                    or config_module.HIGHLIGHTS.MODIFIED
+                api.nvim_buf_add_highlight(buf_id, 0, hl_group, line, modified_start, modified_end)
             end
         end
     end
@@ -2240,7 +2282,7 @@ local function refresh_menu_display(items)
     if title ~= "" then
         api.nvim_buf_add_highlight(buf_id, 0, "Title", 0, 0, -1)
     end
-    apply_menu_highlights(items, menu_state.include_hint, menu_state.title_offset, menu_state.max_digits)
+    apply_menu_highlights(items, menu_state.include_hint, menu_state.title_offset, menu_state.max_digits, menu_state.current_buffer_id)
 
     local win_id = menu_state.win_id
     if win_id and api.nvim_win_is_valid(win_id) then
@@ -4630,6 +4672,7 @@ function M.open_buffer_menu()
         table.insert(items, {
             id = buf_id,
             name = filename,
+            is_modified = is_buffer_actually_modified(buf_id),
         })
     end
 
@@ -4642,12 +4685,13 @@ function M.open_buffer_menu()
 
     local lines = build_menu_lines(items, true)
     open_menu(lines, "Buffers")
+    local current_buffer_id = get_main_window_current_buffer()
     setup_menu_mappings(items, function(item)
         switch_to_buffer_in_main_window(item.id, "Error switching buffer")
     end, true, 1)
-    apply_menu_highlights(items, true, 1)
+    menu_state.current_buffer_id = current_buffer_id
+    apply_menu_highlights(items, true, 1, current_buffer_id)
 
-    local current_buffer_id = get_main_window_current_buffer()
     for i, item in ipairs(items) do
         if item.id == current_buffer_id then
             local win_id = menu_state.win_id
@@ -4680,7 +4724,7 @@ function M.open_group_menu()
     setup_menu_mappings(items, function(item)
         groups.set_active_group(item.id)
     end, false, 1)
-    apply_menu_highlights(items, false, 1)
+    apply_menu_highlights(items, false, 1, nil)
 
     local active_group = groups.get_active_group()
     if active_group then
@@ -4754,6 +4798,7 @@ function M.open_history_menu()
         table.insert(items, {
             id = buf_id,
             name = filename,
+            is_modified = is_buffer_actually_modified(buf_id),
         })
     end
 
@@ -4783,12 +4828,13 @@ function M.open_history_menu()
 
     local lines = build_menu_lines(items, true)
     open_menu(lines, "History")
+    local current_buffer_id = get_main_window_current_buffer()
     setup_menu_mappings(items, function(item)
         switch_to_buffer_in_main_window(item.id, "Error switching buffer")
     end, true, 1)
-    apply_menu_highlights(items, true, 1)
+    menu_state.current_buffer_id = current_buffer_id
+    apply_menu_highlights(items, true, 1, current_buffer_id)
 
-    local current_buffer_id = get_main_window_current_buffer()
     for i, item in ipairs(items) do
         if item.id == current_buffer_id then
             local menu_win_id = menu_state.win_id
