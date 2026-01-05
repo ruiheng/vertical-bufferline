@@ -4725,7 +4725,7 @@ function M.open_buffer_menu()
         switch_to_buffer_in_main_window(item.id, "Error switching buffer")
     end, true, 1)
     menu_state.current_buffer_id = current_buffer_id
-    apply_menu_highlights(items, true, 1, current_buffer_id)
+    apply_menu_highlights(items, true, 1, nil, current_buffer_id)
 
     for i, item in ipairs(items) do
         if item.id == current_buffer_id then
@@ -4868,7 +4868,7 @@ function M.open_history_menu()
         switch_to_buffer_in_main_window(item.id, "Error switching buffer")
     end, true, 1)
     menu_state.current_buffer_id = current_buffer_id
-    apply_menu_highlights(items, true, 1, current_buffer_id)
+    apply_menu_highlights(items, true, 1, nil, current_buffer_id)
 
     for i, item in ipairs(items) do
         if item.id == current_buffer_id then
