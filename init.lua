@@ -753,10 +753,17 @@ local function get_pick_char_match(prefix)
     local count = 0
     local matched_buffers = {}
     local line_to_buffer = state_module.get_line_to_buffer_id()
+    local line_hints = extended_picking.line_hints or {}
+    local hint_lines_are_lines = next(line_hints) ~= nil
 
-    for hint_char, line_num in pairs(extended_picking.hint_lines) do
+    for hint_char, line_or_buf in pairs(extended_picking.hint_lines) do
         if hint_char:sub(1, #prefix) == prefix then
-            local buffer_id = line_to_buffer and line_to_buffer[line_num] or nil
+            local buffer_id = nil
+            if hint_lines_are_lines then
+                buffer_id = line_to_buffer and line_to_buffer[line_or_buf] or nil
+            else
+                buffer_id = line_or_buf
+            end
             if buffer_id and not matched_buffers[buffer_id] then
                 matched_buffers[buffer_id] = true
                 count = count + 1
