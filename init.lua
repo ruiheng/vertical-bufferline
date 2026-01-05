@@ -2760,7 +2760,7 @@ end
 -- Render header for a single group
 local function render_group_header(group, i, is_active, buffer_count, lines_text, group_header_lines)
     local group_marker = is_active and config_module.UI.ACTIVE_GROUP_MARKER or config_module.UI.INACTIVE_GROUP_MARKER
-    local group_name_display = group.name == "" and config_module.UI.UNNAMED_GROUP_DISPLAY or group.name
+    local name_segment = group.name ~= "" and (" " .. group.name) or ""
 
     -- Add spacing between groups (except for first group)
     if i > config_module.SYSTEM.FIRST_INDEX then
@@ -2770,8 +2770,8 @@ local function render_group_header(group, i, is_active, buffer_count, lines_text
     end
 
     -- Clean group header format without borders
-    local group_line = string.format("[%d] %s %s (%d)",
-        group.display_number, group_marker, group_name_display, buffer_count)
+    local group_line = string.format("[%d] %s%s (%d)",
+        group.display_number, group_marker, name_segment, buffer_count)
     table.insert(lines_text, group_line)
 
     -- Record group header line info (use hash table indexed by line number for consistency)

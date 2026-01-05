@@ -179,7 +179,7 @@ Toggle between modes with `:VBufferLineToggleInactiveGroupBuffers` or by calling
 
 ### Group Headers
 - `[1] ● GroupName (5 buffers)` - Active group with name (PmenuSel background, bold text)
-- `[2] ○ (3 buffers)` - Inactive unnamed group (Pmenu background)
+- `[2] ○ (3 buffers)` - Inactive group without a name (Pmenu background)
 - Numbers correspond to the group's display number (use your own keymaps to jump).
 - Each group header uses semantic highlight groups that adapt to your theme
 
