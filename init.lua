@@ -2474,6 +2474,27 @@ local function create_buffer_line(component, j, total_components, current_buffer
             table.insert(parts, part)
         end
     end
+
+    local history_number_padding = 0
+    if group_id == "history" and j == 0 then
+        local numbering_width
+        if not has_any_local_info or should_hide_local_numbering then
+            numbering_width = (max_global_digits or 1)
+        else
+            numbering_width = (max_local_digits or 1) + 1 + (max_global_digits or 1)
+        end
+        local marker_width = 0
+        if not show_tree_lines and is_current then
+            marker_width = vim.fn.strdisplaywidth(config_module.UI.CURRENT_BUFFER_MARKER)
+        end
+        history_number_padding = math.max(0, numbering_width + 1 - marker_width)
+        if history_number_padding > 0 then
+            local space_parts = components.create_space(history_number_padding)
+            for _, part in ipairs(space_parts) do
+                table.insert(parts, part)
+            end
+        end
+    end
     
     -- 5. Icon (moved before filename) - only if enabled
     if show_icons then
@@ -2562,6 +2583,10 @@ local function create_buffer_line(component, j, total_components, current_buffer
                 
                 -- Add space after numbering (create_space(1))
                 -- base_indent = base_indent + 1  -- Skip this space to fix alignment
+            end
+
+            if history_number_padding > 0 then
+                base_indent = base_indent + history_number_padding
             end
             
             -- Add icon width if icons are enabled (emoji + space)
