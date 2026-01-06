@@ -1372,6 +1372,19 @@ local function build_components_from_group(group, current_buffer_id)
     return components
 end
 
+local function get_statusline_buffers(group_id)
+    local buffers = groups.get_group_buffers(group_id) or {}
+    local visible = {}
+    for _, buf_id in ipairs(buffers) do
+        if api.nvim_buf_is_valid(buf_id)
+            and not utils.is_special_buffer(buf_id)
+            and not state_module.is_buffer_pinned(buf_id) then
+            table.insert(visible, buf_id)
+        end
+    end
+    return visible
+end
+
 -- Validate and initialize refresh state
 local function validate_and_initialize_refresh()
     if not state_module.is_sidebar_open() or not api.nvim_win_is_valid(state_module.get_win_id()) then
@@ -6465,6 +6478,41 @@ function M.apply_keymaps(preset, opts)
             vim.keymap.set(mode, lhs, item.rhs, map_opts)
         end
     end
+end
+
+function M.statusline_label()
+    local group = groups.get_active_group()
+    if not group then
+        return ""
+    end
+
+    local label = nil
+    if group.name and group.name ~= "" then
+        label = group.name
+    else
+        label = tostring(group.display_number or 0)
+    end
+
+    local visible = get_statusline_buffers(group.id)
+    local total = #visible
+    if total == 0 then
+        return string.format("[%s]", label)
+    end
+
+    local buf = api.nvim_get_current_buf()
+    local local_pos = nil
+    for i, id in ipairs(visible) do
+        if id == buf then
+            local_pos = i
+            break
+        end
+    end
+
+    if not local_pos then
+        return string.format("[%s]", label)
+    end
+
+    return string.format("[%s] %d/%d", label, local_pos, total)
 end
 
 -- Initialize immediately on plugin load
