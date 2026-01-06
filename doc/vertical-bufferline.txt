@@ -145,6 +145,7 @@ Default configuration:
 
       -- Cursor alignment settings
       align_with_cursor = true,           -- Align content with cursor position
+      buffer_switch_flash_ms = 500,       -- Flash current filename on buffer switch (0 to disable)
 
       -- History settings
       show_history = "auto",              -- "yes", "no", "auto"
@@ -255,6 +256,11 @@ filename_ellipsis       Ellipsis used when truncating filenames.
                              *vertical-bufferline-config-align-with-cursor*
 align_with_cursor       Align sidebar content with main window cursor position.
                         Default: true
+
+                       *vertical-bufferline-config-buffer-switch-flash-ms*
+buffer_switch_flash_ms  Flash the current filename briefly when switching buffers.
+                        Set to 0 to disable.
+                        Default: 500
 
                                   *vertical-bufferline-config-show-history*
 show_history            Control history display: "yes" (always), "no" (never),

@@ -441,6 +441,7 @@ scripts/run_checks.sh
 
     -- Cursor alignment settings
     align_with_cursor = true,       -- Align VBL content with main window cursor position
+    buffer_switch_flash_ms = 500,   -- Flash current filename on buffer switch (0 to disable)
     
     -- History settings
     show_history = "auto",          -- "yes", "no", "auto" - show recent files history per group

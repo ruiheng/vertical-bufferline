@@ -115,6 +115,7 @@ M.HIGHLIGHTS = {
     FILENAME = "VBufferLineFilename",
     FILENAME_CURRENT = "VBufferLineFilenameCurrent",
     FILENAME_VISIBLE = "VBufferLineFilenameVisible",
+    FILENAME_FLASH = "VBufferLineFilenameFlash",
 
     -- Buffer numbering highlights (numbers shown before filenames)
     BUFFER_NUMBER = "VBufferLineBufferNumber",
@@ -189,6 +190,7 @@ M.DEFAULTS = {
 
     -- Cursor alignment settings
     align_with_cursor = true,  -- Align VBL content with main window cursor position
+    buffer_switch_flash_ms = 500,  -- Flash current filename on buffer switches (0 to disable)
     
     -- Session integration settings
     session = {

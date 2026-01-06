@@ -24,6 +24,11 @@ local state = {
     was_picking = false, -- Track picking mode state to avoid spam
     session_loading = false, -- Flag to prevent interference during session loading
     highlight_timer = nil, -- Timer for picking highlights
+    last_current_buffer_id = nil, -- Track last active buffer for flash feedback
+    flash_buffer_id = nil, -- Buffer ID to flash
+    flash_expires_at = 0, -- Flash expiration timestamp (ms)
+    flash_seq = 0, -- Monotonic seq to guard against stale flash callbacks
+    flash_line_offset = nil, -- Saved line offset during flash to prevent jumps
 
     -- Extended picking mode state
     extended_picking = {
@@ -330,6 +335,52 @@ function M.set_session_loading(loading)
     state.session_loading = loading
 end
 
+function M.get_last_current_buffer_id()
+    return state.last_current_buffer_id
+end
+
+function M.set_last_current_buffer_id(buf_id)
+    state.last_current_buffer_id = buf_id
+end
+
+function M.bump_flash_seq()
+    state.flash_seq = state.flash_seq + 1
+    return state.flash_seq
+end
+
+function M.get_flash_state()
+    if not state.flash_buffer_id then
+        return nil
+    end
+    return {
+        buffer_id = state.flash_buffer_id,
+        expires_at = state.flash_expires_at,
+        seq = state.flash_seq
+    }
+end
+
+function M.set_flash_state(buffer_id, expires_at, seq)
+    state.flash_buffer_id = buffer_id
+    state.flash_expires_at = expires_at or 0
+    if seq then
+        state.flash_seq = seq
+    end
+end
+
+function M.get_flash_line_offset()
+    return state.flash_line_offset
+end
+
+function M.set_flash_line_offset(offset)
+    state.flash_line_offset = offset
+end
+
+function M.clear_flash_state()
+    state.flash_buffer_id = nil
+    state.flash_expires_at = 0
+    state.flash_line_offset = nil
+end
+
 -- Highlight timer management
 function M.get_highlight_timer()
     return state.highlight_timer
@@ -489,6 +540,11 @@ function M.reset_state()
     state.line_buffer_ranges = {}
     state.was_picking = false
     state.session_loading = false
+    state.last_current_buffer_id = nil
+    state.flash_buffer_id = nil
+    state.flash_expires_at = 0
+    state.flash_seq = 0
+    state.flash_line_offset = nil
     state.layout_mode = "vertical"
 end
 
@@ -502,6 +558,10 @@ function M.cleanup_invalid_state()
     -- Clean up invalid buffer references
     if state.buf_id and not is_valid_buf_id(state.buf_id) then
         state.buf_id = nil
+    end
+
+    if state.flash_buffer_id and not is_valid_buf_id(state.flash_buffer_id) then
+        M.clear_flash_state()
     end
 
     -- Clean up invalid line mappings

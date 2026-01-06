@@ -57,6 +57,7 @@ end
 -- Namespace for our highlights
 local ns_id = api.nvim_create_namespace("VerticalBufferline")
 local pick_input_ns_id = api.nvim_create_namespace("VerticalBufferlinePickInput")
+local flash_ns_id = api.nvim_create_namespace("VerticalBufferlineFlash")
 
 local switch_to_buffer_in_main_window
 
@@ -234,6 +235,7 @@ local function setup_highlights()
         bg = current_bg,
         bold = true
     })
+    api.nvim_set_hl(0, config_module.HIGHLIGHTS.FILENAME_FLASH, { link = "IncSearch" })
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.FILENAME_VISIBLE, { link = "String", bold = true })
 
     -- Buffer numbering highlights - keep distinct from filenames
@@ -1453,6 +1455,59 @@ local function validate_and_initialize_refresh()
         group_info = group_info,
         active_group = active_group
     }
+end
+
+local function clear_flash_namespace()
+    local buf_id = state_module.get_buf_id()
+    if not buf_id or not api.nvim_buf_is_valid(buf_id) then
+        return
+    end
+    api.nvim_buf_clear_namespace(buf_id, flash_ns_id, 0, -1)
+end
+
+local function update_buffer_flash_state(current_buffer_id)
+    if not current_buffer_id then
+        return
+    end
+
+    local now = vim.loop.now()
+    local flash_state = state_module.get_flash_state()
+    if flash_state and flash_state.expires_at > 0 and now > flash_state.expires_at then
+        state_module.clear_flash_state()
+        clear_flash_namespace()
+    end
+
+    local last_buffer_id = state_module.get_last_current_buffer_id()
+    state_module.set_last_current_buffer_id(current_buffer_id)
+    if not last_buffer_id or last_buffer_id == current_buffer_id then
+        return
+    end
+
+    if not state_module.is_sidebar_open() then
+        return
+    end
+
+    local flash_ms = config_module.settings.buffer_switch_flash_ms
+    if not flash_ms or flash_ms <= 0 then
+        return
+    end
+
+    local seq = state_module.bump_flash_seq()
+    state_module.set_flash_state(current_buffer_id, now + flash_ms, seq)
+    state_module.set_flash_line_offset(state_module.get_line_offset())
+    clear_flash_namespace()
+
+    vim.defer_fn(function()
+        local current_flash = state_module.get_flash_state()
+        if not current_flash or current_flash.seq ~= seq then
+            return
+        end
+        state_module.clear_flash_state()
+        clear_flash_namespace()
+        if config_module.settings.align_with_cursor and state_module.is_sidebar_open() then
+            M.refresh_cursor_alignment()
+        end
+    end, flash_ms)
 end
 -- Detect pick mode type from bufferline state
 local function detect_pick_mode()
@@ -2735,6 +2790,26 @@ local function apply_buffer_highlighting(line_info, component, actual_line_numbe
         end
 
         renderer.apply_highlights(state_module.get_buf_id(), ns_id, actual_line_number - 1, line_info.rendered_line)
+
+        local flash_state = state_module.get_flash_state()
+        if flash_state
+            and flash_state.buffer_id == component.id
+            and vim.loop.now() <= flash_state.expires_at then
+            for _, hl in ipairs(line_info.rendered_line.highlights or {}) do
+                if hl.group == config_module.HIGHLIGHTS.FILENAME_CURRENT
+                    or hl.group == config_module.HIGHLIGHTS.FILENAME
+                    or hl.group == config_module.HIGHLIGHTS.FILENAME_VISIBLE then
+                    api.nvim_buf_add_highlight(
+                        state_module.get_buf_id(),
+                        flash_ns_id,
+                        config_module.HIGHLIGHTS.FILENAME_FLASH,
+                        actual_line_number - 1,
+                        hl.start_col,
+                        hl.end_col
+                    )
+                end
+            end
+        end
         return
     end
 
@@ -3809,6 +3884,14 @@ local function finalize_buffer_display(lines_text, new_line_map, line_group_cont
     elseif config_module.settings.align_with_cursor
         and state_module.get_layout_mode() ~= "horizontal"
         and target_line then
+        if state_module.get_flash_state() then
+            local saved_offset = state_module.get_flash_line_offset()
+            if type(saved_offset) == "number" then
+                offset = saved_offset
+            else
+                offset = 0
+            end
+        else
         local main_win = get_main_window_id()
         if main_win and api.nvim_win_is_valid(main_win) then
             local ok, cursor_row = pcall(function()
@@ -3829,6 +3912,7 @@ local function finalize_buffer_display(lines_text, new_line_map, line_group_cont
                     end
                 end
             end
+        end
         end
     end
 
@@ -4064,6 +4148,8 @@ function M.refresh(reason, position_override)
         return 
     end
 
+    update_buffer_flash_state(refresh_data.current_buffer_id)
+
     local position = position_override or config_module.settings.position
     state_module.set_layout_mode(is_horizontal_position(position) and "horizontal" or "vertical")
 
@@ -4250,6 +4336,9 @@ function M.refresh(reason, position_override)
     
     -- Clear old highlights and apply all highlights AFTER buffer content is set
     api.nvim_buf_clear_namespace(state_module.get_buf_id(), ns_id, 0, -1)
+    if state_module.get_flash_state() then
+        clear_flash_namespace()
+    end
     
     -- Re-setup highlights after clearing to ensure they're available
     setup_highlights()
@@ -5907,6 +5996,9 @@ local cursor_alignment_timer = nil
 function M.refresh_cursor_alignment()
     -- Disable cursor alignment during pick mode to avoid interference
     if state_module.get_extended_picking_state().is_active then
+        return
+    end
+    if state_module.get_flash_state() then
         return
     end
 
