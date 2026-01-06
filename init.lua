@@ -1385,6 +1385,27 @@ local function get_statusline_buffers(group_id)
     return visible
 end
 
+local function get_main_window_current_buffer_id()
+    local main_win = get_main_window_id()
+    if main_win and api.nvim_win_is_valid(main_win) then
+        return api.nvim_win_get_buf(main_win)
+    end
+    return api.nvim_get_current_buf()
+end
+
+local function get_navigable_buffers(group_id)
+    local buffers = groups.get_group_buffers(group_id) or {}
+    local visible = {}
+    for _, buf_id in ipairs(buffers) do
+        if api.nvim_buf_is_valid(buf_id)
+            and not utils.is_special_buffer(buf_id)
+            and not state_module.is_buffer_pinned(buf_id) then
+            table.insert(visible, buf_id)
+        end
+    end
+    return visible
+end
+
 -- Validate and initialize refresh state
 local function validate_and_initialize_refresh()
     if not state_module.is_sidebar_open() or not api.nvim_win_is_valid(state_module.get_win_id()) then
@@ -6307,12 +6328,12 @@ function M.switch_to_next_buffer()
         return false
     end
 
-    local buffers = groups.get_group_buffers(active_group.id)
+    local buffers = get_navigable_buffers(active_group.id)
     if not buffers or #buffers <= 1 then
         return false
     end
 
-    local current_buf = api.nvim_get_current_buf()
+    local current_buf = get_main_window_current_buffer_id()
     local current_idx = nil
     for i, buf_id in ipairs(buffers) do
         if buf_id == current_buf then
@@ -6337,12 +6358,12 @@ function M.switch_to_prev_buffer()
         return false
     end
 
-    local buffers = groups.get_group_buffers(active_group.id)
+    local buffers = get_navigable_buffers(active_group.id)
     if not buffers or #buffers <= 1 then
         return false
     end
 
-    local current_buf = api.nvim_get_current_buf()
+    local current_buf = get_main_window_current_buffer_id()
     local current_idx = nil
     for i, buf_id in ipairs(buffers) do
         if buf_id == current_buf then
@@ -6367,7 +6388,7 @@ function M.switch_to_last_buffer()
         return false
     end
 
-    local buffers = groups.get_group_buffers(active_group.id)
+    local buffers = get_navigable_buffers(active_group.id)
     if not buffers or #buffers == 0 then
         return false
     end
@@ -6499,7 +6520,7 @@ function M.statusline_label()
         return string.format("[%s]", label)
     end
 
-    local buf = api.nvim_get_current_buf()
+    local buf = get_main_window_current_buffer_id()
     local local_pos = nil
     for i, id in ipairs(visible) do
         if id == buf then

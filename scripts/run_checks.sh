@@ -40,5 +40,6 @@ run_check "scripts/pinned_session_test.lua"
 run_check "scripts/pinned_edit_mode_test.lua"
 run_check "scripts/pinned_pick_char_test.lua"
 run_check "scripts/statusline_label_pinned_test.lua"
+run_check "scripts/buffer_nav_pinned_test.lua"
 
 printf "All automated checks completed.\n"
