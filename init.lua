@@ -1509,6 +1509,55 @@ local function update_buffer_flash_state(current_buffer_id)
         end
     end, flash_ms)
 end
+
+local function apply_horizontal_flash_highlights(line_buffer_ranges, line_infos)
+    local flash_state = state_module.get_flash_state()
+    if not flash_state or vim.loop.now() > flash_state.expires_at then
+        return
+    end
+
+    local buf_id = state_module.get_buf_id()
+    if not buf_id or not api.nvim_buf_is_valid(buf_id) then
+        return
+    end
+
+    local flash_buffer_id = flash_state.buffer_id
+    local any_applied = false
+
+    for line_num, ranges in pairs(line_buffer_ranges or {}) do
+        if type(ranges) == "table" then
+            for _, range in ipairs(ranges) do
+                if range.buffer_id == flash_buffer_id then
+                    local applied = false
+                    if range.filename_start and range.filename_end then
+                        local line_text = api.nvim_buf_get_lines(buf_id, line_num - 1, line_num, false)[1] or ""
+                        local segment = line_text:sub(range.filename_start + 1, range.filename_end)
+                        api.nvim_buf_add_highlight(
+                            buf_id,
+                            flash_ns_id,
+                            config_module.HIGHLIGHTS.FILENAME_FLASH,
+                            line_num - 1,
+                            range.filename_start,
+                            range.filename_end
+                        )
+                        applied = true
+                    end
+                    if not applied then
+                        local line = api.nvim_buf_get_lines(buf_id, line_num - 1, line_num, false)[1] or ""
+                        api.nvim_buf_add_highlight(
+                            buf_id,
+                            flash_ns_id,
+                            config_module.HIGHLIGHTS.FILENAME_FLASH,
+                            line_num - 1,
+                            0,
+                            #line
+                        )
+                    end
+                end
+            end
+        end
+    end
+end
 -- Detect pick mode type from bufferline state
 local function detect_pick_mode()
     if not bufferline_integration.is_available() then
@@ -1863,6 +1912,16 @@ end
 
 local function build_horizontal_item_parts(component, number_index, max_digits, is_current, is_visible, is_picking, force_pick_letter, reserve_pick_space)
     local parts = {}
+    local item_len = 0
+    local function append_part(part)
+        table.insert(parts, part)
+        item_len = item_len + #part.text
+    end
+    local function append_parts(part_list)
+        for _, part in ipairs(part_list) do
+            append_part(part)
+        end
+    end
 
     if number_index then
         local num_str = tostring(number_index)
@@ -1870,22 +1929,18 @@ local function build_horizontal_item_parts(component, number_index, max_digits, 
         local padded_num = string.rep(" ", padding) .. num_str
         local num_hl = is_current and config_module.HIGHLIGHTS.HORIZONTAL_NUMBER_CURRENT
             or config_module.HIGHLIGHTS.HORIZONTAL_NUMBER
-        table.insert(parts, renderer.create_part(padded_num, num_hl))
-        table.insert(parts, renderer.create_part(" ", nil))
+        append_part(renderer.create_part(padded_num, num_hl))
+        append_part(renderer.create_part(" ", nil))
     end
 
     if is_picking or force_pick_letter or reserve_pick_space then
         local letter = component.letter
         if letter then
             local pick_parts = build_pick_parts(letter, is_current, is_visible, force_pick_letter and config_module.HIGHLIGHTS.PICK or nil)
-            for _, part in ipairs(pick_parts) do
-                table.insert(parts, part)
-            end
+            append_parts(pick_parts)
         elseif reserve_pick_space then
             local space_parts = components.create_space(2)
-            for _, part in ipairs(space_parts) do
-                table.insert(parts, part)
-            end
+            append_parts(space_parts)
         end
     end
 
@@ -1908,13 +1963,16 @@ local function build_horizontal_item_parts(component, number_index, max_digits, 
         final_name = filename_utils.truncate_filename_middle(final_name, max_filename_len, filename_ellipsis)
     end
 
+    local filename_start = item_len
     local filename_parts = components.create_filename(prefix_info, final_name, is_current, is_visible)
     for _, part in ipairs(filename_parts) do
+        part._is_filename = true
         if is_current then
             part.highlight = config_module.HIGHLIGHTS.HORIZONTAL_CURRENT
         end
-        table.insert(parts, part)
+        append_part(part)
     end
+    parts._filename_range = { start = filename_start, ["end"] = item_len }
 
     local is_modified = is_buffer_actually_modified(component.id)
     local modified_parts = components.create_modified_indicator(is_modified, is_current)
@@ -1922,7 +1980,7 @@ local function build_horizontal_item_parts(component, number_index, max_digits, 
         if is_current then
             part.highlight = config_module.HIGHLIGHTS.HORIZONTAL_CURRENT
         end
-        table.insert(parts, part)
+        append_part(part)
     end
 
     return parts
@@ -3031,14 +3089,24 @@ local function render_horizontal_layout(active_group, bufferline_components, cur
 
         local start_col = current_line_len
         for _, part in ipairs(parts) do
+            part._buffer_id = buffer_id
             table.insert(current_parts, part)
         end
         current_line_width = current_line_width + item_width
         current_line_len = current_line_len + item_len
 
+        local filename_start = nil
+        local filename_end = nil
+        if parts._filename_range then
+            filename_start = start_col + parts._filename_range.start
+            filename_end = start_col + parts._filename_range["end"]
+        end
+
         table.insert(current_ranges, {
             start_col = start_col,
             end_col = start_col + item_len,
+            filename_start = filename_start,
+            filename_end = filename_end,
             buffer_id = buffer_id,
             group_id = group_id,
             is_history = is_history or false,
@@ -4367,6 +4435,7 @@ function M.refresh(reason, position_override)
                 renderer.apply_highlights(state_module.get_buf_id(), ns_id, line_num - 1, line_info.rendered_line)
             end
         end
+        apply_horizontal_flash_highlights(line_buffer_ranges, line_infos)
         return
     end
     
