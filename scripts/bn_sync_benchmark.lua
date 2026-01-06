@@ -42,14 +42,14 @@ local function format_stats(stats)
     table.sort(entries, function(a, b)
         return a.total_ms > b.total_ms
     end)
-    print("VBL sync profile summary (total_ms desc):")
+    print("BN sync profile summary (total_ms desc):")
     for _, entry in ipairs(entries) do
         print(string.format("  %-30s count=%4d total=%.2fms avg=%.2fms max=%.2fms",
             entry.label, entry.count, entry.total_ms, entry.avg_ms, entry.max_ms))
     end
 end
 
-vim.g.vbl_sync_profile = true
+vim.g.bn_sync_profile = true
 
 add_rtp_root()
 if not add_bufferline_rtp() then
@@ -58,15 +58,15 @@ end
 
 require('bufferline').setup({})
 
-local vbl = require('vertical-bufferline')
+local vbl = require('buffer-nexus')
 vbl.setup({
     auto_create_groups = true,
     auto_add_new_buffers = false,
     group_scope = "global",
 })
 
-local groups = require('vertical-bufferline.groups')
-local bl_integration = require('vertical-bufferline.bufferline-integration')
+local groups = require('buffer-nexus.groups')
+local bl_integration = require('buffer-nexus.bufferline-integration')
 
 local buffer_count = 20
 local group_count = 10

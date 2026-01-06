@@ -21,7 +21,7 @@ end
 
 add_rtp_root()
 
-local filename_utils = require('vertical-bufferline.filename_utils')
+local filename_utils = require('buffer-nexus.filename_utils')
 
 local tmpdir = vim.fn.tempname()
 mkdir_p(tmpdir .. "/one/dir")

@@ -19,7 +19,7 @@ end
 
 add_rtp_root()
 
-local vbl = require('vertical-bufferline')
+local vbl = require('buffer-nexus')
 vbl.setup({
     group_scope = "window",
     inherit_on_new_window = false,
@@ -27,7 +27,7 @@ vbl.setup({
     auto_add_new_buffers = true,
 })
 
-local groups = require('vertical-bufferline.groups')
+local groups = require('buffer-nexus.groups')
 assert_ok(groups.is_window_scope_enabled(), "window scope not enabled (bufferline may be active)")
 
 local file1 = write_temp_file({ "one" })
@@ -47,8 +47,8 @@ assert_ok(buf1_in_win2 == buf1, "expected split window to show buf1")
 vim.cmd("edit " .. vim.fn.fnameescape(file2))
 local buf2 = vim.api.nvim_get_current_buf()
 
-local data1 = groups.get_vbl_groups_by_window(win1)
-local data2 = groups.get_vbl_groups_by_window(win2)
+local data1 = groups.get_bn_groups_by_window(win1)
+local data2 = groups.get_bn_groups_by_window(win2)
 
 assert_ok(data1 ~= data2, "expected separate groups data per window")
 
@@ -80,11 +80,11 @@ assert_ok(contains(default2.buffers, buf1), "win2 default group missing buf1")
 assert_ok(contains(default2.buffers, buf2), "win2 default group missing buf2")
 
 vbl.toggle()
-local state = require('vertical-bufferline.state')
+local state = require('buffer-nexus.state')
 local sidebar_win = state.get_win_id()
 assert_ok(sidebar_win and vim.api.nvim_win_is_valid(sidebar_win), "sidebar window not created")
-local sidebar_data = groups.get_vbl_groups_by_window(sidebar_win)
-local current_data = groups.get_vbl_groups_by_window(win2)
+local sidebar_data = groups.get_bn_groups_by_window(sidebar_win)
+local current_data = groups.get_bn_groups_by_window(win2)
 assert_ok(sidebar_data == current_data, "sidebar window should not create a separate context")
 
 vim.api.nvim_set_current_win(win1)

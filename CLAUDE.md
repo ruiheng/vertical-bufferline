@@ -2,23 +2,23 @@
 
 ## Important Directory Information
 
-- **Working Directory**: `/home/ruiheng/config_files/nvim/lua/vertical-bufferline`
-- **Git Repository**: `/home/ruiheng/config_files/nvim/lua/vertical-bufferline` (THIS is the git repo)
-- **Plugin Code Location**: `/home/ruiheng/config_files/nvim/lua/vertical-bufferline/`
+- **Working Directory**: `/home/ruiheng/config_files/nvim/lua/buffernexus`
+- **Git Repository**: `/home/ruiheng/config_files/nvim/lua/buffernexus` (THIS is the git repo)
+- **Plugin Code Location**: `/home/ruiheng/config_files/nvim/lua/buffernexus/`
 
-**IMPORTANT**: Git operations should be performed directly in `/home/ruiheng/config_files/nvim/lua/vertical-bufferline/` - this is NOT a submodule, it's the actual git repository.
+**IMPORTANT**: Git operations should be performed directly in `/home/ruiheng/config_files/nvim/lua/buffernexus/` - this is NOT a submodule, it's the actual git repository.
 
 ## Git Operations
 
-Git repository is directly at: `/home/ruiheng/config_files/nvim/lua/vertical-bufferline/`
+Git repository is directly at: `/home/ruiheng/config_files/nvim/lua/buffernexus/`
 
 ```bash
-# Work directly in the vertical-bufferline directory
+# Work directly in the buffernexus directory
 git add .
 git commit -m "message"
 ```
 
-**DO NOT** manage other directories like `/home/ruiheng/config_files/` - only manage the vertical-bufferline plugin directory.
+**DO NOT** manage other directories like `/home/ruiheng/config_files/` - only manage the buffernexus plugin directory.
 
 ## Key Files
 
@@ -41,7 +41,7 @@ Added adaptive sidebar width that automatically adjusts based on content:
 
 #### New Command
 ```vim
-:VBufferLineToggleAdaptiveWidth  # Toggle adaptive width on/off
+:BNToggleAdaptiveWidth  # Toggle adaptive width on/off
 ```
 
 #### Implementation Details
@@ -62,10 +62,10 @@ Added comprehensive debug logging system to help troubleshoot buffer state synch
 
 #### Debug Commands Added
 ```vim
-:VBufferLineDebugEnable [log_file] [log_level]  # Enable logging
-:VBufferLineDebugDisable                        # Disable logging  
-:VBufferLineDebugStatus                         # Show status
-:VBufferLineDebugLogs [count]                   # Show recent logs
+:BNDebugEnable [log_file] [log_level]  # Enable logging
+:BNDebugDisable                        # Disable logging  
+:BNDebugStatus                         # Show status
+:BNDebugLogs [count]                   # Show recent logs
 ```
 
 #### Key Monitoring Points
@@ -76,10 +76,10 @@ Added comprehensive debug logging system to help troubleshoot buffer state synch
 
 #### Usage Example
 ```vim
-:VBufferLineDebugEnable ~/vbl-debug.log DEBUG
+:BNDebugEnable ~/vbl-debug.log DEBUG
 # Reproduce the issue
-:VBufferLineDebugLogs 50
-:VBufferLineDebugDisable
+:BNDebugLogs 50
+:BNDebugDisable
 ```
 
 #### Auto-Logging Feature
@@ -89,11 +89,11 @@ Added comprehensive debug logging system to help troubleshoot buffer state synch
 - 刷新操作时 → `~/vbl-refresh-debug.log` (INFO级别)
 
 ### Known Issue Being Debugged
-VBL侧边栏有时无法跟随bufferline更新当前buffer状态 - 高亮显示错误的文件或无高亮。
+BN侧边栏有时无法跟随bufferline更新当前buffer状态 - 高亮显示错误的文件或无高亮。
 
 #### 问题分析进展
 通过Session.vim分析发现根本原因：**路径格式不匹配导致session恢复失败**
-- VBL保存相对路径：`"lyceum/page/chat_utils.py"`
+- BN保存相对路径：`"lyceum/page/chat_utils.py"`
 - Vim实际路径：`~/lyceum/lyceum/page/chat_utils.py`
 - 当前工作目录变化导致路径无法匹配，current buffer状态丢失
 
@@ -102,16 +102,16 @@ VBL侧边栏有时无法跟随bufferline更新当前buffer状态 - 高亮显示�
 2. 详细日志追踪 - 自动记录session恢复和同步过程
 3. 智能buffer查找 - 文件名+路径后缀匹配算法
 
-## VBL Synchronization Logic
+## BN Synchronization Logic
 
-**CORE PRINCIPLE**: bufferline ↔ VBL bidirectional sync
-- **Primary**: bufferline → VBL (timer every 100ms)
-- **Secondary**: VBL → bufferline (when switching groups)
+**CORE PRINCIPLE**: bufferline ↔ BN bidirectional sync
+- **Primary**: bufferline → BN (timer every 100ms)
+- **Secondary**: BN → bufferline (when switching groups)
 
 ### Current Unnamed Buffer Issue
 **Problem**: Unnamed buffer disappears when opening new files
 - Works fine with bufferline only
-- Breaks when VBL is added
+- Breaks when BN is added
 - Our code incorrectly unlists the unnamed buffer somewhere
 
 # important-instruction-reminders

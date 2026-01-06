@@ -4,7 +4,7 @@
 local M = {}
 
 local api = vim.api
-local config_module = require('vertical-bufferline.config')
+local config_module = require('buffer-nexus.config')
 
 ---@class LinePart
 ---@field text string The text content

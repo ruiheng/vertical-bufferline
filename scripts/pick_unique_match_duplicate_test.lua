@@ -14,8 +14,8 @@ add_rtp_root()
 vim.o.shadafile = vim.fn.tempname()
 vim.o.swapfile = false
 
-local vbl = require('vertical-bufferline')
-local state = require('vertical-bufferline.state')
+local vbl = require('buffer-nexus')
+local state = require('buffer-nexus.state')
 
 -- Simulate duplicate buffer lines mapped to different hints
 local buffer_id = 42

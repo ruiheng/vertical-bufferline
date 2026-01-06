@@ -20,7 +20,7 @@ add_rtp_root()
 vim.o.shadafile = vim.fn.tempname()
 vim.o.swapfile = false
 
-local vbl = require('vertical-bufferline')
+local vbl = require('buffer-nexus')
 vbl.setup({
     auto_create_groups = true,
     auto_add_new_buffers = true,

@@ -25,7 +25,7 @@ end
 
 add_rtp_root()
 
-local vbl = require('vertical-bufferline')
+local vbl = require('buffer-nexus')
 vbl.setup({
     auto_create_groups = true,
     auto_add_new_buffers = true,
@@ -35,8 +35,8 @@ vbl.setup({
     history_auto_threshold = 2,
 })
 
-local config = require('vertical-bufferline.config')
-local groups = require('vertical-bufferline.groups')
+local config = require('buffer-nexus.config')
+local groups = require('buffer-nexus.groups')
 
 local file1 = write_temp_file({ "one" })
 local file2 = write_temp_file({ "two" })

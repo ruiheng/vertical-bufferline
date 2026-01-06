@@ -14,9 +14,9 @@ add_rtp_root()
 vim.o.shadafile = vim.fn.tempname()
 vim.o.swapfile = false
 
-local vbl = require('vertical-bufferline')
-local groups = require('vertical-bufferline.groups')
-local state = require('vertical-bufferline.state')
+local vbl = require('buffer-nexus')
+local groups = require('buffer-nexus.groups')
+local state = require('buffer-nexus.state')
 
 local tmpdir = vim.fn.tempname()
 vim.fn.mkdir(tmpdir, "p")

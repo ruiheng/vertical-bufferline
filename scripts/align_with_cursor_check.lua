@@ -19,7 +19,7 @@ end
 
 add_rtp_root()
 
-local vbl = require('vertical-bufferline')
+local vbl = require('buffer-nexus')
 vbl.setup({
     align_with_cursor = true,
     group_scope = "global",
@@ -28,7 +28,7 @@ vbl.setup({
     position = "left",
 })
 
-local state = require('vertical-bufferline.state')
+local state = require('buffer-nexus.state')
 
 local lines = {}
 for i = 1, 80 do
@@ -50,7 +50,7 @@ vim.api.nvim_win_set_cursor(0, { 40, 0 })
 vbl.refresh("align_cursor_down")
 assert_ok(state.get_line_offset() > 0, "line offset should increase when cursor moves")
 
-require('vertical-bufferline.config').settings.align_with_cursor = false
+require('buffer-nexus.config').settings.align_with_cursor = false
 vbl.refresh("align_cursor_disabled")
 assert_ok(state.get_line_offset() == 0, "line offset should reset when alignment is disabled")
 

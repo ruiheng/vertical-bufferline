@@ -19,14 +19,14 @@ end
 
 add_rtp_root()
 
-local vbl = require('vertical-bufferline')
+local vbl = require('buffer-nexus')
 vbl.setup({
     group_scope = "global",
     auto_create_groups = true,
     auto_add_new_buffers = true,
 })
 
-local edit_mode = require('vertical-bufferline.edit_mode')
+local edit_mode = require('buffer-nexus.edit_mode')
 
 local file1 = write_temp_file({ "one" })
 local file2 = write_temp_file({ "two" })

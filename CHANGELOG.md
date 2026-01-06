@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to the Vertical Bufferline project will be documented in this file.
+All notable changes to the Buffer Nexus project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `min_width` option sets minimum width (default: 15, changed from 40)
   - `max_width` option sets maximum sidebar width (default: 60)
   - `adaptive_width` option to enable/disable feature (default: true)
-  - `:VBufferLineToggleAdaptiveWidth` command to toggle at runtime
+  - `:BNToggleAdaptiveWidth` command to toggle at runtime
   - Width state persists across sidebar open/close cycles
   - Works with both split and floating window modes
 - **Comprehensive EmmyLua annotations** for full LSP autocompletion support
@@ -25,19 +25,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Multiple installation methods documented (lazy.nvim, packer, vim-plug, manual)
   - Individual help tags for all configuration options
   - Proper Neovim help file conventions with tag completion
-  - Accessible via `:help vertical-bufferline`
+  - Accessible via `:help buffernexus`
 - History feature with per-group tracking of recent files
 - Sidebar hotkeys `h` and `p` for toggling display modes
-- `:VBufferLineClearHistory` command for history management
+- `:BNClearHistory` command for history management
 - `<leader>h1` to `<leader>h9` hotkeys for quick history access
 - Session save/restore functionality for history data
-- **Cursor alignment feature** - VBL content automatically aligns with main window cursor position
+- **Cursor alignment feature** - BN content automatically aligns with main window cursor position
 - `align_with_cursor` configuration option (default: true)
-- `:VBufferLineToggleCursorAlign` command to toggle cursor alignment
+- `:BNToggleCursorAlign` command to toggle cursor alignment
 - Intelligent path compression with progressive abbreviation (3→2→1 chars)
 - Path disambiguation to Recent Files display
 - Debug logging system with file output and memory buffer
-- Debug commands: `:VBufferLineDebugEnable`, `:VBufferLineDebugDisable`, `:VBufferLineDebugStatus`, `:VBufferLineDebugLogs`
+- Debug commands: `:BNDebugEnable`, `:BNDebugDisable`, `:BNDebugStatus`, `:BNDebugLogs`
 
 ### Fixed
 - Click handling precision issues in history display
@@ -61,16 +61,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 - **Manual session commands** (obsolete due to auto-serialization)
-  - Removed `:VBufferLineSaveSession`, `:VBufferLineLoadSession`, `:VBufferLineDeleteSession`, `:VBufferLineListSessions`
+  - Removed `:BNSaveSession`, `:BNLoadSession`, `:BNDeleteSession`, `:BNListSessions`
   - Sessions now automatically managed via `auto_serialize` and Neovim's `:mksession`
-  - Users simply use native `:mksession` and `:source` - VBL state is included automatically
+  - Users simply use native `:mksession` and `:source` - BN state is included automatically
 - JSON session persistence (`auto_save`, `auto_load`, `session_name_strategy`)
 
 ### Documentation Improvements
 - **Clarified keymaps documentation** - separated built-in vs user-configured vs bufferline keymaps
 - **Added comprehensive session management explanation** - how auto-serialization works
 - **Clear BufferLine integration section** - shows recommended bufferline keymaps with examples
-- **New help tag**: `*vertical-bufferline-bufferline-keymaps*` for BufferLine integration
+- **New help tag**: `*buffernexus-bufferline-keymaps*` for BufferLine integration
 - **Updated all examples** to show correct usage of `:mksession` instead of manual commands
 
 ## [1.1.0] - 2024-XX-XX
@@ -93,7 +93,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.0] - 2024-XX-XX
 
 ### Added
-- Initial release of Vertical Bufferline
+- Initial release of Buffer Nexus
 - Vertical sidebar with buffer group management
 - Dynamic buffer grouping with automatic management
 - Seamless bufferline integration
@@ -145,7 +145,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - History feature is enabled by default with "auto" mode
 - Existing keymaps are preserved, new sidebar hotkeys added (`h`, `p`)
 - EmmyLua annotations provide LSP autocompletion (no action needed)
-- Enhanced help file accessible via `:help vertical-bufferline`
+- Enhanced help file accessible via `:help buffernexus`
 
 ## Support
 

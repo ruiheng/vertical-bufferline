@@ -2,12 +2,12 @@
 -- Dynamic group management module
 
 -- Anti-reload protection
-if _G._vertical_bufferline_groups_loaded then
-    return _G._vertical_bufferline_groups_instance
+if _G._buffer_nexus_groups_loaded then
+    return _G._buffer_nexus_groups_instance
 end
 
-local config_module = require('vertical-bufferline.config')
-local state_module = require('vertical-bufferline.state')
+local config_module = require('buffer-nexus.config')
+local state_module = require('buffer-nexus.state')
 
 local M = {}
 
@@ -64,7 +64,7 @@ local function is_window_scope_enabled()
     if config_module.settings.group_scope ~= "window" then
         return false
     end
-    local bufferline_integration = require('vertical-bufferline.bufferline-integration')
+    local bufferline_integration = require('buffer-nexus.bufferline-integration')
     return not bufferline_integration.is_available()
 end
 
@@ -185,7 +185,7 @@ local function is_eligible_window(winid)
         return false
     end
 
-    local state_module = require('vertical-bufferline.state')
+    local state_module = require('buffer-nexus.state')
     if state_module.get_win_id and winid == state_module.get_win_id() then
         return false
     end
@@ -240,7 +240,7 @@ function M.activate_window_context(winid, opts)
     return groups_data
 end
 
-function M.get_vbl_groups_by_window(winid)
+function M.get_bn_groups_by_window(winid)
     if not is_window_scope_enabled() then
         return global_groups_data
     end
@@ -637,7 +637,7 @@ end
 function M.set_active_group(group_id, target_buffer_id)
     -- Safety: Clear any lingering extended_picking state when switching groups
     -- This prevents issues where picking mode might interfere with group switching
-    local state_module = require('vertical-bufferline.state')
+    local state_module = require('buffer-nexus.state')
     if state_module.get_extended_picking_state().is_active then
         state_module.set_extended_picking_active(false)
     end
@@ -653,7 +653,7 @@ function M.set_active_group(group_id, target_buffer_id)
     end
 
     local old_group_id = groups_data.active_group_id
-    local bufferline_integration = require('vertical-bufferline.bufferline-integration')
+    local bufferline_integration = require('buffer-nexus.bufferline-integration')
     
     -- Store previous group ID for switching back
     if old_group_id then
@@ -823,7 +823,7 @@ function M.add_buffer_to_group(buffer_id, group_id)
     -- M.remove_buffer_from_all_groups(buffer_id)
 
     -- Add to specified group in correct order based on bufferline's sorting (if available)
-    local bufferline_integration = require('vertical-bufferline.bufferline-integration')
+    local bufferline_integration = require('buffer-nexus.bufferline-integration')
     local insert_position = #group.buffers + 1
     if bufferline_integration.is_available() then
         local sorted_buffers = bufferline_integration.get_sorted_buffers()
@@ -1106,8 +1106,8 @@ function M.sync_active_group_with_bufferline(buffer_list)
     update_group_buffers_internal(active_group, buffer_list or {})
 
     vim.schedule(function()
-        if require('vertical-bufferline').refresh then
-            require('vertical-bufferline').refresh("group_buffers_update")
+        if require('buffer-nexus').refresh then
+            require('buffer-nexus').refresh("group_buffers_update")
         end
     end)
 
@@ -1178,7 +1178,7 @@ function M.setup(opts)
         init_default_group()
     end
 
-    local bufferline_integration = require('vertical-bufferline.bufferline-integration')
+    local bufferline_integration = require('buffer-nexus.bufferline-integration')
     if bufferline_integration.is_available() then
         bufferline_integration.set_sync_target(groups_data.active_group_id)
     end
@@ -1192,7 +1192,7 @@ function M.setup(opts)
         })
     end)
 
-    -- Auto-add new buffers to active group (for VBL standalone mode without bufferline)
+    -- Auto-add new buffers to active group (for BN standalone mode without bufferline)
     vim.api.nvim_create_autocmd("BufEnter", {
         pattern = "*",
         callback = function(args)
@@ -1203,7 +1203,7 @@ function M.setup(opts)
             end
 
             -- Only auto-add if bufferline is not available
-            local bufferline_integration = require('vertical-bufferline.bufferline-integration')
+            local bufferline_integration = require('buffer-nexus.bufferline-integration')
             if bufferline_integration.is_available() then
                 return  -- Let bufferline sync handle this
             end
@@ -1237,7 +1237,7 @@ function M.setup(opts)
                 M.add_buffer_to_group(buf_id, active_group.id)
             end
         end,
-        desc = "Auto-add new buffers to active group (VBL standalone)"
+        desc = "Auto-add new buffers to active group (BN standalone)"
     })
 
     -- Track history on every buffer enter in standalone mode
@@ -1250,7 +1250,7 @@ function M.setup(opts)
                 M.activate_window_context(target_win or api.nvim_get_current_win())
             end
 
-            local bufferline_integration = require('vertical-bufferline.bufferline-integration')
+            local bufferline_integration = require('buffer-nexus.bufferline-integration')
             if bufferline_integration.is_available() then
                 return -- bufferline handles history sync
             end
@@ -1279,7 +1279,7 @@ function M.setup(opts)
                 M.sync_group_history_with_current(active_group.id, buf_id)
             end
         end,
-        desc = "Sync history on BufEnter (VBL standalone)"
+        desc = "Sync history on BufEnter (BN standalone)"
     })
 
     -- Periodically clean up invalid buffers and buffer states
@@ -1317,7 +1317,7 @@ function M.setup(opts)
                 seed_buffer_id = api.nvim_win_get_buf(win_id),
             })
         end,
-        desc = "Activate VBL group context for window",
+        desc = "Activate BN group context for window",
     })
 
     vim.api.nvim_create_autocmd("WinClosed", {
@@ -1331,7 +1331,7 @@ function M.setup(opts)
                 group_contexts[win_id] = nil
             end
         end,
-        desc = "Remove VBL group context for closed window",
+        desc = "Remove BN group context for closed window",
     })
 end
 
@@ -1582,7 +1582,7 @@ end
 M.find_group_by_id = find_group_by_id
 
 -- Save global instance and set flag
-_G._vertical_bufferline_groups_loaded = true
-_G._vertical_bufferline_groups_instance = M
+_G._buffer_nexus_groups_loaded = true
+_G._buffer_nexus_groups_instance = M
 
 return M

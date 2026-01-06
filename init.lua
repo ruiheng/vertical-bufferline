@@ -1,6 +1,6 @@
 -- /home/ruiheng/config_files/nvim/lua/vertical-bufferline/init.lua
 
----@class VerticalBufferline
+---@class BufferNexus
 ---@field setup fun(config?: table): nil Setup the plugin with configuration
 ---@field toggle fun(): nil Toggle the sidebar on/off
 ---@field refresh fun(reason?: string): nil Refresh the sidebar display
@@ -21,8 +21,8 @@
 ---@field session table Session management functions
 
 -- Anti-reload protection
-if _G._vertical_bufferline_init_loaded then
-    return _G._vertical_bufferline_init_instance
+if _G._buffer_nexus_init_loaded then
+    return _G._buffer_nexus_init_instance
 end
 
 local M = {}
@@ -30,34 +30,34 @@ local M = {}
 local api = vim.api
 
 -- Configuration and constants
-local config_module = require('vertical-bufferline.config')
+local config_module = require('buffer-nexus.config')
 
 -- State management
-local state_module = require('vertical-bufferline.state')
+local state_module = require('buffer-nexus.state')
 
 -- Group management modules
-local groups = require('vertical-bufferline.groups')
-local commands = require('vertical-bufferline.commands')
-local bufferline_integration = require('vertical-bufferline.bufferline-integration')
-local session = require('vertical-bufferline.session')
-local filename_utils = require('vertical-bufferline.filename_utils')
-local logger = require('vertical-bufferline.logger')
-local layout = require('vertical-bufferline.layout')
+local groups = require('buffer-nexus.groups')
+local commands = require('buffer-nexus.commands')
+local bufferline_integration = require('buffer-nexus.bufferline-integration')
+local session = require('buffer-nexus.session')
+local filename_utils = require('buffer-nexus.filename_utils')
+local logger = require('buffer-nexus.logger')
+local layout = require('buffer-nexus.layout')
 
 local capture_pick_display_state
 local update_pick_display
 local restore_pick_display
 
-if not package.preload["telescope._extensions.vertical_bufferline"] then
-    package.preload["telescope._extensions.vertical_bufferline"] = function()
-        return require('vertical-bufferline.telescope_extension')
+if not package.preload["telescope._extensions.buffer_nexus"] then
+    package.preload["telescope._extensions.buffer_nexus"] = function()
+        return require('buffer-nexus.telescope_extension')
     end
 end
 
 -- Namespace for our highlights
-local ns_id = api.nvim_create_namespace("VerticalBufferline")
-local pick_input_ns_id = api.nvim_create_namespace("VerticalBufferlinePickInput")
-local flash_ns_id = api.nvim_create_namespace("VerticalBufferlineFlash")
+local ns_id = api.nvim_create_namespace("BufferNexus")
+local pick_input_ns_id = api.nvim_create_namespace("BufferNexusPickInput")
+local flash_ns_id = api.nvim_create_namespace("BufferNexusFlash")
 
 local switch_to_buffer_in_main_window
 
@@ -328,21 +328,21 @@ vim.api.nvim_create_autocmd("ColorScheme", {
 vim.api.nvim_create_autocmd({"TextChanged", "TextChangedI", "BufWritePost"}, {
     pattern = "*",
     callback = function()
-        local state_module = require('vertical-bufferline.state')
+        local state_module = require('buffer-nexus.state')
         if state_module.is_sidebar_open() then
             -- Use a timer to avoid too frequent updates
-            if vim.g.vertical_bufferline_update_timer then
-                vim.fn.timer_stop(vim.g.vertical_bufferline_update_timer)
+            if vim.g.buffer_nexus_update_timer then
+                vim.fn.timer_stop(vim.g.buffer_nexus_update_timer)
             end
-            vim.g.vertical_bufferline_update_timer = vim.fn.timer_start(100, function()
-                local vertical_bufferline = require('vertical-bufferline')
-                if vertical_bufferline and vertical_bufferline.refresh then
-                    vertical_bufferline.refresh()
+            vim.g.buffer_nexus_update_timer = vim.fn.timer_start(100, function()
+                local buffer_nexus = require('buffer-nexus')
+                if buffer_nexus and buffer_nexus.refresh then
+                    buffer_nexus.refresh()
                 end
             end)
         end
     end,
-    desc = "Refresh vertical-bufferline when buffer content changes"
+    desc = "Refresh BN when buffer content changes"
 })
 
 
@@ -387,25 +387,25 @@ local function is_buffer_actually_modified(buf_id)
     local current_changedtick = api.nvim_buf_get_changedtick(buf_id)
     
     -- Store previous changedtick values to detect actual changes
-    if not vim.g.vertical_bufferline_changedticks then
-        vim.g.vertical_bufferline_changedticks = {}
+    if not vim.g.buffer_nexus_changedticks then
+        vim.g.buffer_nexus_changedticks = {}
     end
-    
-    local stored_tick = vim.g.vertical_bufferline_changedticks[buf_id]
-    
+
+    local stored_tick = vim.g.buffer_nexus_changedticks[buf_id]
+
     -- If this is the first time we see this buffer, store its tick and use basic modified
     if not stored_tick then
-        vim.g.vertical_bufferline_changedticks[buf_id] = current_changedtick
+        vim.g.buffer_nexus_changedticks[buf_id] = current_changedtick
         return basic_modified
     end
-    
+
     -- If changedtick hasn't changed, trust the basic modified flag
     if current_changedtick == stored_tick then
         return basic_modified
     end
-    
+
     -- If changedtick changed, update stored tick and check for real modification
-    vim.g.vertical_bufferline_changedticks[buf_id] = current_changedtick
+    vim.g.buffer_nexus_changedticks[buf_id] = current_changedtick
     
     -- Use a combination of checks for accuracy
     local buf_modified = api.nvim_buf_get_option(buf_id, "modified")
@@ -445,7 +445,7 @@ end
 
 local function get_pinned_buffer_ids()
     local pinned = {}
-    local utils_module = require('vertical-bufferline.utils')
+    local utils_module = require('buffer-nexus.utils')
     for _, buf_id in ipairs(api.nvim_list_bufs()) do
         if api.nvim_buf_is_valid(buf_id)
             and not utils_module.is_special_buffer(buf_id)
@@ -959,10 +959,10 @@ local function setup_pick_highlights()
     end
 end
 
--- Extended picking mode management (for VBL standalone mode without bufferline)
+-- Extended picking mode management (for BN standalone mode without bufferline)
 local function start_extended_picking(mode_type)
     if not state_module.is_sidebar_open() then
-        vim.notify("VBL sidebar must be open to use pick mode", vim.log.levels.WARN)
+        vim.notify("BN sidebar must be open to use pick mode", vim.log.levels.WARN)
         return
     end
 
@@ -1276,7 +1276,7 @@ local function apply_extended_picking_highlights()
 end
 
 -- Import shared utilities
-local utils = require('vertical-bufferline.utils')
+local utils = require('buffer-nexus.utils')
 
 -- State is now managed by the state_module, no direct state object needed
 
@@ -1354,7 +1354,7 @@ local function build_components_from_group(group, current_buffer_id)
 
     local minimal_prefixes = {}
     if #valid_buffers > 1 then
-        local filename_utils = require('vertical-bufferline.filename_utils')
+        local filename_utils = require('buffer-nexus.filename_utils')
         minimal_prefixes = filename_utils.generate_minimal_prefixes(valid_buffers, window_width)
     end
 
@@ -1733,14 +1733,14 @@ local function get_buffer_path_info(component)
     end
     
     -- Use smart path compression instead of crude truncation
-    local filename_utils = require('vertical-bufferline.filename_utils')
+    local filename_utils = require('buffer-nexus.filename_utils')
     relative_dir = filename_utils.compress_path_smart(relative_dir, config_module.settings.path_max_length, 1)
     
     return relative_dir, filename
 end
 
-local renderer = require('vertical-bufferline.renderer')
-local components = require('vertical-bufferline.components')
+local renderer = require('buffer-nexus.renderer')
+local components = require('buffer-nexus.components')
 
 local pick_display_cache = {
     buf_id = nil,
@@ -1954,7 +1954,7 @@ local function build_horizontal_item_parts(component, number_index, max_digits, 
         final_name = prefix_info.prefix .. prefix_info.filename
     end
 
-    local filename_utils = require('vertical-bufferline.filename_utils')
+    local filename_utils = require('buffer-nexus.filename_utils')
     local max_filename_len = config_module.settings.filename_max_length
     local filename_ellipsis = config_module.settings.filename_ellipsis
     if prefix_info and prefix_info.filename then
@@ -2069,7 +2069,7 @@ local function open_menu(lines, title)
     menu_state.prev_win_id = api.nvim_get_current_win()
     menu_state.win_id = win_id
     menu_state.buf_id = buf_id
-    menu_state.augroup = api.nvim_create_augroup("VerticalBufferlineMenu", { clear = true })
+    menu_state.augroup = api.nvim_create_augroup("BufferNexusMenu", { clear = true })
     menu_state.title = title or ""
 
     api.nvim_create_autocmd({ "WinLeave", "BufLeave", "BufHidden" }, {
@@ -2082,9 +2082,9 @@ local function open_menu(lines, title)
     })
 
     local keymap_opts = { noremap = true, silent = true, nowait = true }
-    api.nvim_buf_set_keymap(buf_id, "n", "<Esc>", ":lua require('vertical-bufferline').close_menu()<CR>", keymap_opts)
-    api.nvim_buf_set_keymap(buf_id, "n", "q", ":lua require('vertical-bufferline').close_menu()<CR>", keymap_opts)
-    api.nvim_buf_set_keymap(buf_id, "n", "<CR>", ":lua require('vertical-bufferline').menu_confirm_input()<CR>", keymap_opts)
+    api.nvim_buf_set_keymap(buf_id, "n", "<Esc>", ":lua require('buffer-nexus').close_menu()<CR>", keymap_opts)
+    api.nvim_buf_set_keymap(buf_id, "n", "q", ":lua require('buffer-nexus').close_menu()<CR>", keymap_opts)
+    api.nvim_buf_set_keymap(buf_id, "n", "<CR>", ":lua require('buffer-nexus').menu_confirm_input()<CR>", keymap_opts)
     api.nvim_buf_set_keymap(buf_id, "n", "j", "j", keymap_opts)
     api.nvim_buf_set_keymap(buf_id, "n", "k", "k", keymap_opts)
 
@@ -2510,7 +2510,7 @@ local function setup_menu_mappings(items, on_select_item, include_hint, title_of
     for i, item in ipairs(items) do
         if allow_direct_digits and i <= 9 then
             api.nvim_buf_set_keymap(buf_id, "n", tostring(i),
-                string.format(":lua require('vertical-bufferline').menu_select_by_index(%d)<CR>", i),
+                string.format(":lua require('buffer-nexus').menu_select_by_index(%d)<CR>", i),
                 keymap_opts)
         end
     end
@@ -2518,7 +2518,7 @@ local function setup_menu_mappings(items, on_select_item, include_hint, title_of
     if not allow_direct_digits then
         for digit = 0, 9 do
             api.nvim_buf_set_keymap(buf_id, "n", tostring(digit),
-                string.format(":lua require('vertical-bufferline').menu_handle_input('%d')<CR>", digit),
+                string.format(":lua require('buffer-nexus').menu_handle_input('%d')<CR>", digit),
                 keymap_opts)
         end
     end
@@ -2527,7 +2527,7 @@ local function setup_menu_mappings(items, on_select_item, include_hint, title_of
         local hint_chars = collect_menu_hint_chars(items)
         for ch, _ in pairs(hint_chars) do
             api.nvim_buf_set_keymap(buf_id, "n", ch,
-                string.format(":lua require('vertical-bufferline').menu_handle_input('%s')<CR>", ch),
+                string.format(":lua require('buffer-nexus').menu_handle_input('%s')<CR>", ch),
                 keymap_opts)
         end
     end
@@ -2555,7 +2555,7 @@ local function create_buffer_line(component, j, total_components, current_buffer
     local show_icons = config_module.settings.show_icons and not compact_mode
     
     -- Check if this buffer is in the currently active group
-    local groups = require('vertical-bufferline.groups')
+    local groups = require('buffer-nexus.groups')
     local active_group = groups.get_active_group()
     local is_in_active_group = active_group and (group_id == active_group.id)
     
@@ -2586,7 +2586,7 @@ local function create_buffer_line(component, j, total_components, current_buffer
         end
     elseif group_id == "history" and is_current then
         -- For history group, always show current buffer marker
-        local renderer = require('vertical-bufferline.renderer')
+        local renderer = require('buffer-nexus.renderer')
         local current_marker = renderer.create_part(config_module.UI.CURRENT_BUFFER_MARKER, config_module.HIGHLIGHTS.PREFIX_CURRENT)
         table.insert(parts, current_marker)
     end
@@ -2610,7 +2610,7 @@ local function create_buffer_line(component, j, total_components, current_buffer
     end
 
     -- 3. Smart numbering (intelligent display logic)
-    local bl_integration = require('vertical-bufferline.bufferline-integration')
+    local bl_integration = require('buffer-nexus.bufferline-integration')
     -- 2. Numbering (skip if position is 0, show for active group and history group)
     if j > 0 and (is_in_active_group or group_id == "history" or opts.force_numbering) then
         local ok, position_info = pcall(bl_integration.get_buffer_position_info, group_id)
@@ -2695,7 +2695,7 @@ local function create_buffer_line(component, j, total_components, current_buffer
         final_name = prefix_info.prefix .. prefix_info.filename
     end
 
-    local filename_utils = require('vertical-bufferline.filename_utils')
+    local filename_utils = require('buffer-nexus.filename_utils')
     local max_filename_len = config_module.settings.filename_max_length
     local filename_ellipsis = config_module.settings.filename_ellipsis
     if prefix_info and prefix_info.filename then
@@ -2784,7 +2784,7 @@ local function create_buffer_line(component, j, total_components, current_buffer
                 preserve_segments = 1
             }
 
-            local filename_utils = require('vertical-bufferline.filename_utils')
+            local filename_utils = require('buffer-nexus.filename_utils')
             local display_path = filename_utils.compress_path_contextual(raw_path, window_width, ui_context)
             
             -- Only add tree continuation if tree lines are enabled
@@ -2909,7 +2909,7 @@ local function render_group_buffers(group_components, current_buffer_id, is_pick
     local max_local_digits = 1  -- At least 1 for "-"
     local has_any_local_info = false
     local should_hide_local_numbering = false  -- Hide local if first local equals 1
-    local bl_integration = require('vertical-bufferline.bufferline-integration')
+    local bl_integration = require('buffer-nexus.bufferline-integration')
     local ok, position_info = pcall(bl_integration.get_buffer_position_info, line_group_context.current_group_id)
     if ok and position_info then
         -- Check first component to determine if local numbering should be hidden
@@ -3690,7 +3690,7 @@ local function apply_group_highlights(group_header_lines, lines_text)
     end
 end
 
--- Calculate vertical offset to align VBL content with main window cursor
+-- Calculate vertical offset to align BN content with main window cursor
 local function calculate_cursor_based_offset(content_length, target_line)
     -- Check if cursor alignment is enabled
     if not config_module.settings.align_with_cursor then
@@ -5163,7 +5163,7 @@ function M.close_sidebar(position_override)
     end
 
     -- Clean up autocmd group for sidebar protection
-    pcall(api.nvim_del_augroup_by_name, "VerticalBufferlineSidebarProtection")
+    pcall(api.nvim_del_augroup_by_name, "BufferNexusSidebarProtection")
     
     state_module.close_sidebar()
     state_module.set_current_position(nil)
@@ -5178,18 +5178,18 @@ local function setup_sidebar_keymaps(buf_id)
     api.nvim_buf_set_keymap(buf_id, "n", "k", "k", keymap_opts)
     
     -- Actions
-    api.nvim_buf_set_keymap(buf_id, "n", "<CR>", ":lua require('vertical-bufferline').handle_selection()<CR>", keymap_opts)
-    api.nvim_buf_set_keymap(buf_id, "n", "d", ":lua require('vertical-bufferline').smart_close_buffer()<CR>", keymap_opts)
-    api.nvim_buf_set_keymap(buf_id, "n", "x", ":lua require('vertical-bufferline').remove_from_group()<CR>", keymap_opts)
-    api.nvim_buf_set_keymap(buf_id, "n", "D", ":lua require('vertical-bufferline').smart_close_buffer()<CR>", keymap_opts)
-    api.nvim_buf_set_keymap(buf_id, "n", "q", ":lua require('vertical-bufferline').close_sidebar()<CR>", keymap_opts)
+    api.nvim_buf_set_keymap(buf_id, "n", "<CR>", ":lua require('buffer-nexus').handle_selection()<CR>", keymap_opts)
+    api.nvim_buf_set_keymap(buf_id, "n", "d", ":lua require('buffer-nexus').smart_close_buffer()<CR>", keymap_opts)
+    api.nvim_buf_set_keymap(buf_id, "n", "x", ":lua require('buffer-nexus').remove_from_group()<CR>", keymap_opts)
+    api.nvim_buf_set_keymap(buf_id, "n", "D", ":lua require('buffer-nexus').smart_close_buffer()<CR>", keymap_opts)
+    api.nvim_buf_set_keymap(buf_id, "n", "q", ":lua require('buffer-nexus').close_sidebar()<CR>", keymap_opts)
     
     -- Settings
-    api.nvim_buf_set_keymap(buf_id, "n", "p", ":lua require('vertical-bufferline').cycle_show_path_setting()<CR>", keymap_opts)
-    api.nvim_buf_set_keymap(buf_id, "n", "h", ":lua require('vertical-bufferline').cycle_show_history_setting()<CR>", keymap_opts)
+    api.nvim_buf_set_keymap(buf_id, "n", "p", ":lua require('buffer-nexus').cycle_show_path_setting()<CR>", keymap_opts)
+    api.nvim_buf_set_keymap(buf_id, "n", "h", ":lua require('buffer-nexus').cycle_show_history_setting()<CR>", keymap_opts)
     
     -- Mouse support - simple approach
-    api.nvim_buf_set_keymap(buf_id, "n", "<LeftRelease>", ":lua require('vertical-bufferline').handle_mouse_click()<CR>", keymap_opts)
+    api.nvim_buf_set_keymap(buf_id, "n", "<LeftRelease>", ":lua require('buffer-nexus').handle_mouse_click()<CR>", keymap_opts)
     api.nvim_buf_set_keymap(buf_id, "n", "<LeftMouse>", "<LeftMouse>", keymap_opts)
     
     -- Disable problematic keymaps
@@ -5205,7 +5205,7 @@ local function open_sidebar(position_override)
     api.nvim_buf_set_option(buf_id, 'buftype', 'nofile')
     api.nvim_buf_set_option(buf_id, 'buflisted', false)
     api.nvim_buf_set_option(buf_id, 'swapfile', false)
-    api.nvim_buf_set_option(buf_id, 'filetype', 'vertical-bufferline')
+    api.nvim_buf_set_option(buf_id, 'filetype', 'buffer-nexus')
     local current_win = api.nvim_get_current_win()
 
     local position = position_override or config_module.settings.position
@@ -5298,7 +5298,7 @@ local function open_sidebar(position_override)
     -- Instead, we rely on autocmd protection below for smart handling
     
     -- Buffer protection and floating window management
-    local group_name = "VerticalBufferlineSidebarProtection"
+    local group_name = "BufferNexusSidebarProtection"
     api.nvim_create_augroup(group_name, { clear = true })
     
     -- Handle window resize for floating sidebar (only needed in floating mode)
@@ -5438,7 +5438,7 @@ local function open_sidebar(position_override)
                     api.nvim_buf_set_option(new_sidebar_buf, 'buftype', 'nofile')
                     api.nvim_buf_set_option(new_sidebar_buf, 'buflisted', false)
                     api.nvim_buf_set_option(new_sidebar_buf, 'swapfile', false)
-                    api.nvim_buf_set_option(new_sidebar_buf, 'filetype', 'vertical-bufferline')
+                    api.nvim_buf_set_option(new_sidebar_buf, 'filetype', 'buffer-nexus')
                     api.nvim_win_set_buf(new_win_id, new_sidebar_buf)
                     
                     -- Update state with new buffer ID
@@ -5455,7 +5455,7 @@ local function open_sidebar(position_override)
                     api.nvim_buf_set_option(new_sidebar_buf, 'buftype', 'nofile')
                     api.nvim_buf_set_option(new_sidebar_buf, 'buflisted', false)
                     api.nvim_buf_set_option(new_sidebar_buf, 'swapfile', false)
-                    api.nvim_buf_set_option(new_sidebar_buf, 'filetype', 'vertical-bufferline')
+                    api.nvim_buf_set_option(new_sidebar_buf, 'filetype', 'buffer-nexus')
                     api.nvim_win_set_buf(new_win_id, new_sidebar_buf)
                     state_module.set_buf_id(new_sidebar_buf)
                     
@@ -5543,7 +5543,7 @@ function M.cycle_show_history_setting()
         return 
     end
     
-    local groups = require('vertical-bufferline.groups')
+    local groups = require('buffer-nexus.groups')
     local new_setting = groups.cycle_show_history()
     
     -- Provide visual feedback
@@ -5985,7 +5985,7 @@ local populate_startup_buffers
 
 -- Plugin initialization function (called on load)
 local function initialize_plugin()
-    -- Set global flag so bufferline knows VBL is enabled
+    -- Set global flag so bufferline knows BN is enabled
     vim.g.enable_vertical_bufferline = 1
 
     -- Setup commands
@@ -6006,17 +6006,17 @@ local function initialize_plugin()
     session.setup_session_integration()
 
     -- Setup global autocmds (not dependent on sidebar state)
-    api.nvim_command("augroup VerticalBufferlineGlobal")
+    api.nvim_command("augroup BufferNexusGlobal")
     api.nvim_command("autocmd!")
-    -- TEMP DISABLED: api.nvim_command("autocmd BufEnter,BufDelete,BufWipeout * lua require('vertical-bufferline').refresh_if_open()")
-    api.nvim_command("autocmd BufWritePost * lua require('vertical-bufferline').refresh_if_open()")
-    api.nvim_command("autocmd WinClosed * lua require('vertical-bufferline').check_quit_condition()")
-    api.nvim_command("autocmd WinEnter * lua require('vertical-bufferline').handle_win_enter()")
+    -- TEMP DISABLED: api.nvim_command("autocmd BufEnter,BufDelete,BufWipeout * lua require('buffer-nexus').refresh_if_open()")
+    api.nvim_command("autocmd BufWritePost * lua require('buffer-nexus').refresh_if_open()")
+    api.nvim_command("autocmd WinClosed * lua require('buffer-nexus').check_quit_condition()")
+    api.nvim_command("autocmd WinEnter * lua require('buffer-nexus').handle_win_enter()")
 
-    -- Add cursor alignment triggers (only for VBL-managed file buffers)
+    -- Add cursor alignment triggers (only for BN-managed file buffers)
     -- WinScrolled is needed to catch viewport changes from zz, zt, zb, etc.
-    api.nvim_command("autocmd CursorMoved,CursorMovedI,WinScrolled * lua require('vertical-bufferline').refresh_cursor_alignment()")
-    api.nvim_command("autocmd User " .. config_module.EVENTS.GROUP_CHANGED .. " lua require('vertical-bufferline').refresh_if_open()")
+    api.nvim_command("autocmd CursorMoved,CursorMovedI,WinScrolled * lua require('buffer-nexus').refresh_cursor_alignment()")
+    api.nvim_command("autocmd User " .. config_module.EVENTS.GROUP_CHANGED .. " lua require('buffer-nexus').refresh_if_open()")
 
     api.nvim_command("augroup END")
 
@@ -6059,7 +6059,7 @@ function M.handle_win_enter()
     end
 end
 
--- Throttled refresh for cursor alignment (only for VBL-managed buffers)
+-- Throttled refresh for cursor alignment (only for BN-managed buffers)
 local cursor_alignment_timer = nil
 
 function M.refresh_cursor_alignment()
@@ -6078,8 +6078,8 @@ function M.refresh_cursor_alignment()
 
     local current_buf = api.nvim_get_current_buf()
 
-    -- Check if current buffer is managed by VBL
-    local groups = require('vertical-bufferline.groups')
+    -- Check if current buffer is managed by BN
+    local groups = require('buffer-nexus.groups')
     local all_groups = groups.get_all_groups()
 
     local is_vbl_buffer = false
@@ -6091,7 +6091,7 @@ function M.refresh_cursor_alignment()
     end
 
     if not is_vbl_buffer then
-        return  -- Not a VBL-managed buffer, ignore
+        return  -- Not a BN-managed buffer, ignore
     end
 
     -- Cancel existing timer
@@ -6273,7 +6273,7 @@ M.move_group_down = function() commands.move_group_down() end
 --- @param group_id? number|string Group ID to clear history for (nil clears all groups)
 --- @return boolean success True if history was cleared successfully
 M.clear_history = function(group_id)
-    local groups = require('vertical-bufferline.groups')
+    local groups = require('buffer-nexus.groups')
     local success = groups.clear_group_history(group_id)
     if success then
         M.refresh("clear_history")
@@ -6284,7 +6284,7 @@ end
 --- Copy current window's groups to a register (edit-mode format)
 --- @param register? string Target register (defaults to ")
 function M.copy_groups_to_register(register)
-    require('vertical-bufferline.edit_mode').copy_to_register(register)
+    require('buffer-nexus.edit_mode').copy_to_register(register)
 end
 
 --- Cycle through path display modes (yes/no/auto)
@@ -6309,7 +6309,7 @@ M.cycle_show_history = M.cycle_show_history_setting
 --- @field user_config.floating? boolean Use floating window instead of split (default: false)
 --- @field user_config.auto_create_groups? boolean Enable automatic group creation (default: true)
 --- @field user_config.auto_add_new_buffers? boolean Auto-add new buffers to active group (default: true)
---- @field user_config.group_scope? "global"|"window" Group scope for VBL groups (default: "global")
+--- @field user_config.group_scope? "global"|"window" Group scope for BN groups (default: "global")
 --- @field user_config.inherit_on_new_window? boolean Inherit groups when a new window is created (default: false)
 --- @field user_config.show_path? "yes"|"no"|"auto" Path display mode (default: "auto")
 --- @field user_config.path_style? "relative"|"absolute"|"smart" Path display style (default: "relative")
@@ -6393,7 +6393,7 @@ end
 --- @param position number History position (1-9)
 --- @return boolean success
 function M.switch_to_history_file(position)
-    local groups = require('vertical-bufferline.groups')
+    local groups = require('buffer-nexus.groups')
     local active_group = groups.get_active_group()
     if not active_group then
         vim.notify("No active group", vim.log.levels.WARN)
@@ -6617,10 +6617,10 @@ function M.keymap_preset(opts)
     if include_section("basic") then
         add(leader .. "vb", function() M.toggle() end, "Toggle vertical bufferline")
         add(leader .. "ve", function() M.toggle_expand_all() end, "Toggle expand all groups")
-        add(leader .. "vi", function() require('vertical-bufferline.edit_mode').open() end, "Edit buffer groups")
+        add(leader .. "vi", function() require('buffer-nexus.edit_mode').open() end, "Edit buffer groups")
         add(leader .. "gn", function() M.switch_to_next_group() end, "Switch to next group")
         add(leader .. "gp", function() M.switch_to_prev_group() end, "Switch to previous group")
-        add(leader .. "G", function() require('vertical-bufferline.groups').switch_to_previous_group() end, "Switch to last-used group")
+        add(leader .. "G", function() require('buffer-nexus.groups').switch_to_previous_group() end, "Switch to last-used group")
         add(leader .. "gc", function() M.create_group() end, "Create new group")
     end
 
@@ -6660,14 +6660,14 @@ function M.keymap_preset(opts)
     end
 
     if include_section("pick") then
-        add(pick_key, function() M.pick_buffer() end, "Pick buffer (VBL)")
-        add(pick_close_key, function() M.pick_close_buffer() end, "Pick and close buffer (VBL)")
+        add(pick_key, function() M.pick_buffer() end, "Pick buffer (BN)")
+        add(pick_close_key, function() M.pick_close_buffer() end, "Pick and close buffer (BN)")
     end
 
     if include_section("menus") then
-        add(buffer_menu_key, function() M.open_buffer_menu() end, "Open buffer menu (VBL)")
-        add(group_menu_key, function() M.open_group_menu() end, "Open group menu (VBL)")
-        add(history_menu_key, function() M.open_history_menu() end, "Open history menu (VBL)")
+        add(buffer_menu_key, function() M.open_buffer_menu() end, "Open buffer menu (BN)")
+        add(group_menu_key, function() M.open_group_menu() end, "Open group menu (BN)")
+        add(history_menu_key, function() M.open_history_menu() end, "Open history menu (BN)")
     end
 
     return preset
@@ -6741,7 +6741,7 @@ end
 initialize_plugin()
 
 -- Save global instance and set loaded flag
-_G._vertical_bufferline_init_loaded = true
-_G._vertical_bufferline_init_instance = M
+_G._buffer_nexus_init_loaded = true
+_G._buffer_nexus_init_instance = M
 
 return M

@@ -14,8 +14,8 @@ add_rtp_root()
 vim.o.shadafile = vim.fn.tempname()
 vim.o.swapfile = false
 
-local vbl = require('vertical-bufferline')
-local state = require('vertical-bufferline.state')
+local vbl = require('buffer-nexus')
+local state = require('buffer-nexus.state')
 
 -- Simulate hint_lines mapping directly to buffer_id (line_hints empty).
 local buffer_id = 99

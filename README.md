@@ -1,4 +1,4 @@
-# Vertical Bufferline
+# Buffer Nexus
 
 **Vertical sidebar for buffer groups, with optional bufferline.nvim integration and history for large projects.**
 
@@ -13,12 +13,12 @@ Use the unused space on the left/right to show every buffer at a glance, organiz
 ```lua
 -- lazy.nvim
 {
-  "ruiheng/vertical-bufferline",
+  "ruiheng/buffer-nexus",
   -- Optional: add bufferline.nvim for integration
   -- dependencies = { "akinsho/bufferline.nvim" },
   opts = {},
   config = function()
-    local vbl = require("vertical-bufferline")
+    local vbl = require("buffer-nexus")
     vbl.apply_keymaps(vbl.keymap_preset())
   end,
 }
@@ -30,10 +30,10 @@ require('bufferline').setup({
   options = {
     numbers = "ordinal",
     close_command = function(bufnum)
-      require('vertical-bufferline.bufferline-integration').smart_close_buffer(bufnum)
+      require('buffer-nexus.bufferline-integration').smart_close_buffer(bufnum)
     end,
     right_mouse_command = function(bufnum)
-      require('vertical-bufferline.bufferline-integration').smart_close_buffer(bufnum)
+      require('buffer-nexus.bufferline-integration').smart_close_buffer(bufnum)
     end,
   }
 })
@@ -55,7 +55,7 @@ require('bufferline').setup({
 - **Perfect picking mode compatibility** with synchronized highlighting
 - **Two display modes**: Show only active group (default) or expand all groups
 - **Smart filename disambiguation** - automatically resolves duplicate filenames with minimal path context
-- **Cursor alignment** - VBL content automatically aligns with your cursor position in the main window
+- **Cursor alignment** - BN content automatically aligns with your cursor position in the main window
 - **Pinned buffers** - show in a global pinned section (syncs with bufferline when installed); standalone can assign stable pick chars via edit mode
 - **Edit mode (modal)** - batch edit groups in a temporary buffer and apply
 
@@ -72,13 +72,13 @@ require('bufferline').setup({
 
 Apply the preset:
 ```lua
-local vbl = require("vertical-bufferline")
+local vbl = require("buffer-nexus")
 vbl.apply_keymaps(vbl.keymap_preset())
 ```
 
 Customize prefixes:
 ```lua
-local vbl = require("vertical-bufferline")
+local vbl = require("buffer-nexus")
 vbl.apply_keymaps(vbl.keymap_preset({
   history_prefix = "<leader>h", -- defaults to <leader>h
   buffer_prefix = "<leader>",   -- defaults to <leader>
@@ -93,59 +93,59 @@ You can also override or remove any entry by editing the returned table before a
 The following functions are available for you to map to your preferred keybindings. See Installation section for keymap examples.
 
 **Sidebar Control:**
-- `require('vertical-bufferline').toggle()` - Toggle vertical bufferline sidebar
-- `require('vertical-bufferline').toggle_show_inactive_group_buffers()` - Toggle showing inactive group buffers
-- `require('vertical-bufferline').close_sidebar()` - Close the sidebar
+- `require('buffer-nexus').toggle()` - Toggle vertical bufferline sidebar
+- `require('buffer-nexus').toggle_show_inactive_group_buffers()` - Toggle showing inactive group buffers
+- `require('buffer-nexus').close_sidebar()` - Close the sidebar
 
 **Group Management:**
-- `require('vertical-bufferline').create_group()` - Create new unnamed group
-- `require('vertical-bufferline').switch_to_next_group()` - Switch to next group
-- `require('vertical-bufferline').switch_to_prev_group()` - Switch to previous group
-- `require('vertical-bufferline').move_group_up()` - Move current group up in the list
-- `require('vertical-bufferline').move_group_down()` - Move current group down in the list
-- `require('vertical-bufferline').copy_groups_to_register()` - Copy current window groups to default register (edit-mode format)
-- `require('vertical-bufferline').groups.switch_to_group_by_display_number(n)` - Switch directly to group n by display number
+- `require('buffer-nexus').create_group()` - Create new unnamed group
+- `require('buffer-nexus').switch_to_next_group()` - Switch to next group
+- `require('buffer-nexus').switch_to_prev_group()` - Switch to previous group
+- `require('buffer-nexus').move_group_up()` - Move current group up in the list
+- `require('buffer-nexus').move_group_down()` - Move current group down in the list
+- `require('buffer-nexus').copy_groups_to_register()` - Copy current window groups to default register (edit-mode format)
+- `require('buffer-nexus').groups.switch_to_group_by_display_number(n)` - Switch directly to group n by display number
 
 **History Quick Access:**
-- `require('vertical-bufferline').switch_to_history_file(n)` - Switch to nth recent file in current group history
-- `require('vertical-bufferline').switch_to_group_buffer(n)` - Switch to nth buffer in current group
+- `require('buffer-nexus').switch_to_history_file(n)` - Switch to nth recent file in current group history
+- `require('buffer-nexus').switch_to_group_buffer(n)` - Switch to nth buffer in current group
 
-Note: `BufferLineGoToBuffer` and `BufferLinePick` are provided by bufferline.nvim. Without bufferline, use `:VBufferLinePick`.
+Note: `BufferLineGoToBuffer` and `BufferLinePick` are provided by bufferline.nvim. Without bufferline, use `:BNPick`.
 
 ## Commands
 
 ### Edit Mode
-- `:VBufferLineEdit` - Fast, modal batch editor for groups: reorder everything in one pass without leaving Vim.
+- `:BNEdit` - Fast, modal batch editor for groups: reorder everything in one pass without leaving Vim.
 - Great for large refactors: move buffers across groups, duplicate entries into multiple groups, and assign stable pick chars with `[pin]` / `[pin=a]`.
 - Safe and forgiving: unsaved buffers are preserved, and invalid lines are skipped with warnings instead of aborting.
 - Built-in file insertion: use the edit picker (Telescope/snacks/fzf-lua/mini.pick) to add files quickly.
 
 ### Group Operations
-- `:VBufferLineCreateGroup [name]` - Create new group with optional name
-- `:VBufferLineDeleteGroup <name_or_id>` - Delete specified group
-- `:VBufferLineRenameGroup <new_name>` - Rename current active group
-- `:VBufferLineSwitchGroup [name_or_id]` - Switch to specified group
-- `:VBufferLineAddToGroup <name_or_id>` - Add current buffer to specified group
-- `:VBufferLineCopyGroups [register]` - Copy groups to a register (edit-mode format)
+- `:BNCreateGroup [name]` - Create new group with optional name
+- `:BNDeleteGroup <name_or_id>` - Delete specified group
+- `:BNRenameGroup <new_name>` - Rename current active group
+- `:BNSwitchGroup [name_or_id]` - Switch to specified group
+- `:BNAddToGroup <name_or_id>` - Add current buffer to specified group
+- `:BNCopyGroups [register]` - Copy groups to a register (edit-mode format)
 
 ### Navigation
-- `:VBufferLineNextGroup` - Switch to next group
-- `:VBufferLinePrevGroup` - Switch to previous group
-- `:VBufferLineToggleInactiveGroupBuffers` - Toggle showing buffer lists for inactive groups (same as `:VBufferLineToggleExpandAll`)
-- `:VBufferLinePick` - Pick a buffer across groups
-- `:VBufferLinePickClose` - Pick a buffer across groups and close it
+- `:BNNextGroup` - Switch to next group
+- `:BNPrevGroup` - Switch to previous group
+- `:BNToggleInactiveGroupBuffers` - Toggle showing buffer lists for inactive groups (same as `:BNToggleExpandAll`)
+- `:BNPick` - Pick a buffer across groups
+- `:BNPickClose` - Pick a buffer across groups and close it
 
 ### Group Reordering
-- `:VBufferLineMoveGroupUp` - Move current group up in the list
-- `:VBufferLineMoveGroupDown` - Move current group down in the list
-- `:VBufferLineMoveGroupToPosition <position>` - Move current group to specified position
+- `:BNMoveGroupUp` - Move current group up in the list
+- `:BNMoveGroupDown` - Move current group down in the list
+- `:BNMoveGroupToPosition <position>` - Move current group to specified position
 
 ### Utilities
-- `:VBufferLineDebug` - Show debug information
-- `:VBufferLineRefreshBuffers` - Manually refresh and add current buffers to active group
-- `:VBufferLineClearHistory [group_name]` - Clear history for all groups or specific group
-- `:VBufferLineToggleCursorAlign` - Toggle cursor alignment for VBL content
-- `:VBufferLineToggleAdaptiveWidth` - Toggle adaptive width for VBL sidebar
+- `:BNDebug` - Show debug information
+- `:BNRefreshBuffers` - Manually refresh and add current buffers to active group
+- `:BNClearHistory [group_name]` - Clear history for all groups or specific group
+- `:BNToggleCursorAlign` - Toggle cursor alignment for BN content
+- `:BNToggleAdaptiveWidth` - Toggle adaptive width for BN sidebar
 
 ## Display Modes
 
@@ -173,7 +173,7 @@ Shows all groups expanded with their buffers visible:
 └─ 2 📋 config.json
 ```
 
-Toggle between modes with `:VBufferLineToggleInactiveGroupBuffers` or by calling `require('vertical-bufferline').toggle_show_inactive_group_buffers()`.
+Toggle between modes with `:BNToggleInactiveGroupBuffers` or by calling `require('buffer-nexus').toggle_show_inactive_group_buffers()`.
 
 ## Interface Elements
 
@@ -187,12 +187,12 @@ Toggle between modes with `:VBufferLineToggleInactiveGroupBuffers` or by calling
 
 **Dual Numbering System (bufferline.nvim only):**
 
-VBL displays buffer ordinal numbers to help you navigate efficiently. Each buffer shows its position with one or two numbers:
+BN displays buffer ordinal numbers to help you navigate efficiently. Each buffer shows its position with one or two numbers:
 
 - **Group Ordinal** (always shown): The buffer's ordinal position within the current group
 - **Visible Ordinal** (shown only when different): The buffer's ordinal position in bufferline's visible elements
 
-When bufferline truncates the list (many open buffers), some buffers won't appear in the horizontal bufferline. In this case, VBL shows both ordinals to clarify the buffer's location:
+When bufferline truncates the list (many open buffers), some buffers won't appear in the horizontal bufferline. In this case, BN shows both ordinals to clarify the buffer's location:
 
 ```
 Format: [visible|group] or just [group] when they match
@@ -203,7 +203,7 @@ Examples:
 -|9 Config.json        # Not in bufferline visible elements, 9th in group
 ```
 
-The visible ordinal corresponds to bufferline's ordinal numbers (for example, if you map them to `<leader>1`, `<leader>2`, etc.), making it easy to jump to visible buffers using those shortcuts. Without bufferline.nvim, VBL shows only the group ordinal.
+The visible ordinal corresponds to bufferline's ordinal numbers (for example, if you map them to `<leader>1`, `<leader>2`, etc.), making it easy to jump to visible buffers using those shortcuts. Without bufferline.nvim, BN shows only the group ordinal.
 
 **Buffer Display Elements:**
 - `► 1 🌙 filename.lua` - Current buffer with arrow marker
@@ -212,7 +212,7 @@ The visible ordinal corresponds to bufferline's ordinal numbers (for example, if
 - `└─ 3 📋 src/config.json` - Tree structure with smart disambiguation for duplicate names
 
 ### Picking Mode Integration
-When using `:BufferLinePick` (bufferline.nvim) or `:VBufferLinePick` (built-in), the sidebar shows pick chars:
+When using `:BufferLinePick` (bufferline.nvim) or `:BNPick` (built-in), the sidebar shows pick chars:
 ```
 ├─ a ► 1 🌙 App.tsx
 ├─ s 2 📄 Button.jsx
@@ -225,12 +225,12 @@ When using `:BufferLinePick` (bufferline.nvim) or `:VBufferLinePick` (built-in),
 Use commands directly, or map them to your own keys.
 ```
 # Create groups for different areas
-:VBufferLineCreateGroup Frontend
-:VBufferLineCreateGroup Backend
+:BNCreateGroup Frontend
+:BNCreateGroup Backend
 
 # Switch between groups
-:VBufferLineNextGroup
-:VBufferLinePrevGroup
+:BNNextGroup
+:BNPrevGroup
 ```
 
 ## Automatic Features
@@ -256,12 +256,12 @@ Each group maintains its own history of recently accessed files. The current act
 - **Configurable display count**: Maximum number of history items shown (default: 7)
 
 ### History Quick Access
-Map `require('vertical-bufferline').switch_to_history_file(n)` to your preferred keys. Example mapping to positions 1-9:
+Map `require('buffer-nexus').switch_to_history_file(n)` to your preferred keys. Example mapping to positions 1-9:
 ```lua
 for i = 1, 9 do
   vim.keymap.set('n', '<leader>h' .. i, function()
-    require('vertical-bufferline').switch_to_history_file(i)
-  end, { desc = "VBL history " .. i })
+    require('buffer-nexus').switch_to_history_file(i)
+  end, { desc = "BN history " .. i })
 end
 ```
 Behavior (with the example mapping above):
@@ -272,8 +272,8 @@ Behavior (with the example mapping above):
 - History automatically updates when switching between files in the active group
 
 ### History Management
-- `:VBufferLineClearHistory` - Clear history for all groups
-- `:VBufferLineClearHistory [group_name]` - Clear history for specific group
+- `:BNClearHistory` - Clear history for all groups
+- `:BNClearHistory [group_name]` - Clear history for specific group
 - History is automatically saved and restored with sessions
 - History size is configurable (default: 10 entries per group)
 - History display count is configurable (default: 5 items shown)
@@ -313,14 +313,14 @@ Behavior (with the example mapping above):
 Simply use Neovim's native session commands:
 
 ```vim
-" Save a session (includes all VBL state automatically)
+" Save a session (includes all BN state automatically)
 :mksession ~/my-project.vim
 
-" Restore a session (restores all VBL state automatically)
+" Restore a session (restores all BN state automatically)
 :source ~/my-project.vim
 ```
 
-That's it! No need to manually save or load VBL-specific sessions.
+That's it! No need to manually save or load BN-specific sessions.
 
 ### Integration
 
@@ -342,7 +342,7 @@ The sidebar automatically adjusts its width based on the content being displayed
 ### Configuration
 
 ```lua
-require('vertical-bufferline').setup({
+require('buffer-nexus').setup({
     min_width = 15,          -- Minimum width
     max_width = 60,          -- Maximum width
     adaptive_width = true,   -- Enable adaptive sizing (default: true)
@@ -373,12 +373,12 @@ Width: ~45 chars (auto-adjusted)
 
 Toggle adaptive width on/off:
 ```vim
-:VBufferLineToggleAdaptiveWidth
+:BNToggleAdaptiveWidth
 ```
 
 Or disable it in configuration for fixed width behavior:
 ```lua
-require('vertical-bufferline').setup({
+require('buffer-nexus').setup({
     min_width = 40,
     adaptive_width = false,  -- Fixed width mode
 })
@@ -412,7 +412,7 @@ scripts/run_checks.sh
 
 ```lua
 {
-  "ruiheng/vertical-bufferline",
+  "ruiheng/buffer-nexus",
   opts = {
     -- UI settings
     min_width = 15,                 -- Minimum sidebar width (for adaptive sizing)
@@ -440,7 +440,7 @@ scripts/run_checks.sh
     filename_ellipsis = "…",        -- Ellipsis used for truncated filenames
 
     -- Cursor alignment settings
-    align_with_cursor = true,       -- Align VBL content with main window cursor position
+    align_with_cursor = true,       -- Align BN content with main window cursor position
     buffer_switch_flash_ms = 500,   -- Flash current filename on buffer switch (0 to disable)
     
     -- History settings
@@ -462,24 +462,24 @@ scripts/run_checks.sh
   },
   keys = {
     -- Example keymaps (define your own)
-    { "<leader>vb", "<cmd>lua require('vertical-bufferline').toggle()<cr>", desc = "Toggle vertical bufferline" },
-    { "<leader>ve", "<cmd>lua require('vertical-bufferline').toggle_show_inactive_group_buffers()<cr>", desc = "Toggle showing inactive group buffers" },
-    { "<leader>gc", "<cmd>lua require('vertical-bufferline').create_group()<cr>", desc = "Create new group" },
-    { "<leader>gn", "<cmd>lua require('vertical-bufferline').switch_to_next_group()<cr>", desc = "Next group" },
-    { "<leader>gp", "<cmd>lua require('vertical-bufferline').switch_to_prev_group()<cr>", desc = "Previous group" },
-    { "<leader>G", "<cmd>lua require('vertical-bufferline.groups').switch_to_previous_group()<cr>", desc = "Last-used group" },
-    { "<leader>Bo", "<cmd>lua require('vertical-bufferline').close_other_buffers_in_group()<cr>", desc = "Close other buffers in group" },
-    { "<leader>BO", "<cmd>lua require('vertical-bufferline').close_other_buffers_in_group()<cr>", desc = "Close other buffers in group" },
-    { "<leader>bb", "<cmd>lua require('vertical-bufferline').open_buffer_menu()<cr>", desc = "Buffer menu" },
-    { "<leader>gg", "<cmd>lua require('vertical-bufferline').open_group_menu()<cr>", desc = "Group menu" },
-    { "<leader>hh", "<cmd>lua require('vertical-bufferline').open_history_menu()<cr>", desc = "History menu" },
+    { "<leader>vb", "<cmd>lua require('buffer-nexus').toggle()<cr>", desc = "Toggle vertical bufferline" },
+    { "<leader>ve", "<cmd>lua require('buffer-nexus').toggle_show_inactive_group_buffers()<cr>", desc = "Toggle showing inactive group buffers" },
+    { "<leader>gc", "<cmd>lua require('buffer-nexus').create_group()<cr>", desc = "Create new group" },
+    { "<leader>gn", "<cmd>lua require('buffer-nexus').switch_to_next_group()<cr>", desc = "Next group" },
+    { "<leader>gp", "<cmd>lua require('buffer-nexus').switch_to_prev_group()<cr>", desc = "Previous group" },
+    { "<leader>G", "<cmd>lua require('buffer-nexus.groups').switch_to_previous_group()<cr>", desc = "Last-used group" },
+    { "<leader>Bo", "<cmd>lua require('buffer-nexus').close_other_buffers_in_group()<cr>", desc = "Close other buffers in group" },
+    { "<leader>BO", "<cmd>lua require('buffer-nexus').close_other_buffers_in_group()<cr>", desc = "Close other buffers in group" },
+    { "<leader>bb", "<cmd>lua require('buffer-nexus').open_buffer_menu()<cr>", desc = "Buffer menu" },
+    { "<leader>gg", "<cmd>lua require('buffer-nexus').open_group_menu()<cr>", desc = "Group menu" },
+    { "<leader>hh", "<cmd>lua require('buffer-nexus').open_history_menu()<cr>", desc = "History menu" },
   }
 }
 ```
 
 Top/bottom positions use a compact, multi-item layout with wrapping; History comes first, then the active group file list, then a group list. Each file shows its ordinal number, and path lines are suppressed to save vertical space.
 
-For a minimal setup, `require("vertical-bufferline").setup()` is enough.
+For a minimal setup, `require("buffer-nexus").setup()` is enough.
 
 ## Integration
 
@@ -494,10 +494,10 @@ For a minimal setup, `require("vertical-bufferline").setup()` is enough.
 
 ### Telescope.nvim
 - Provides a picker for buffers in the current group
-- Use `:Telescope vertical-bufferline current_group` to open the picker
+- Use `:Telescope buffernexus current_group` to open the picker
 
 ### Filetype Support
-The sidebar buffer uses the `vertical-bufferline` filetype, making it easy to:
+The sidebar buffer uses the `buffernexus` filetype, making it easy to:
 - Set buffer-specific configurations and keymaps
 - Integrate with other plugins that check buffer filetype
 - Apply custom syntax highlighting or statusline behavior
@@ -505,9 +505,9 @@ The sidebar buffer uses the `vertical-bufferline` filetype, making it easy to:
 
 Example configuration for the sidebar buffer:
 ```lua
--- Custom configuration for vertical-bufferline buffers
+-- Custom configuration for buffernexus buffers
 vim.api.nvim_create_autocmd("FileType", {
-    pattern = "vertical-bufferline",
+    pattern = "buffernexus",
     callback = function()
         -- Custom settings for sidebar buffer
         vim.opt_local.wrap = false
@@ -532,7 +532,7 @@ Add to your lazy.nvim configuration:
 
 ```lua
 {
-  "ruiheng/vertical-bufferline",
+  "ruiheng/buffer-nexus",
   opts = {
     min_width = 40,
     show_inactive_group_buffers = false,  -- Show only active group (default)
@@ -541,17 +541,17 @@ Add to your lazy.nvim configuration:
   },
   keys = {
     -- Example keymaps (define your own)
-    { "<leader>vb", "<cmd>lua require('vertical-bufferline').toggle()<cr>", desc = "Toggle vertical bufferline" },
-    { "<leader>ve", "<cmd>lua require('vertical-bufferline').toggle_show_inactive_group_buffers()<cr>", desc = "Toggle showing inactive group buffers" },
-    { "<leader>gc", "<cmd>lua require('vertical-bufferline').create_group()<cr>", desc = "Create new group" },
-    { "<leader>gn", "<cmd>lua require('vertical-bufferline').switch_to_next_group()<cr>", desc = "Next group" },
-    { "<leader>gp", "<cmd>lua require('vertical-bufferline').switch_to_prev_group()<cr>", desc = "Previous group" },
-    { "<leader>G", "<cmd>lua require('vertical-bufferline.groups').switch_to_previous_group()<cr>", desc = "Last-used group" },
-    { "<leader>Bo", "<cmd>lua require('vertical-bufferline').close_other_buffers_in_group()<cr>", desc = "Close other buffers in group" },
-    { "<leader>BO", "<cmd>lua require('vertical-bufferline').close_other_buffers_in_group()<cr>", desc = "Close other buffers in group" },
-    { "<leader>bb", "<cmd>lua require('vertical-bufferline').open_buffer_menu()<cr>", desc = "Buffer menu" },
-    { "<leader>gg", "<cmd>lua require('vertical-bufferline').open_group_menu()<cr>", desc = "Group menu" },
-    { "<leader>hh", "<cmd>lua require('vertical-bufferline').open_history_menu()<cr>", desc = "History menu" },
+    { "<leader>vb", "<cmd>lua require('buffer-nexus').toggle()<cr>", desc = "Toggle vertical bufferline" },
+    { "<leader>ve", "<cmd>lua require('buffer-nexus').toggle_show_inactive_group_buffers()<cr>", desc = "Toggle showing inactive group buffers" },
+    { "<leader>gc", "<cmd>lua require('buffer-nexus').create_group()<cr>", desc = "Create new group" },
+    { "<leader>gn", "<cmd>lua require('buffer-nexus').switch_to_next_group()<cr>", desc = "Next group" },
+    { "<leader>gp", "<cmd>lua require('buffer-nexus').switch_to_prev_group()<cr>", desc = "Previous group" },
+    { "<leader>G", "<cmd>lua require('buffer-nexus.groups').switch_to_previous_group()<cr>", desc = "Last-used group" },
+    { "<leader>Bo", "<cmd>lua require('buffer-nexus').close_other_buffers_in_group()<cr>", desc = "Close other buffers in group" },
+    { "<leader>BO", "<cmd>lua require('buffer-nexus').close_other_buffers_in_group()<cr>", desc = "Close other buffers in group" },
+    { "<leader>bb", "<cmd>lua require('buffer-nexus').open_buffer_menu()<cr>", desc = "Buffer menu" },
+    { "<leader>gg", "<cmd>lua require('buffer-nexus').open_group_menu()<cr>", desc = "Group menu" },
+    { "<leader>hh", "<cmd>lua require('buffer-nexus').open_history_menu()<cr>", desc = "History menu" },
   }
 }
 ```
@@ -560,9 +560,9 @@ Add to your lazy.nvim configuration:
 
 ```lua
 use {
-  'ruiheng/vertical-bufferline',
+  'ruiheng/buffer-nexus',
   config = function()
-    require('vertical-bufferline').setup({
+    require('buffer-nexus').setup({
       min_width = 40,
       show_inactive_group_buffers = false,  -- Show only active group (default)
       show_icons = false,
@@ -575,11 +575,11 @@ use {
 ### Using vim-plug
 
 ```vim
-Plug 'ruiheng/vertical-bufferline'
+Plug 'ruiheng/buffer-nexus'
 
 " In your init.vim or init.lua
 lua << EOF
-require('vertical-bufferline').setup({
+require('buffer-nexus').setup({
   min_width = 40,
   show_inactive_group_buffers = false,  -- Show only active group (default)
   show_icons = false,
@@ -591,11 +591,11 @@ EOF
 ### Using dein.vim
 
 ```vim
-call dein#add('ruiheng/vertical-bufferline')
+call dein#add('ruiheng/buffer-nexus')
 
 " Configuration in init.vim
 lua << EOF
-require('vertical-bufferline').setup()
+require('buffer-nexus').setup()
 EOF
 ```
 
@@ -603,12 +603,12 @@ EOF
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/ruiheng/vertical-bufferline.git ~/.local/share/nvim/site/pack/plugins/start/vertical-bufferline
+git clone https://github.com/ruiheng/buffer-nexus.git ~/.local/share/nvim/site/pack/plugins/start/buffernexus
 ```
 
 2. Add to your init.lua:
 ```lua
-require('vertical-bufferline').setup()
+require('buffer-nexus').setup()
 ```
 
 ### Requirements

@@ -21,7 +21,7 @@ add_rtp_root()
 add_dep_rtp(vim.fn.getcwd() .. "/.deps/snacks.nvim")
 add_dep_rtp(vim.fn.getcwd() .. "/.deps/fzf-lua")
 
-local vbl = require('vertical-bufferline')
+local vbl = require('buffer-nexus')
 
 local function close_edit_buffer()
     for _, buf in ipairs(vim.api.nvim_list_bufs()) do
@@ -44,7 +44,7 @@ local function open_and_assert_header(picker)
             picker = picker,
         },
     })
-    require('vertical-bufferline.edit_mode').open()
+    require('buffer-nexus.edit_mode').open()
     local buf = vim.api.nvim_get_current_buf()
     local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
     local expected = "picker = " .. picker

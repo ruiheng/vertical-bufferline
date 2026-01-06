@@ -36,14 +36,14 @@ end
 
 require('bufferline').setup({})
 
-local vbl = require('vertical-bufferline')
+local vbl = require('buffer-nexus')
 vbl.setup({
     group_scope = "window",
     auto_create_groups = true,
     auto_add_new_buffers = true,
 })
 
-local groups = require('vertical-bufferline.groups')
+local groups = require('buffer-nexus.groups')
 assert_ok(groups.is_window_scope_enabled() == false, "window scope should be disabled with bufferline")
 
 local file1 = write_temp_file({ "one" })

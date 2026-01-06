@@ -19,14 +19,14 @@ end
 
 add_rtp_root()
 
-local vbl = require('vertical-bufferline')
+local vbl = require('buffer-nexus')
 vbl.setup({
     group_scope = "global",
     auto_create_groups = true,
     auto_add_new_buffers = true,
 })
 
-local groups = require('vertical-bufferline.groups')
+local groups = require('buffer-nexus.groups')
 assert_ok(not groups.is_window_scope_enabled(), "window scope should be disabled in global mode")
 
 local file1 = write_temp_file({ "one" })
@@ -37,8 +37,8 @@ local win1 = vim.api.nvim_get_current_win()
 vim.cmd("vsplit " .. vim.fn.fnameescape(file2))
 local win2 = vim.api.nvim_get_current_win()
 
-local data1 = groups.get_vbl_groups_by_window(win1)
-local data2 = groups.get_vbl_groups_by_window(win2)
+local data1 = groups.get_bn_groups_by_window(win1)
+local data2 = groups.get_bn_groups_by_window(win2)
 assert_ok(data1 == data2, "global scope should share group data across windows")
 
 local active = groups.get_active_group()

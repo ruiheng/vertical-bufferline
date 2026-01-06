@@ -14,9 +14,9 @@ add_rtp_root()
 vim.o.shadafile = vim.fn.tempname()
 vim.o.swapfile = false
 
-local session = require('vertical-bufferline.session')
-local groups = require('vertical-bufferline.groups')
-local state = require('vertical-bufferline.state')
+local session = require('buffer-nexus.session')
+local groups = require('buffer-nexus.groups')
+local state = require('buffer-nexus.state')
 
 local tmpdir = vim.fn.tempname()
 vim.fn.mkdir(tmpdir, "p")
@@ -40,7 +40,7 @@ state.set_buffer_pin_char(buf1, "a")
 state.set_buffer_pinned(buf2, true)
 
 local session_data = session.collect_current_state()
-vim.g.VerticalBufferlineSession = vim.json.encode(session_data)
+vim.g.BufferNexusSession = vim.json.encode(session_data)
 
 state.clear_pinned_buffers()
 

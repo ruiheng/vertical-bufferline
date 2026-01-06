@@ -75,82 +75,82 @@ M.COLORS = {
 -- Highlight group names
 M.HIGHLIGHTS = {
     -- Buffer highlights
-    CURRENT = "VBufferLineCurrent",
-    VISIBLE = "VBufferLineVisible",
-    MODIFIED = "VBufferLineModified",
-    MODIFIED_CURRENT = "VBufferLineModifiedCurrent",
-    PIN = "VBufferLinePin",
-    PIN_CURRENT = "VBufferLinePinCurrent",
-    INACTIVE = "VBufferLineInactive",
-    ERROR = "VBufferLineError",
-    WARNING = "VBufferLineWarning",
-    BAR = "VBufferLineBar",
-    PLACEHOLDER = "VBufferLinePlaceholder",
+    CURRENT = "BufferNexusCurrent",
+    VISIBLE = "BufferNexusVisible",
+    MODIFIED = "BufferNexusModified",
+    MODIFIED_CURRENT = "BufferNexusModifiedCurrent",
+    PIN = "BufferNexusPin",
+    PIN_CURRENT = "BufferNexusPinCurrent",
+    INACTIVE = "BufferNexusInactive",
+    ERROR = "BufferNexusError",
+    WARNING = "BufferNexusWarning",
+    BAR = "BufferNexusBar",
+    PLACEHOLDER = "BufferNexusPlaceholder",
 
     -- Group highlights
-    GROUP_ACTIVE = "VBufferLineGroupActive",
-    GROUP_INACTIVE = "VBufferLineGroupInactive",
-    GROUP_NUMBER = "VBufferLineGroupNumber",
-    GROUP_SEPARATOR = "VBufferLineGroupSeparator",
-    GROUP_MARKER = "VBufferLineGroupMarker",
-    GROUP_TAB_ACTIVE = "VBufferLineGroupTabActive",
-    GROUP_TAB_INACTIVE = "VBufferLineGroupTabInactive",
-    SECTION_LABEL_ACTIVE = "VBufferLineSectionLabelActive",
-    SECTION_LABEL_INACTIVE = "VBufferLineSectionLabelInactive",
+    GROUP_ACTIVE = "BufferNexusGroupActive",
+    GROUP_INACTIVE = "BufferNexusGroupInactive",
+    GROUP_NUMBER = "BufferNexusGroupNumber",
+    GROUP_SEPARATOR = "BufferNexusGroupSeparator",
+    GROUP_MARKER = "BufferNexusGroupMarker",
+    GROUP_TAB_ACTIVE = "BufferNexusGroupTabActive",
+    GROUP_TAB_INACTIVE = "BufferNexusGroupTabInactive",
+    SECTION_LABEL_ACTIVE = "BufferNexusSectionLabelActive",
+    SECTION_LABEL_INACTIVE = "BufferNexusSectionLabelInactive",
 
     -- Recent Files highlights
-    RECENT_FILES_HEADER = "VBufferLineRecentFilesHeader",
+    RECENT_FILES_HEADER = "BufferNexusRecentFilesHeader",
 
     -- Pick mode highlights
-    PICK = "VBufferLinePick",
-    PICK_VISIBLE = "VBufferLinePickVisible",
-    PICK_SELECTED = "VBufferLinePickSelected",
-    
+    PICK = "BufferNexusPick",
+    PICK_VISIBLE = "BufferNexusPickVisible",
+    PICK_SELECTED = "BufferNexusPickSelected",
+
     -- Path display highlights
-    PATH = "VBufferLinePath",
-    PATH_CURRENT = "VBufferLinePathCurrent",
-    PATH_VISIBLE = "VBufferLinePathVisible",
-    
+    PATH = "BufferNexusPath",
+    PATH_CURRENT = "BufferNexusPathCurrent",
+    PATH_VISIBLE = "BufferNexusPathVisible",
+
     -- Filename-specific highlights for better distinction
-    FILENAME = "VBufferLineFilename",
-    FILENAME_CURRENT = "VBufferLineFilenameCurrent",
-    FILENAME_VISIBLE = "VBufferLineFilenameVisible",
-    FILENAME_FLASH = "VBufferLineFilenameFlash",
+    FILENAME = "BufferNexusFilename",
+    FILENAME_CURRENT = "BufferNexusFilenameCurrent",
+    FILENAME_VISIBLE = "BufferNexusFilenameVisible",
+    FILENAME_FLASH = "BufferNexusFilenameFlash",
 
     -- Buffer numbering highlights (numbers shown before filenames)
-    BUFFER_NUMBER = "VBufferLineBufferNumber",
-    BUFFER_NUMBER_CURRENT = "VBufferLineBufferNumberCurrent",
-    BUFFER_NUMBER_VISIBLE = "VBufferLineBufferNumberVisible",
-    
+    BUFFER_NUMBER = "BufferNexusBufferNumber",
+    BUFFER_NUMBER_CURRENT = "BufferNexusBufferNumberCurrent",
+    BUFFER_NUMBER_VISIBLE = "BufferNexusBufferNumberVisible",
+
     -- Prefix highlights for first-line minimal prefixes (different from full path)
-    PREFIX = "VBufferLinePrefix",
-    PREFIX_CURRENT = "VBufferLinePrefixCurrent",
-    PREFIX_VISIBLE = "VBufferLinePrefixVisible",
-    
+    PREFIX = "BufferNexusPrefix",
+    PREFIX_CURRENT = "BufferNexusPrefixCurrent",
+    PREFIX_VISIBLE = "BufferNexusPrefixVisible",
+
     -- Dual numbering highlights for local|global format
-    NUMBER_LOCAL = "VBufferLineNumberLocal",    -- Local position (for <leader>1 style)
-    NUMBER_GLOBAL = "VBufferLineNumberGlobal",  -- Global position (for <leader>b1 style)
-    NUMBER_SEPARATOR = "VBufferLineNumberSep",  -- The "|" separator
-    NUMBER_SEPARATOR_CURRENT = "VBufferLineNumberSepCurrent",  -- "|" separator for current buffer line
-    NUMBER_HIDDEN = "VBufferLineNumberHidden",  -- The "-" when not visible
+    NUMBER_LOCAL = "BufferNexusNumberLocal",    -- Local position (for <leader>1 style)
+    NUMBER_GLOBAL = "BufferNexusNumberGlobal",  -- Global position (for <leader>b1 style)
+    NUMBER_SEPARATOR = "BufferNexusNumberSep",  -- The "|" separator
+    NUMBER_SEPARATOR_CURRENT = "BufferNexusNumberSepCurrent",  -- "|" separator for current buffer line
+    NUMBER_HIDDEN = "BufferNexusNumberHidden",  -- The "-" when not visible
 
-    HORIZONTAL_NUMBER = "VBufferLineHorizontalNumber",
-    HORIZONTAL_NUMBER_CURRENT = "VBufferLineHorizontalNumberCurrent",
-    HORIZONTAL_CURRENT = "VBufferLineHorizontalCurrent",
+    HORIZONTAL_NUMBER = "BufferNexusHorizontalNumber",
+    HORIZONTAL_NUMBER_CURRENT = "BufferNexusHorizontalNumberCurrent",
+    HORIZONTAL_CURRENT = "BufferNexusHorizontalCurrent",
 
-    MENU_INPUT_PREFIX = "VBufferLineMenuInputPrefix",
+    MENU_INPUT_PREFIX = "BufferNexusMenuInputPrefix",
 }
 
 -- Event names for autocmds
 M.EVENTS = {
-    GROUP_CREATED = "VBufferLineGroupCreated",
-    GROUP_DELETED = "VBufferLineGroupDeleted",
-    GROUP_RENAMED = "VBufferLineGroupRenamed",
-    GROUP_CHANGED = "VBufferLineGroupChanged",
-    GROUP_REORDERED = "VBufferLineGroupReordered",
-    BUFFER_ADDED_TO_GROUP = "VBufferLineBufferAddedToGroup",
-    BUFFER_REMOVED_FROM_GROUP = "VBufferLineBufferRemovedFromGroup",
-    GROUP_BUFFERS_UPDATED = "VBufferLineGroupBuffersUpdated",
+    GROUP_CREATED = "BufferNexusGroupCreated",
+    GROUP_DELETED = "BufferNexusGroupDeleted",
+    GROUP_RENAMED = "BufferNexusGroupRenamed",
+    GROUP_CHANGED = "BufferNexusGroupChanged",
+    GROUP_REORDERED = "BufferNexusGroupReordered",
+    BUFFER_ADDED_TO_GROUP = "BufferNexusBufferAddedToGroup",
+    BUFFER_REMOVED_FROM_GROUP = "BufferNexusBufferRemovedFromGroup",
+    GROUP_BUFFERS_UPDATED = "BufferNexusGroupBuffersUpdated",
 }
 
 -- Default settings
@@ -189,7 +189,7 @@ M.DEFAULTS = {
     filename_ellipsis = "…",
 
     -- Cursor alignment settings
-    align_with_cursor = true,  -- Align VBL content with main window cursor position
+    align_with_cursor = true,  -- Align BN content with main window cursor position
     buffer_switch_flash_ms = 500,  -- Flash current filename on buffer switches (0 to disable)
     
     -- Session integration settings
@@ -203,7 +203,7 @@ M.DEFAULTS = {
         optimize_serialize = true,          -- Only serialize when state actually changes
         auto_restore_prompt = true,         -- Show restore prompt when session data changes during source
         confirm_restore = true,             -- Ask for confirmation before restoring
-        global_variable = "VerticalBufferlineSession"  -- Global variable name for session data
+        global_variable = "BufferNexusSession"  -- Global variable name for session data
     },
 
     -- Edit-mode settings

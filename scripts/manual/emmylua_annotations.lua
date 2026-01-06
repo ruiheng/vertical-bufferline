@@ -1,6 +1,6 @@
 -- Test EmmyLua annotations for vertical-bufferline
 
-local vbl = require('vertical-bufferline')
+local vbl = require('buffer-nexus')
 
 -- This file demonstrates that LSP autocompletion should work for these calls
 -- When opened in Neovim with lua-language-server, you should get:

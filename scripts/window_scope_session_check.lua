@@ -37,7 +37,7 @@ end
 
 add_rtp_root()
 
-local vbl = require('vertical-bufferline')
+local vbl = require('buffer-nexus')
 vbl.setup({
     group_scope = "window",
     inherit_on_new_window = false,
@@ -45,8 +45,8 @@ vbl.setup({
     auto_add_new_buffers = true,
 })
 
-local groups = require('vertical-bufferline.groups')
-local session = require('vertical-bufferline.session')
+local groups = require('buffer-nexus.groups')
+local session = require('buffer-nexus.session')
 assert_ok(groups.is_window_scope_enabled(), "window scope not enabled (bufferline may be active)")
 
 local file1 = write_temp_file({ "alpha" })
@@ -69,7 +69,7 @@ groups.add_buffer_to_group(buf2, group2_id)
 groups.set_active_group(group2_id)
 
 local session_data = session.collect_current_state()
-vim.g.VerticalBufferlineSession = vim.json.encode(session_data)
+vim.g.BufferNexusSession = vim.json.encode(session_data)
 
 groups.reset_window_contexts()
 assert_ok(session.restore_state_from_global(), "session restore failed")

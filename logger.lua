@@ -106,7 +106,7 @@ local function log(level, module, message, context)
     
     -- Also output to nvim if DEBUG level
     if level == "DEBUG" and logger_state.log_level == "DEBUG" then
-        print("[VBL-DEBUG] " .. message)
+        print("[BN-DEBUG] " .. message)
     end
 end
 
@@ -188,7 +188,7 @@ function M.enable(log_file_path, log_level)
     if logger_state.log_file then
         local file = io.open(logger_state.log_file, "w")
         if file then
-            file:write(string.format("=== VBL Debug Log Started at %s ===\n", get_timestamp()))
+            file:write(string.format("=== BN Debug Log Started at %s ===\n", get_timestamp()))
             file:write(string.format("Session ID: %s\n", get_session_id()))
             file:write(string.format("Log Level: %s\n\n", logger_state.log_level))
             file:close()
@@ -208,7 +208,7 @@ function M.disable()
         if logger_state.log_file then
             local file = io.open(logger_state.log_file, "a")
             if file then
-                file:write(string.format("\n=== VBL Debug Log Ended at %s ===\n", get_timestamp()))
+                file:write(string.format("\n=== BN Debug Log Ended at %s ===\n", get_timestamp()))
                 file:close()
             end
         end

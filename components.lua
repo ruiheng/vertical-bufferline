@@ -3,8 +3,8 @@
 
 local M = {}
 
-local renderer = require('vertical-bufferline.renderer')
-local config_module = require('vertical-bufferline.config')
+local renderer = require('buffer-nexus.renderer')
+local config_module = require('buffer-nexus.config')
 
 -- Create tree prefix component
 ---@param is_last boolean

@@ -1,5 +1,5 @@
-" Vim syntax file for vertical-bufferline edit mode
-" Language: vertical-bufferline-edit
+" Vim syntax file for buffer-nexus edit mode
+" Language: buffer-nexus-edit
 
 if exists("b:current_syntax")
     finish
@@ -15,4 +15,4 @@ highlight default link VBlEditGroupHeader Title
 highlight default link VBlEditBufId Identifier
 highlight default link VBlEditFlags Type
 
-let b:current_syntax = "vertical-bufferline-edit"
+let b:current_syntax = "buffer-nexus-edit"

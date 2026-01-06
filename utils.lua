@@ -4,7 +4,7 @@
 local M = {}
 
 -- Get the config module
-local config_module = require('vertical-bufferline.config')
+local config_module = require('buffer-nexus.config')
 
 --- Check if buffer is special (based on buftype)
 --- @param buf_id number Buffer ID

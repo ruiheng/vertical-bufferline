@@ -16,7 +16,7 @@ local function find_sidebar_window()
         if vim.api.nvim_win_is_valid(win) then
             local buf = vim.api.nvim_win_get_buf(win)
             if vim.api.nvim_buf_is_valid(buf) and
-                vim.api.nvim_buf_get_option(buf, "filetype") == "vertical-bufferline" then
+                vim.api.nvim_buf_get_option(buf, "filetype") == "buffer-nexus" then
                 return win
             end
         end
@@ -89,9 +89,9 @@ end
 
 add_rtp_root()
 
-local vbl = require("vertical-bufferline")
-local config = require("vertical-bufferline.config")
-local state = require("vertical-bufferline.state")
+local vbl = require("buffer-nexus")
+local config = require("buffer-nexus.config")
+local state = require("buffer-nexus.state")
 
 vbl.setup({
     position = "left",
@@ -136,7 +136,7 @@ local function run_test()
 
     assert_vertical_sizes(sidebar_win, main_win, config.settings.min_width, config.settings.max_width)
 
-    vim.cmd("VBufferLineSetPosition top")
+    vim.cmd("BNSetPosition top")
     local top_sidebar_win = wait_for_sidebar_open()
     assert_ok(top_sidebar_win, "sidebar did not open for top position")
     local top_main_win = find_main_window(top_sidebar_win)

@@ -1,6 +1,6 @@
-# Contributing to Vertical Bufferline
+# Contributing to Buffer Nexus
 
-Thank you for considering contributing to Vertical Bufferline! This document provides guidelines for contributing to the project.
+Thank you for considering contributing to Buffer Nexus! This document provides guidelines for contributing to the project.
 
 ## Table of Contents
 
@@ -38,8 +38,8 @@ This project follows a standard code of conduct. Be respectful, inclusive, and c
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/your-username/vertical-bufferline.git
-cd vertical-bufferline
+git clone https://github.com/your-username/buffernexus.git
+cd buffernexus
 ```
 
 2. Create a test environment:
@@ -54,7 +54,7 @@ mkdir -p test-config/lua
 vim.opt.rtp:prepend(vim.fn.getcwd())
 
 -- Basic setup
-require('vertical-bufferline').setup({
+require('buffernexus').setup({
   -- Your test configuration
 })
 ```
@@ -328,7 +328,7 @@ Brief description of changes
 
 2. **User Documentation**:
    - README.md updates for new features
-   - Help file updates (doc/vertical-bufferline.txt)
+   - Help file updates (doc/buffernexus.txt)
    - Configuration examples
 
 3. **Developer Documentation**:
@@ -402,4 +402,4 @@ Include:
 - Improve documentation
 - Share usage examples
 
-Thank you for contributing to Vertical Bufferline!
+Thank you for contributing to Buffer Nexus!

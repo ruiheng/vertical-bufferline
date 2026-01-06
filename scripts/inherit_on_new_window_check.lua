@@ -28,7 +28,7 @@ end
 
 add_rtp_root()
 
-local vbl = require('vertical-bufferline')
+local vbl = require('buffer-nexus')
 vbl.setup({
     group_scope = "window",
     inherit_on_new_window = true,
@@ -36,7 +36,7 @@ vbl.setup({
     auto_add_new_buffers = true,
 })
 
-local groups = require('vertical-bufferline.groups')
+local groups = require('buffer-nexus.groups')
 assert_ok(groups.is_window_scope_enabled(), "window scope should be enabled")
 
 local file1 = write_temp_file({ "one" })
@@ -55,8 +55,8 @@ local win2 = vim.api.nvim_get_current_win()
 local buf2 = vim.api.nvim_get_current_buf()
 groups.activate_window_context(win2, { seed_buffer_id = buf2 })
 
-local data1 = groups.get_vbl_groups_by_window(win1)
-local data2 = groups.get_vbl_groups_by_window(win2)
+local data1 = groups.get_bn_groups_by_window(win1)
+local data2 = groups.get_bn_groups_by_window(win2)
 assert_ok(data1 ~= data2, "window scope should have separate contexts")
 
 local groups_win2 = groups.get_all_groups()

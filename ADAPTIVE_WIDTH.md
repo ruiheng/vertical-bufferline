@@ -2,14 +2,14 @@
 
 ## Overview
 
-The VBL sidebar now supports adaptive width that automatically adjusts based on the content being displayed. Instead of a fixed width, the sidebar will dynamically resize within configured min/max bounds to fit the content optimally.
+The BN sidebar now supports adaptive width that automatically adjusts based on the content being displayed. Instead of a fixed width, the sidebar will dynamically resize within configured min/max bounds to fit the content optimally.
 
 ## Configuration Options
 
 ### New Options
 
 ```lua
-require('vertical-bufferline').setup({
+require('buffernexus').setup({
     min_width = 15,          -- Minimum width (default: 15)
     max_width = 60,          -- Maximum width (default: 60)
     adaptive_width = true,   -- Enable adaptive width (default: true)
@@ -43,7 +43,7 @@ require('vertical-bufferline').setup({
 ### Toggle Adaptive Width
 
 ```vim
-:VBufferLineToggleAdaptiveWidth
+:BNToggleAdaptiveWidth
 ```
 
 Toggles adaptive width on/off at runtime. Shows a notification with the current state.
@@ -84,7 +84,7 @@ end
 ### Example 1: Conservative Range
 ```lua
 -- Keep sidebar compact
-require('vertical-bufferline').setup({
+require('buffernexus').setup({
     min_width = 20,
     max_width = 40,
     adaptive_width = true,
@@ -94,7 +94,7 @@ require('vertical-bufferline').setup({
 ### Example 2: Wide Range
 ```lua
 -- Allow sidebar to grow with content
-require('vertical-bufferline').setup({
+require('buffernexus').setup({
     min_width = 15,
     max_width = 80,
     adaptive_width = true,
@@ -104,7 +104,7 @@ require('vertical-bufferline').setup({
 ### Example 3: Disable Adaptive Width
 ```lua
 -- Fixed width (traditional behavior)
-require('vertical-bufferline').setup({
+require('buffernexus').setup({
     min_width = 40,
     adaptive_width = false,
 })
@@ -122,7 +122,7 @@ require('vertical-bufferline').setup({
 Run the test script to verify the implementation:
 
 ```bash
-cd /home/ruiheng/config_files/nvim/lua/vertical-bufferline
+cd /home/ruiheng/config_files/nvim/lua/buffernexus
 nvim --headless -c "luafile test_adaptive_width.lua" -c "quit"
 ```
 

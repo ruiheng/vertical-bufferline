@@ -3,9 +3,9 @@
 
 local M = {}
 
-local groups = require('vertical-bufferline.groups')
-local logger = require('vertical-bufferline.logger')
-local utils = require('vertical-bufferline.utils')
+local groups = require('buffer-nexus.groups')
+local logger = require('buffer-nexus.logger')
+local utils = require('buffer-nexus.utils')
 
 -- Create group command
 local function create_group_command(args)
@@ -91,8 +91,8 @@ local function delete_group_command(args)
 
         -- Refresh interface
         vim.schedule(function()
-            if require('vertical-bufferline').refresh then
-                require('vertical-bufferline').refresh()
+            if require('buffer-nexus').refresh then
+                require('buffer-nexus').refresh()
             end
         end)
     end
@@ -102,7 +102,7 @@ end
 local function rename_group_command(args)
     local new_name = args.args
     if new_name == "" then
-        vim.notify("Usage: VBufferLineRenameGroup <new_name>", vim.log.levels.ERROR)
+        vim.notify("Usage: BNRenameGroup <new_name>", vim.log.levels.ERROR)
         return
     end
 
@@ -120,8 +120,8 @@ local function rename_group_command(args)
 
         -- Refresh interface immediately
         vim.schedule(function()
-            if require('vertical-bufferline').refresh then
-                require('vertical-bufferline').refresh()
+            if require('buffer-nexus').refresh then
+                require('buffer-nexus').refresh()
             end
         end)
     end
@@ -157,13 +157,13 @@ local function switch_group_command(args)
         -- Group switching completed, sidebar will automatically update display
 
         -- Trigger bufferline force refresh
-        local bufferline_integration = require('vertical-bufferline.bufferline-integration')
+        local bufferline_integration = require('buffer-nexus.bufferline-integration')
         bufferline_integration.force_refresh()
 
         -- Also refresh our sidebar
         vim.schedule(function()
-            if require('vertical-bufferline').refresh then
-                require('vertical-bufferline').refresh()
+            if require('buffer-nexus').refresh then
+                require('buffer-nexus').refresh()
             end
         end)
     end
@@ -174,7 +174,7 @@ end
 local function add_buffer_to_group_command(args)
     local group_name_or_id = args.args
     if group_name_or_id == "" then
-        vim.notify("Usage: VBufferLineAddToGroup <group_name_or_id>", vim.log.levels.ERROR)
+        vim.notify("Usage: BNAddToGroup <group_name_or_id>", vim.log.levels.ERROR)
         return
     end
 
@@ -227,13 +227,13 @@ local function next_group_command()
     -- Switch to next group
 
     -- Trigger bufferline force refresh
-    local bufferline_integration = require('vertical-bufferline.bufferline-integration')
+    local bufferline_integration = require('buffer-nexus.bufferline-integration')
     bufferline_integration.force_refresh()
 
     -- Also refresh our sidebar
     vim.schedule(function()
-        if require('vertical-bufferline').refresh then
-            require('vertical-bufferline').refresh()
+        if require('buffer-nexus').refresh then
+            require('buffer-nexus').refresh()
         end
     end)
 end
@@ -263,26 +263,26 @@ local function prev_group_command()
     -- Switch to previous group
 
     -- Trigger bufferline force refresh
-    local bufferline_integration = require('vertical-bufferline.bufferline-integration')
+    local bufferline_integration = require('buffer-nexus.bufferline-integration')
     bufferline_integration.force_refresh()
 
     -- Also refresh our sidebar
     vim.schedule(function()
-        if require('vertical-bufferline').refresh then
-            require('vertical-bufferline').refresh()
+        if require('buffer-nexus').refresh then
+            require('buffer-nexus').refresh()
         end
     end)
 end
 
 -- Toggle expand all groups mode
 local function toggle_expand_all_command()
-    local vbl = require('vertical-bufferline')
+    local vbl = require('buffer-nexus')
     vbl.toggle_expand_all()
 end
 
 -- Toggle show inactive group buffers mode
 local function toggle_show_inactive_group_buffers_command()
-    local vbl = require('vertical-bufferline')
+    local vbl = require('buffer-nexus')
     vbl.toggle_show_inactive_group_buffers()
 end
 
@@ -299,8 +299,8 @@ local function move_group_up_command()
 
         -- Refresh interface immediately
         vim.schedule(function()
-            if require('vertical-bufferline').refresh then
-                require('vertical-bufferline').refresh()
+            if require('buffer-nexus').refresh then
+                require('buffer-nexus').refresh()
             end
         end)
     else
@@ -321,8 +321,8 @@ local function move_group_down_command()
 
         -- Refresh interface immediately
         vim.schedule(function()
-            if require('vertical-bufferline').refresh then
-                require('vertical-bufferline').refresh()
+            if require('buffer-nexus').refresh then
+                require('buffer-nexus').refresh()
             end
         end)
     else
@@ -359,8 +359,8 @@ local function move_group_to_position_command(args)
 
         -- Refresh interface immediately
         vim.schedule(function()
-            if require('vertical-bufferline').refresh then
-                require('vertical-bufferline').refresh()
+            if require('buffer-nexus').refresh then
+                require('buffer-nexus').refresh()
             end
         end)
     else
@@ -395,52 +395,52 @@ local function group_complete(arglead, cmdline, cursorpos)
 end
 
 local function edit_mode_command()
-    require('vertical-bufferline.edit_mode').open()
+    require('buffer-nexus.edit_mode').open()
 end
 
 local function copy_groups_command(args)
     local register = args and args.args or ""
     if register ~= "" and #register ~= 1 then
-        vim.notify("Usage: VBufferLineCopyGroups [register]", vim.log.levels.ERROR)
+        vim.notify("Usage: BNCopyGroups [register]", vim.log.levels.ERROR)
         return
     end
-    require('vertical-bufferline').copy_groups_to_register(register ~= "" and register or nil)
-    vim.notify("Copied VBL groups to register " .. (register ~= "" and register or '"'), vim.log.levels.INFO)
+    require('buffer-nexus').copy_groups_to_register(register ~= "" and register or nil)
+    vim.notify("Copied BN groups to register " .. (register ~= "" and register or '"'), vim.log.levels.INFO)
 end
 
 --- Set up all user commands
 function M.setup()
     -- Create group
-    vim.api.nvim_create_user_command("VBufferLineCreateGroup", create_group_command, {
+    vim.api.nvim_create_user_command("BNCreateGroup", create_group_command, {
         nargs = "?",
         desc = "Create a new buffer group"
     })
 
     -- Edit group layout in a temporary buffer
-    vim.api.nvim_create_user_command("VBufferLineEdit", edit_mode_command, {
+    vim.api.nvim_create_user_command("BNEdit", edit_mode_command, {
         nargs = 0,
         desc = "Edit buffer groups in a temporary buffer"
     })
 
-    vim.api.nvim_create_user_command("VBufferLineCopyGroups", copy_groups_command, {
+    vim.api.nvim_create_user_command("BNCopyGroups", copy_groups_command, {
         nargs = "?",
         desc = "Copy groups to a register (edit-mode format)"
     })
 
     -- Delete group
-    vim.api.nvim_create_user_command("VBufferLineDeleteGroup", delete_group_command, {
+    vim.api.nvim_create_user_command("BNDeleteGroup", delete_group_command, {
         nargs = "?",
-        desc = "Delete a buffer group by number, name, or current active group if no argument (e.g. :VBufferLineDeleteGroup 2)"
+        desc = "Delete a buffer group by number, name, or current active group if no argument (e.g. :BNDeleteGroup 2)"
     })
 
     -- Rename group
-    vim.api.nvim_create_user_command("VBufferLineRenameGroup", rename_group_command, {
+    vim.api.nvim_create_user_command("BNRenameGroup", rename_group_command, {
         nargs = 1,
         desc = "Rename current buffer group"
     })
 
     -- Switch group
-    vim.api.nvim_create_user_command("VBufferLineSwitchGroup", switch_group_command, {
+    vim.api.nvim_create_user_command("BNSwitchGroup", switch_group_command, {
         nargs = "?",
         complete = group_complete,
         desc = "Switch to a buffer group"
@@ -448,7 +448,7 @@ function M.setup()
 
 
     -- Add buffer to group
-    vim.api.nvim_create_user_command("VBufferLineAddToGroup", add_buffer_to_group_command, {
+    vim.api.nvim_create_user_command("BNAddToGroup", add_buffer_to_group_command, {
         nargs = 1,
         complete = group_complete,
         desc = "Add current buffer to a group"
@@ -456,56 +456,56 @@ function M.setup()
 
 
     -- Next group
-    vim.api.nvim_create_user_command("VBufferLineNextGroup", next_group_command, {
+    vim.api.nvim_create_user_command("BNNextGroup", next_group_command, {
         nargs = 0,
         desc = "Switch to next buffer group"
     })
 
     -- Previous group
-    vim.api.nvim_create_user_command("VBufferLinePrevGroup", prev_group_command, {
+    vim.api.nvim_create_user_command("BNPrevGroup", prev_group_command, {
         nargs = 0,
         desc = "Switch to previous buffer group"
     })
 
     -- Toggle expand all groups mode
-    vim.api.nvim_create_user_command("VBufferLineToggleExpandAll", toggle_expand_all_command, {
+    vim.api.nvim_create_user_command("BNToggleExpandAll", toggle_expand_all_command, {
         nargs = 0,
         desc = "Toggle expand all groups mode"
     })
 
     -- Toggle show inactive group buffers mode
-    vim.api.nvim_create_user_command("VBufferLineToggleInactiveGroupBuffers", toggle_show_inactive_group_buffers_command, {
+    vim.api.nvim_create_user_command("BNToggleInactiveGroupBuffers", toggle_show_inactive_group_buffers_command, {
         nargs = 0,
         desc = "Toggle showing buffer lists for inactive groups"
     })
 
     -- Picking commands
-    vim.api.nvim_create_user_command("VBufferLinePick", function()
-        require('vertical-bufferline').pick_buffer()
+    vim.api.nvim_create_user_command("BNPick", function()
+        require('buffer-nexus').pick_buffer()
     end, {
         nargs = 0,
         desc = "Pick a buffer across groups"
     })
 
-    vim.api.nvim_create_user_command("VBufferLinePickClose", function()
-        require('vertical-bufferline').pick_close()
+    vim.api.nvim_create_user_command("BNPickClose", function()
+        require('buffer-nexus').pick_close()
     end, {
         nargs = 0,
         desc = "Pick a buffer across groups and close it"
     })
 
     -- Group reordering commands
-    vim.api.nvim_create_user_command("VBufferLineMoveGroupUp", move_group_up_command, {
+    vim.api.nvim_create_user_command("BNMoveGroupUp", move_group_up_command, {
         nargs = 0,
         desc = "Move current group up"
     })
 
-    vim.api.nvim_create_user_command("VBufferLineMoveGroupDown", move_group_down_command, {
+    vim.api.nvim_create_user_command("BNMoveGroupDown", move_group_down_command, {
         nargs = 0,
         desc = "Move current group down"
     })
 
-    vim.api.nvim_create_user_command("VBufferLineMoveGroupToPosition", move_group_to_position_command, {
+    vim.api.nvim_create_user_command("BNMoveGroupToPosition", move_group_to_position_command, {
         nargs = "?",
         desc = "Move current group to specified position (interactive if no position given)"
     })
@@ -515,7 +515,7 @@ function M.setup()
     -- No user commands needed - everything is automatic
 
     -- Debug information
-    vim.api.nvim_create_user_command("VBufferLineDebug", function()
+    vim.api.nvim_create_user_command("BNDebug", function()
         vim.notify("=== Debug Info ===", vim.log.levels.INFO)
         local all_groups = groups.get_all_groups()
         local active_group = groups.get_active_group()
@@ -526,7 +526,7 @@ function M.setup()
         vim.notify("Stats: " .. vim.inspect(stats), vim.log.levels.INFO)
 
         -- Add bufferline integration status information
-        local bufferline_integration = require('vertical-bufferline.bufferline-integration')
+        local bufferline_integration = require('buffer-nexus.bufferline-integration')
         local integration_status = bufferline_integration.status()
 
         vim.notify("\n=== Integration Status ===", vim.log.levels.INFO)
@@ -539,8 +539,8 @@ function M.setup()
 
 
     -- Manual synchronization command
-    vim.api.nvim_create_user_command("VBufferLineSyncGroups", function()
-        local bufferline_integration = require('vertical-bufferline.bufferline-integration')
+    vim.api.nvim_create_user_command("BNSyncGroups", function()
+        local bufferline_integration = require('buffer-nexus.bufferline-integration')
         bufferline_integration.manual_sync()
     end, {
         nargs = 0,
@@ -548,9 +548,9 @@ function M.setup()
     })
 
     -- Check buffer group duplicates
-    vim.api.nvim_create_user_command("VBufferLineCheckDuplicates", function()
+    vim.api.nvim_create_user_command("BNCheckDuplicates", function()
         vim.notify("=== Buffer Group Duplicates Check ===", vim.log.levels.INFO)
-        local groups = require('vertical-bufferline.groups')
+        local groups = require('buffer-nexus.groups')
         local all_groups = groups.get_all_groups()
         local buffer_group_map = {}
 
@@ -592,9 +592,9 @@ function M.setup()
     })
 
     -- Clean buffer group duplicates
-    vim.api.nvim_create_user_command("VBufferLineCleanDuplicates", function()
+    vim.api.nvim_create_user_command("BNCleanDuplicates", function()
         vim.notify("=== Cleaning Buffer Group Duplicates ===", vim.log.levels.INFO)
-        local groups = require('vertical-bufferline.groups')
+        local groups = require('buffer-nexus.groups')
         local all_groups = groups.get_all_groups()
         local buffer_group_map = {}
         local cleaned_count = 0
@@ -633,7 +633,7 @@ function M.setup()
         if cleaned_count > 0 then
             vim.notify(string.format("Cleaned %d duplicate buffer assignments.", cleaned_count), vim.log.levels.INFO)
             -- Refresh interface
-            local vbl = require('vertical-bufferline')
+            local vbl = require('buffer-nexus')
             if vbl.state and vbl.state.is_sidebar_open then
                 vbl.refresh()
             end
@@ -647,9 +647,9 @@ function M.setup()
     })
 
     -- Rebuild group structure (thoroughly clean all issues)
-    vim.api.nvim_create_user_command("VBufferLineRebuildGroups", function()
+    vim.api.nvim_create_user_command("BNRebuildGroups", function()
         vim.notify("=== Rebuilding Group Structure ===", vim.log.levels.INFO)
-        local groups = require('vertical-bufferline.groups')
+        local groups = require('buffer-nexus.groups')
         local all_groups = groups.get_all_groups()
         local active_group_id = groups.get_active_group_id()
 
@@ -691,7 +691,7 @@ function M.setup()
         end
 
         -- Refresh interface
-        local vbl = require('vertical-bufferline')
+        local vbl = require('buffer-nexus')
         if vbl.state and vbl.state.is_sidebar_open then
             vbl.refresh()
         end
@@ -704,8 +704,8 @@ function M.setup()
     })
 
     -- Control automatic buffer addition feature
-    vim.api.nvim_create_user_command("VBufferLineToggleAutoAdd", function()
-        local groups = require('vertical-bufferline.groups')
+    vim.api.nvim_create_user_command("BNToggleAutoAdd", function()
+        local groups = require('buffer-nexus.groups')
         local current_state = groups.is_auto_add_disabled()
         groups.set_auto_add_disabled(not current_state)
         local new_state = groups.is_auto_add_disabled()
@@ -716,10 +716,10 @@ function M.setup()
     })
 
     -- Manually force sync session and bufferline
-    vim.api.nvim_create_user_command("VBufferLineForceSync", function()
+    vim.api.nvim_create_user_command("BNForceSync", function()
         vim.notify("=== Force Sync Started ===", vim.log.levels.INFO)
-        local bufferline_integration = require('vertical-bufferline.bufferline-integration')
-        local groups = require('vertical-bufferline.groups')
+        local bufferline_integration = require('buffer-nexus.bufferline-integration')
+        local groups = require('buffer-nexus.groups')
 
         -- Show current status
         local active_group = groups.get_active_group()
@@ -767,7 +767,7 @@ function M.setup()
         end
 
         -- Refresh sidebar
-        local vbl = require('vertical-bufferline')
+        local vbl = require('buffer-nexus')
         if vbl.state and vbl.state.is_sidebar_open then
             vbl.refresh()
         end
@@ -781,8 +781,8 @@ function M.setup()
     })
 
     -- Manually add current buffer to current group (supports multi-group)
-    vim.api.nvim_create_user_command("VBufferLineAddCurrentToGroup", function()
-        local groups = require('vertical-bufferline.groups')
+    vim.api.nvim_create_user_command("BNAddCurrentToGroup", function()
+        local groups = require('buffer-nexus.groups')
         local active_group = groups.get_active_group()
         if not active_group then
             vim.notify("No active group found", vim.log.levels.ERROR)
@@ -809,7 +809,7 @@ function M.setup()
             end
 
             -- Refresh interface
-            local vbl = require('vertical-bufferline')
+            local vbl = require('buffer-nexus')
             if vbl.state and vbl.state.is_sidebar_open then
                 vbl.refresh()
             end
@@ -822,8 +822,8 @@ function M.setup()
     })
 
     -- Smart close buffer (similar to scope.nvim)
-    vim.api.nvim_create_user_command("VBufferLineSmartClose", function()
-        local bufferline_integration = require('vertical-bufferline.bufferline-integration')
+    vim.api.nvim_create_user_command("BNSmartClose", function()
+        local bufferline_integration = require('buffer-nexus.bufferline-integration')
         bufferline_integration.smart_close_buffer()
     end, {
         nargs = 0,
@@ -831,8 +831,8 @@ function M.setup()
     })
 
     -- Remove buffer from current group (soft delete)
-    vim.api.nvim_create_user_command("VBufferLineRemoveFromGroup", function()
-        local groups = require('vertical-bufferline.groups')
+    vim.api.nvim_create_user_command("BNRemoveFromGroup", function()
+        local groups = require('buffer-nexus.groups')
         local active_group = groups.get_active_group()
         if not active_group then
             vim.notify("No active group found", vim.log.levels.ERROR)
@@ -858,7 +858,7 @@ function M.setup()
             end
 
             -- Refresh interface
-            local vbl = require('vertical-bufferline')
+            local vbl = require('buffer-nexus')
             if vbl.state and vbl.state.is_sidebar_open then
                 vbl.refresh()
             end
@@ -871,7 +871,7 @@ function M.setup()
     })
 
     -- Manually refresh buffer list
-    vim.api.nvim_create_user_command("VBufferLineRefreshBuffers", function()
+    vim.api.nvim_create_user_command("BNRefreshBuffers", function()
         local active_group = groups.get_active_group()
         if not active_group then
             vim.notify("No active group found", vim.log.levels.ERROR)
@@ -907,8 +907,8 @@ function M.setup()
 
         -- Refresh interface
         vim.schedule(function()
-            if require('vertical-bufferline').refresh then
-                require('vertical-bufferline').refresh()
+            if require('buffer-nexus').refresh then
+                require('buffer-nexus').refresh()
             end
         end)
     end, {
@@ -917,42 +917,42 @@ function M.setup()
     })
 
     -- Debug logging commands
-    vim.api.nvim_create_user_command("VBufferLineDebugEnable", function(args)
+    vim.api.nvim_create_user_command("BNDebugEnable", function(args)
         local args_str = args.args or ""
         local args_list = args_str ~= "" and vim.split(args_str, "%s+") or {}
-        local log_file = args_list[1] or vim.fn.expand("~/vbl-debug.log")
+        local log_file = args_list[1] or vim.fn.expand("~/bn-debug.log")
         local log_level = args_list[2] or "INFO"
         
         logger.enable(log_file, log_level)
-        vim.notify(string.format("VBL debug logging enabled: %s (level: %s)", log_file, log_level), vim.log.levels.INFO)
+        vim.notify(string.format("BN debug logging enabled: %s (level: %s)", log_file, log_level), vim.log.levels.INFO)
     end, {
         nargs = "*",
-        desc = "Enable VBL debug logging. Args: [log_file] [log_level]. Example: :VBufferLineDebugEnable ~/vbl.log DEBUG"
+        desc = "Enable BN debug logging. Args: [log_file] [log_level]. Example: :BNDebugEnable ~/bn.log DEBUG"
     })
 
-    vim.api.nvim_create_user_command("VBufferLineDebugDisable", function()
+    vim.api.nvim_create_user_command("BNDebugDisable", function()
         logger.disable()
-        vim.notify("VBL debug logging disabled", vim.log.levels.INFO)
+        vim.notify("BN debug logging disabled", vim.log.levels.INFO)
     end, {
         nargs = 0,
-        desc = "Disable VBL debug logging"
+        desc = "Disable BN debug logging"
     })
 
-    vim.api.nvim_create_user_command("VBufferLineDebugStatus", function()
+    vim.api.nvim_create_user_command("BNDebugStatus", function()
         local status = logger.get_status()
         if status.enabled then
-            vim.notify(string.format("VBL debug logging: ENABLED\nFile: %s\nLevel: %s\nSession: %s\nBuffer lines: %d", 
-                status.log_file or "none", status.log_level, status.session_id or "none", status.buffer_lines), 
+            vim.notify(string.format("BN debug logging: ENABLED\nFile: %s\nLevel: %s\nSession: %s\nBuffer lines: %d",
+                status.log_file or "none", status.log_level, status.session_id or "none", status.buffer_lines),
                 vim.log.levels.INFO)
         else
-            vim.notify("VBL debug logging: DISABLED", vim.log.levels.INFO)
+            vim.notify("BN debug logging: DISABLED", vim.log.levels.INFO)
         end
     end, {
         nargs = 0,
-        desc = "Show VBL debug logging status"
+        desc = "Show BN debug logging status"
     })
 
-    vim.api.nvim_create_user_command("VBufferLineTestUnnamed", function()
+    vim.api.nvim_create_user_command("BNTestUnnamed", function()
         print("=== Testing unnamed buffer creation ===")
 
         -- Create a new unnamed buffer
@@ -965,8 +965,8 @@ function M.setup()
         print("  Type:", vim.api.nvim_buf_get_option(new_buf, 'buftype'))
         print("  Listed:", vim.api.nvim_buf_get_option(new_buf, 'buflisted'))
 
-        -- Check if VBL's is_special_buffer thinks it's special
-        local init_module = require('vertical-bufferline')
+        -- Check if BN's is_special_buffer thinks it's special
+        local init_module = require('buffer-nexus')
         -- Since is_special_buffer is local, let's check indirectly
 
         print("This tells us if vim creates unnamed buffers as unlisted by default")
@@ -975,8 +975,8 @@ function M.setup()
         desc = "Test unnamed buffer creation behavior"
     })
 
-    vim.api.nvim_create_user_command("VBufferLineDebugState", function()
-        print("=== Current VBL State ===")
+    vim.api.nvim_create_user_command("BNDebugState", function()
+        print("=== Current BN State ===")
 
         -- Check unnamed buffers
         local unnamed_bufs = {}
@@ -994,7 +994,7 @@ function M.setup()
         end
 
         -- Check active group
-        local groups = require('vertical-bufferline.groups')
+        local groups = require('buffer-nexus.groups')
         local active_group = groups.get_active_group()
         if active_group then
             print("Active group:", active_group.name, "ID:", active_group.id)
@@ -1019,10 +1019,10 @@ function M.setup()
         end
     end, {
         nargs = 0,
-        desc = "Debug current VBL and bufferline state"
+        desc = "Debug current BN and bufferline state"
     })
 
-    vim.api.nvim_create_user_command("VBufferLineWatchUnnamed", function()
+    vim.api.nvim_create_user_command("BNWatchUnnamed", function()
         -- Create autocmd to watch when unnamed buffers get unlisted
         vim.api.nvim_create_autocmd({"BufEnter", "BufLeave", "BufAdd", "BufDelete"}, {
             callback = function(args)
@@ -1044,7 +1044,7 @@ function M.setup()
         desc = "Watch unnamed buffer state changes"
     })
 
-    vim.api.nvim_create_user_command("VBufferLineDebugSync", function()
+    vim.api.nvim_create_user_command("BNDebugSync", function()
         print("=== Debugging unnamed buffer issue ===")
 
         -- Check all current buffers
@@ -1059,8 +1059,8 @@ function M.setup()
                 if buf_name == "" and buftype == "" then
                     table.insert(unnamed_buffers, buf)
                     -- Check if our is_special_buffer function thinks this is special
-                    local integration = require('vertical-bufferline.bufferline-integration')
-                    local init_module = require('vertical-bufferline')
+                    local integration = require('buffer-nexus.bufferline-integration')
+                    local init_module = require('buffer-nexus')
                     local is_special = init_module.is_special_buffer and init_module.is_special_buffer(buf)
                     print(string.format("  buf %d: name='[unnamed]', type='%s', listed=%s, is_special=%s",
                         buf, buftype, buflisted, tostring(is_special)))
@@ -1087,12 +1087,12 @@ function M.setup()
             end
         end
 
-        -- Check VBL active group
-        local groups = require('vertical-bufferline.groups')
+        -- Check BN active group
+        local groups = require('buffer-nexus.groups')
         local active_group = groups.get_active_group()
         local vbl_has_unnamed = false
         if active_group then
-            print("VBL active group buffers:")
+            print("BN active group buffers:")
             for _, buf in ipairs(active_group.buffers) do
                 local buf_name = vim.api.nvim_buf_get_name(buf)
                 if #unnamed_buffers > 0 and vim.tbl_contains(unnamed_buffers, buf) then
@@ -1106,10 +1106,10 @@ function M.setup()
         print("\nSummary:")
         print("  Unnamed buffers exist:", #unnamed_buffers > 0)
         print("  Bufferline has unnamed:", bufferline_has_unnamed)
-        print("  VBL has unnamed:", vbl_has_unnamed)
+        print("  BN has unnamed:", vbl_has_unnamed)
 
         if #unnamed_buffers > 0 and bufferline_has_unnamed and not vbl_has_unnamed then
-            print("  PROBLEM: Bufferline has unnamed buffer but VBL doesn't!")
+            print("  PROBLEM: Bufferline has unnamed buffer but BN doesn't!")
         elseif #unnamed_buffers > 0 and not bufferline_has_unnamed then
             print("  PROBLEM: Unnamed buffer exists but bufferline ignores it (probably buflisted=false)")
             -- Try to fix it
@@ -1120,17 +1120,17 @@ function M.setup()
                 print("    Verification: buflisted is now", new_listed)
             end
 
-            -- Force VBL refresh after fixing
-            local vbl = require('vertical-bufferline')
+            -- Force BN refresh after fixing
+            local vbl = require('buffer-nexus')
             vbl.refresh()
-            print("  Fixed and refreshed VBL! Test your scenario now.")
+            print("  Fixed and refreshed BN! Test your scenario now.")
         end
     end, {
         nargs = 0,
         desc = "Debug unnamed buffer sync issue"
     })
 
-    vim.api.nvim_create_user_command("VBufferLineDebugLogs", function(args)
+    vim.api.nvim_create_user_command("BNDebugLogs", function(args)
         local args_str = args.args or ""
         local count = (args_str ~= "" and tonumber(args_str)) or 20
         local logs = logger.get_recent_logs(count)
@@ -1142,7 +1142,7 @@ function M.setup()
         
         -- Create a new buffer to display logs
         local buf = vim.api.nvim_create_buf(false, true)
-        vim.api.nvim_buf_set_name(buf, "VBL Debug Logs")
+        vim.api.nvim_buf_set_name(buf, "BN Debug Logs")
 
         -- Split multi-line log entries into separate lines
         local split_logs = {}
@@ -1162,12 +1162,12 @@ function M.setup()
         vim.api.nvim_set_current_buf(buf)
     end, {
         nargs = "?",
-        desc = "Show recent VBL debug logs. Args: [count] (default: 20)"
+        desc = "Show recent BN debug logs. Args: [count] (default: 20)"
     })
 
     -- Clear history command
-    vim.api.nvim_create_user_command("VBufferLineClearHistory", function(opts)
-        local groups = require('vertical-bufferline.groups')
+    vim.api.nvim_create_user_command("BNClearHistory", function(opts)
+        local groups = require('buffer-nexus.groups')
         local target_group = opts.args and opts.args ~= "" and opts.args or nil
         
         if target_group then
@@ -1187,8 +1187,8 @@ function M.setup()
 
         -- Refresh interface to update display
         vim.schedule(function()
-            if require('vertical-bufferline').refresh then
-                require('vertical-bufferline').refresh("clear_history")
+            if require('buffer-nexus').refresh then
+                require('buffer-nexus').refresh("clear_history")
             end
         end)
     end, {
@@ -1197,45 +1197,45 @@ function M.setup()
     })
 
     -- Toggle cursor alignment
-    vim.api.nvim_create_user_command("VBufferLineToggleCursorAlign", function()
-        local config = require('vertical-bufferline.config')
+    vim.api.nvim_create_user_command("BNToggleCursorAlign", function()
+        local config = require('buffer-nexus.config')
         config.settings.align_with_cursor = not config.settings.align_with_cursor
         local status = config.settings.align_with_cursor and "enabled" or "disabled"
-        vim.notify(string.format("VBL cursor alignment: %s", status), vim.log.levels.INFO)
+        vim.notify(string.format("BN cursor alignment: %s", status), vim.log.levels.INFO)
 
         -- Refresh to apply the change
-        require('vertical-bufferline').refresh("cursor_align_toggle")
+        require('buffer-nexus').refresh("cursor_align_toggle")
     end, {
         nargs = 0,
-        desc = "Toggle cursor alignment for VBL content"
+        desc = "Toggle cursor alignment for BN content"
     })
 
     -- Toggle adaptive width
-    vim.api.nvim_create_user_command("VBufferLineToggleAdaptiveWidth", function()
-        local config = require('vertical-bufferline.config')
+    vim.api.nvim_create_user_command("BNToggleAdaptiveWidth", function()
+        local config = require('buffer-nexus.config')
         config.settings.adaptive_width = not config.settings.adaptive_width
         local status = config.settings.adaptive_width and "enabled" or "disabled"
-        vim.notify(string.format("VBL adaptive width: %s", status), vim.log.levels.INFO)
+        vim.notify(string.format("BN adaptive width: %s", status), vim.log.levels.INFO)
 
-        local state = require('vertical-bufferline.state')
+        local state = require('buffer-nexus.state')
         local win_id = state.get_win_id()
         if win_id and vim.api.nvim_win_is_valid(win_id) then
             vim.api.nvim_win_set_option(win_id, 'winfixwidth', not config.settings.adaptive_width)
         end
 
         -- Refresh to apply the change
-        require('vertical-bufferline').refresh("adaptive_width_toggle")
+        require('buffer-nexus').refresh("adaptive_width_toggle")
     end, {
         nargs = 0,
-        desc = "Toggle adaptive width for VBL sidebar"
+        desc = "Toggle adaptive width for BN sidebar"
     })
 
     -- Set sidebar position
-    vim.api.nvim_create_user_command("VBufferLineSetPosition", function(opts)
-        local config = require('vertical-bufferline.config')
+    vim.api.nvim_create_user_command("BNSetPosition", function(opts)
+        local config = require('buffer-nexus.config')
         local position = opts.args
         if position == "" then
-            vim.notify("Usage: VBufferLineSetPosition <left|right|top|bottom>", vim.log.levels.ERROR)
+            vim.notify("Usage: BNSetPosition <left|right|top|bottom>", vim.log.levels.ERROR)
             return
         end
 
@@ -1244,45 +1244,45 @@ function M.setup()
             return
         end
 
-        local state = require('vertical-bufferline.state')
+        local state = require('buffer-nexus.state')
         local was_open = state.is_sidebar_open()
         local previous_position = config.settings.position
 
         if was_open then
-            local vbl = require('vertical-bufferline')
+            local vbl = require('buffer-nexus')
             vbl.close_sidebar(previous_position)
         end
 
         if previous_position ~= position then
-            local layout = require('vertical-bufferline.layout')
+            local layout = require('buffer-nexus.layout')
             layout.clear_cached_size_on_axis_switch(previous_position, position, state)
         end
 
         config.settings.position = position
-        vim.notify(string.format("VBL position set to %s", position), vim.log.levels.INFO)
+        vim.notify(string.format("BN position set to %s", position), vim.log.levels.INFO)
 
         if was_open then
-            local vbl = require('vertical-bufferline')
+            local vbl = require('buffer-nexus')
             vbl.toggle()
         end
     end, {
         nargs = 1,
-        desc = "Set VBL position (left/right/top/bottom)",
+        desc = "Set BN position (left/right/top/bottom)",
         complete = function()
             return { "left", "right", "top", "bottom" }
         end
     })
 
     -- Debug pick mode pick chars
-    vim.api.nvim_create_user_command("VBufferLineDebugPickMode", function()
-        logger.enable(vim.fn.expand("~/vbl-pick-debug.log"), "DEBUG")
-        vim.notify("VBL pick mode debug logging enabled: ~/vbl-pick-debug.log\nNow enter pick mode and check the log file", vim.log.levels.INFO)
+    vim.api.nvim_create_user_command("BNDebugPickMode", function()
+        logger.enable(vim.fn.expand("~/bn-pick-debug.log"), "DEBUG")
+        vim.notify("BN pick mode debug logging enabled: ~/bn-pick-debug.log\nNow enter pick mode and check the log file", vim.log.levels.INFO)
     end, {
         nargs = 0,
         desc = "Enable debug logging for pick chars in pick mode"
     })
 
-    -- Pick mode commands removed - using VBufferLinePick and VBufferLinePickClose defined earlier
+    -- Pick mode commands removed - using BNPick and BNPickClose defined earlier
 end
 
 -- Export functions for use by other modules

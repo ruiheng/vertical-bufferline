@@ -14,12 +14,12 @@ buffer groups by editing a temporary text buffer and applying the result.
 ## User Flow
 
 1. User runs a command (TBD) to open an editable buffer.
-2. VBL opens a new buffer (e.g. filetype `vertical-bufferline-edit`).
+2. BN opens a new buffer (e.g. filetype `buffernexus-edit`).
 3. The buffer contains a minimal, editable representation of groups plus brief
    header comments (e.g. current cwd and a short hint).
 4. User edits the text using any Vim commands.
 5. User applies with `:w`/`:wq`, or discards with `:q!`.
-6. VBL parses the buffer and updates group state.
+6. BN parses the buffer and updates group state.
 
 ## Format (Editable Buffer)
 
@@ -86,7 +86,7 @@ src/api/server.lua
 - **Realpath normalization**: Canonicalize file paths (resolve symlinks) before matching.
 - **History preservation**: Keep history where possible; drop entries that no longer belong to their group.
 - **Apply focus**: Return focus to the buffer that was current before entering edit mode. If it exists in a group, set that group active. If it is a special buffer, just focus it.
-- **Group membership vs buffer lifetime**: Removing a buffer from all groups does not close it; it just disappears from VBL.
+- **Group membership vs buffer lifetime**: Removing a buffer from all groups does not close it; it just disappears from BN.
 
 ### Buffer-Number Entries
 
@@ -117,11 +117,11 @@ Rules:
 - `swapfile=false`, `undofile=false` (ephemeral buffer).
 - `bufhidden=wipe` so closing discards the temp buffer.
 - `modifiable=true` during edit.
-- `filetype=vertical-bufferline-edit` for optional syntax highlighting.
+- `filetype=buffernexus-edit` for optional syntax highlighting.
 
 ## Proposed Command Name
 
-- `:VBufferLineEdit` (opens the editable buffer)
+- `:BNEdit` (opens the editable buffer)
 
 ## Group Definitions (Save/Load)
 
@@ -136,5 +136,5 @@ Notes:
 - Save should write only the grouping definition (not history).
 - Load should follow the same parsing rules and error handling as edit mode.
 - A simple start could be:
-  - `:VBufferLineSaveGroups <path>`
-  - `:VBufferLineLoadGroups <path>`
+  - `:BNSaveGroups <path>`
+  - `:BNLoadGroups <path>`

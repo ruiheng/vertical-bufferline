@@ -4,7 +4,7 @@
 local M = {}
 
 local api = vim.api
-local config_module = require('vertical-bufferline.config')
+local config_module = require('buffer-nexus.config')
 local list_normal_windows
 local saved_cmdheight = nil
 
@@ -23,7 +23,7 @@ local function apply_session_sidebar_state(session_data)
         return
     end
 
-    local state_module = require('vertical-bufferline.state')
+    local state_module = require('buffer-nexus.state')
     if session_data.last_width then
         state_module.set_last_width(session_data.last_width)
     end
@@ -57,7 +57,7 @@ local function get_sidebar_windows()
         if vim.api.nvim_win_is_valid(win) then
             local buf = vim.api.nvim_win_get_buf(win)
             if vim.api.nvim_buf_is_valid(buf)
-                and vim.api.nvim_buf_get_option(buf, 'filetype') == 'vertical-bufferline' then
+                and vim.api.nvim_buf_get_option(buf, 'filetype') == 'buffer-nexus' then
                 table.insert(windows, {
                     win_id = win,
                     buf_id = buf,
@@ -137,8 +137,8 @@ local function reconcile_sidebar_layout(session_data)
     local desired_position = session_data.position or config_module.settings.position
     local desired_open = session_data.sidebar_open ~= false
 
-    local state_module = require('vertical-bufferline.state')
-    local vbl = require('vertical-bufferline')
+    local state_module = require('buffer-nexus.state')
+    local vbl = require('buffer-nexus')
     local existing = get_sidebar_windows()
     local state_win = state_module.is_sidebar_open() and state_module.get_win_id() or nil
     local state_win_valid = state_win and vim.api.nvim_win_is_valid(state_win)
@@ -182,7 +182,7 @@ local function reconcile_sidebar_layout(session_data)
 
         local buf_id = vim.api.nvim_win_get_buf(keep_win)
         local buf_ft = vim.api.nvim_buf_get_option(buf_id, 'filetype')
-        if buf_ft == 'vertical-bufferline' then
+        if buf_ft == 'buffer-nexus' then
             state_module.set_win_id(keep_win)
             state_module.set_buf_id(buf_id)
             state_module.set_sidebar_open(true)
@@ -204,8 +204,8 @@ end
 
 -- Common session restore finalization
 local function finalize_session_restore(session_data, opened_count, total_groups)
-    local groups = require('vertical-bufferline.groups')
-    local bufferline_integration = require('vertical-bufferline.bufferline-integration')
+    local groups = require('buffer-nexus.groups')
+    local bufferline_integration = require('buffer-nexus.bufferline-integration')
     
     if groups.is_window_scope_enabled() then
         local windows = list_normal_windows()
@@ -251,7 +251,7 @@ local function finalize_session_restore(session_data, opened_count, total_groups
     end
     
     -- Final sync to bufferline
-    local logger = require('vertical-bufferline.logger')
+    local logger = require('buffer-nexus.logger')
     local active_group = groups.get_active_group()
     
     logger.info("session", "finalizing session restore", {
@@ -312,7 +312,7 @@ local function finalize_session_restore(session_data, opened_count, total_groups
                             logger.info("session", "cleaning up initial empty buffer and windows", { buf_id = old_buf })
 
                             -- First, close all windows showing this buffer (except sidebar)
-                            local vbl = require('vertical-bufferline')
+                            local vbl = require('buffer-nexus')
                             local sidebar_win = vbl.state and vbl.state.is_sidebar_open() and vbl.state.get_win_id() or nil
                             local current_win = vim.api.nvim_get_current_win()
 
@@ -358,10 +358,10 @@ local function finalize_session_restore(session_data, opened_count, total_groups
     -- Refresh UI
     vim.schedule(function()
         -- Clean up extra windows that vim session may have created
-        -- Native vim session saves all windows including VBL sidebar,
+        -- Native vim session saves all windows including BN sidebar,
         -- so we might end up with duplicate windows after restoration
         vim.defer_fn(function()
-            local state_module = require('vertical-bufferline.state')
+            local state_module = require('buffer-nexus.state')
             local all_wins = vim.api.nvim_list_wins()
             local sidebar_win = state_module.is_sidebar_open() and state_module.get_win_id() or nil
             local main_wins = {}
@@ -448,7 +448,7 @@ local function finalize_session_restore(session_data, opened_count, total_groups
 
             reconcile_sidebar_layout(session_data)
 
-            local vbl = require('vertical-bufferline')
+            local vbl = require('buffer-nexus')
             if vbl.state and vbl.state.is_sidebar_open then
                 vbl.refresh()
             end
@@ -476,7 +476,7 @@ local function normalize_buffer_path(buffer_path)
 end
 
 list_normal_windows = function()
-    local state_module = require('vertical-bufferline.state')
+    local state_module = require('buffer-nexus.state')
     local sidebar_win = state_module.get_win_id()
     local windows = {}
 
@@ -590,7 +590,7 @@ local function expand_buffer_path(buffer_path)
 end
 
 local function get_pinned_buffers()
-    local bufferline_integration = require('vertical-bufferline.bufferline-integration')
+    local bufferline_integration = require('buffer-nexus.bufferline-integration')
     if bufferline_integration.is_available() then
         local pinned = vim.g.BufferlinePinnedBuffers
         if not pinned or pinned == "" then
@@ -608,7 +608,7 @@ local function get_pinned_buffers()
         return result
     end
 
-    local state_module = require('vertical-bufferline.state')
+    local state_module = require('buffer-nexus.state')
     local result = {}
     for _, buf_id in ipairs(state_module.get_pinned_buffers()) do
         if api.nvim_buf_is_valid(buf_id) then
@@ -628,7 +628,7 @@ end
 -- Find existing buffers without creating new ones (safe for session restore)
 -- Helper function to find buffer by matching filename patterns
 local function find_buffer_by_path_patterns(target_path)
-    local logger = require('vertical-bufferline.logger')
+    local logger = require('buffer-nexus.logger')
     local all_bufs = vim.api.nvim_list_bufs()
     local target_filename = vim.fn.fnamemodify(target_path, ":t")  -- Get filename only
     
@@ -819,7 +819,7 @@ local function find_existing_buffers(session_data)
 end
 
 local function rebuild_groups_from_data(group_block, buffer_mappings)
-    local groups = require('vertical-bufferline.groups')
+    local groups = require('buffer-nexus.groups')
     local group_list = group_block.groups or {}
     local active_group_id = group_block.active_group_id
 
@@ -949,7 +949,7 @@ local function apply_pinned_buffers(session_data, buffer_mappings)
         end
     end
 
-    local state_module = require('vertical-bufferline.state')
+    local state_module = require('buffer-nexus.state')
     for _, buf_id in ipairs(vim.api.nvim_list_bufs()) do
         if vim.api.nvim_buf_is_valid(buf_id) then
             state_module.set_buffer_pinned(buf_id, pin_set[buf_id] == true)
@@ -979,7 +979,7 @@ local function apply_pinned_buffers(session_data, buffer_mappings)
         end
     end
 
-    local bufferline_integration = require('vertical-bufferline.bufferline-integration')
+    local bufferline_integration = require('buffer-nexus.bufferline-integration')
     if bufferline_integration.is_available() then
         local ok_groups, bufferline_groups = pcall(require, "bufferline.groups")
         if ok_groups then
@@ -1046,7 +1046,7 @@ local function map_window_groups_to_windows(session_data, windows)
 end
 
 local function restore_groups_from_session(session_data, buffer_mappings)
-    local groups = require('vertical-bufferline.groups')
+    local groups = require('buffer-nexus.groups')
 
     if groups.is_window_scope_enabled() and session_data.window_groups then
         groups.reset_window_contexts()
@@ -1083,8 +1083,8 @@ end
 
 -- State collection for global variable serialization
 local function collect_current_state()
-    local groups = require('vertical-bufferline.groups')
-    local state_module = require('vertical-bufferline.state')
+    local groups = require('buffer-nexus.groups')
+    local state_module = require('buffer-nexus.state')
     local active_group_id = groups.get_active_group_id()
     local current_buf = api.nvim_get_current_buf()
     local window_groups = nil
@@ -1154,13 +1154,13 @@ end
 
 -- State restoration from global variable (simplified synchronous version)
 local function restore_state_from_global()
-    if not vim.g.VerticalBufferlineSession then
+    if not vim.g.BufferNexusSession then
         return false
     end
 
-    local success, session_data = pcall(vim.json.decode, vim.g.VerticalBufferlineSession)
+    local success, session_data = pcall(vim.json.decode, vim.g.BufferNexusSession)
     if not success then
-        vim.notify("Failed to decode VBL session data", vim.log.levels.ERROR)
+        vim.notify("Failed to decode BN session data", vim.log.levels.ERROR)
         return false
     end
     
@@ -1169,7 +1169,7 @@ local function restore_state_from_global()
     local has_groups = session_data.groups and type(session_data.groups) == "table"
     local has_window_groups = session_data.window_groups and type(session_data.window_groups) == "table"
     if not has_groups and not has_window_groups then
-        vim.notify("Invalid VBL session data format", vim.log.levels.ERROR)
+        vim.notify("Invalid BN session data format", vim.log.levels.ERROR)
         return false
     end
 
@@ -1179,15 +1179,15 @@ local function restore_state_from_global()
     apply_session_sidebar_state(session_data)
     
     -- Prevent duplicate execution
-    if _G._vbl_session_restore_in_progress then
+    if _G._bn_session_restore_in_progress then
         return false
     end
-    _G._vbl_session_restore_in_progress = true
+    _G._bn_session_restore_in_progress = true
 
     -- Synchronous execution - remove vim.schedule() wrapper
-    local state_module = require('vertical-bufferline.state')
-    local groups = require('vertical-bufferline.groups')
-    local bufferline_integration = require('vertical-bufferline.bufferline-integration')
+    local state_module = require('buffer-nexus.state')
+    local groups = require('buffer-nexus.groups')
+    local bufferline_integration = require('buffer-nexus.bufferline-integration')
     saved_cmdheight = vim.o.cmdheight
 
     -- CRITICAL: Disable auto-add during session restore to prevent BufEnter from interfering
@@ -1195,7 +1195,7 @@ local function restore_state_from_global()
     groups.disable_auto_add()
 
     -- Show progress notification
-    vim.notify("Restoring VBL state...", vim.log.levels.INFO)
+    vim.notify("Restoring BN state...", vim.log.levels.INFO)
 
     -- Temporarily disable bufferline sync during loading
     bufferline_integration.set_sync_target(nil)
@@ -1215,14 +1215,14 @@ local function restore_state_from_global()
     -- Always re-enable auto-add and reset state, even if there was an error
     groups.enable_auto_add()
     state_module.set_session_loading(false)
-    _G._vbl_session_restore_in_progress = false
+    _G._bn_session_restore_in_progress = false
 
     if not success then
-        vim.notify("VBL state restore error: " .. tostring(err), vim.log.levels.ERROR)
+        vim.notify("BN state restore error: " .. tostring(err), vim.log.levels.ERROR)
         return false
     end
 
-    vim.notify(string.format("VBL state restored (%d groups)", count_session_groups(session_data)), vim.log.levels.INFO)
+    vim.notify(string.format("BN state restored (%d groups)", count_session_groups(session_data)), vim.log.levels.INFO)
     return true
 end
 
@@ -1235,7 +1235,7 @@ local saved_buflisted_states = {}
 
 -- Setup complete buffer visibility for session save
 local function setup_complete_buffer_visibility_for_session()
-    local groups = require('vertical-bufferline.groups')
+    local groups = require('buffer-nexus.groups')
     local all_groups = groups.get_all_groups()
     
     -- Clear previous state
@@ -1278,8 +1278,8 @@ local function restore_original_buffer_visibility()
     saved_buflisted_states = {}
     
     -- Restore current active group's visibility through bufferline integration
-    local groups = require('vertical-bufferline.groups')
-    local bufferline_integration = require('vertical-bufferline.bufferline-integration')
+    local groups = require('buffer-nexus.groups')
+    local bufferline_integration = require('buffer-nexus.bufferline-integration')
     local active_group = groups.get_active_group()
     
     if active_group then
@@ -1295,7 +1295,7 @@ local function serialize_if_changed()
     
     -- Only update global variable if state actually changed
     if current_hash ~= last_state_hash then
-        vim.g.VerticalBufferlineSession = state_json
+        vim.g.BufferNexusSession = state_json
         last_state_hash = current_hash
     end
 end
@@ -1320,7 +1320,7 @@ end
 
 -- Setup session integration
 local function setup_session_integration()
-    local config_module = require('vertical-bufferline.config')
+    local config_module = require('buffer-nexus.config')
     
     -- Get session config with fallback defaults
     local session_config = config_module.settings.session or {
@@ -1339,17 +1339,17 @@ local function setup_session_integration()
                 stop_auto_serialize()
 
                 -- CRITICAL: Remove 'blank' from sessionoptions to prevent saving empty buffers
-                -- (like the VBL sidebar which becomes empty when special buffers can't be saved)
-                vim.g._vbl_saved_sessionoptions = vim.o.sessionoptions
+                -- (like the BN sidebar which becomes empty when special buffers can't be saved)
+                vim.g._bn_saved_sessionoptions = vim.o.sessionoptions
                 vim.opt.sessionoptions:remove('blank')
 
                 -- Save all buffer visibility states and temporarily make all group buffers visible
                 setup_complete_buffer_visibility_for_session()
 
-                -- Save VBL state
-                vim.g.VerticalBufferlineSession = vim.json.encode(collect_current_state())
+                -- Save BN state
+                vim.g.BufferNexusSession = vim.json.encode(collect_current_state())
             end,
-            desc = "Auto-save VBL state and setup complete buffer visibility for mini.sessions"
+            desc = "Auto-save BN state and setup complete buffer visibility for mini.sessions"
         })
         
         -- Restore state after session write
@@ -1360,9 +1360,9 @@ local function setup_session_integration()
                 restore_original_buffer_visibility()
 
                 -- Restore original sessionoptions
-                if vim.g._vbl_saved_sessionoptions then
-                    vim.o.sessionoptions = vim.g._vbl_saved_sessionoptions
-                    vim.g._vbl_saved_sessionoptions = nil
+                if vim.g._bn_saved_sessionoptions then
+                    vim.o.sessionoptions = vim.g._bn_saved_sessionoptions
+                    vim.g._bn_saved_sessionoptions = nil
                 end
 
                 -- Restart auto-serialization if enabled
@@ -1383,7 +1383,7 @@ local function setup_session_integration()
                 end
 
                 -- CRITICAL: Save original session data IMMEDIATELY before anything can overwrite it
-                local original_session_data = vim.g.VerticalBufferlineSession
+                local original_session_data = vim.g.BufferNexusSession
 
                 -- IMPORTANT: Stop any running auto-serialization timer IMMEDIATELY
                 stop_auto_serialize()
@@ -1397,11 +1397,11 @@ local function setup_session_integration()
 
                 vim.defer_fn(function()
                     -- Restore the original data in case it was overwritten
-                    vim.g.VerticalBufferlineSession = original_session_data
+                    vim.g.BufferNexusSession = original_session_data
 
-                    if vim.g.VerticalBufferlineSession and not _G._vbl_session_restore_completed then
+                    if vim.g.BufferNexusSession and not _G._bn_session_restore_completed then
                         restore_state_from_global()
-                        _G._vbl_session_restore_completed = true
+                        _G._bn_session_restore_completed = true
 
                         -- NOW safe to start auto-serialize after restore is complete
                         if session_config.auto_serialize then
@@ -1410,7 +1410,7 @@ local function setup_session_integration()
                     end
                 end, 50)
             end,
-            desc = "Auto-restore VBL state for mini.sessions"
+            desc = "Auto-restore BN state for mini.sessions"
         })
     end
     
@@ -1432,9 +1432,9 @@ local function setup_session_integration()
     
     -- Manual restore command
     vim.api.nvim_create_user_command("VBufferLineRestoreSession", function()
-        if vim.g.VerticalBufferlineSession then
+        if vim.g.BufferNexusSession then
             -- Decode session data to show preview
-            local success, session_data = pcall(vim.json.decode, vim.g.VerticalBufferlineSession)
+            local success, session_data = pcall(vim.json.decode, vim.g.BufferNexusSession)
             local preview = ""
             if success and (session_data.groups or session_data.window_groups) then
                 local group_count = count_session_groups(session_data)
@@ -1446,23 +1446,23 @@ local function setup_session_integration()
             end
             
             local choice = vim.fn.confirm(
-                "Restore VBL state from session?" .. preview,
+                "Restore BN state from session?" .. preview,
                 "&Yes\n&No", 1
             )
             if choice == 1 then
                 restore_state_from_global()
             end
         else
-            vim.notify("No VBL session data found", vim.log.levels.WARN)
+            vim.notify("No BN session data found", vim.log.levels.WARN)
         end
-    end, { desc = "Restore VBL state from session" })
+    end, { desc = "Restore BN state from session" })
     
     -- Commands to control auto-restore prompt
-    vim.api.nvim_create_user_command("VBufferLineEnableAutoPrompt", function()
+    vim.api.nvim_create_user_command("BNEnableAutoPrompt", function()
         M.enable_auto_restore_prompt()
     end, { desc = "Enable auto-restore prompt after sourcing session files" })
     
-    vim.api.nvim_create_user_command("VBufferLineDisableAutoPrompt", function()
+    vim.api.nvim_create_user_command("BNDisableAutoPrompt", function()
         M.disable_auto_restore_prompt()
     end, { desc = "Disable auto-restore prompt after sourcing session files" })
 
@@ -1470,18 +1470,18 @@ end
 
 -- Enable/disable auto restore prompt
 function M.enable_auto_restore_prompt()
-    local config_module = require('vertical-bufferline.config')
+    local config_module = require('buffer-nexus.config')
     if config_module.settings.session then
         config_module.settings.session.auto_restore_prompt = true
-        vim.notify("VBL auto-restore prompt enabled", vim.log.levels.INFO)
+        vim.notify("BN auto-restore prompt enabled", vim.log.levels.INFO)
     end
 end
 
 function M.disable_auto_restore_prompt()
-    local config_module = require('vertical-bufferline.config')
+    local config_module = require('buffer-nexus.config')
     if config_module.settings.session then
         config_module.settings.session.auto_restore_prompt = false
-        vim.notify("VBL auto-restore prompt disabled", vim.log.levels.INFO)
+        vim.notify("BN auto-restore prompt disabled", vim.log.levels.INFO)
     end
 end
 

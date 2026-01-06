@@ -21,14 +21,14 @@ add_rtp_root()
 add_dep_rtp(vim.fn.getcwd() .. "/.deps/telescope.nvim")
 add_dep_rtp(vim.fn.getcwd() .. "/.deps/mini.nvim")
 
-local vbl = require('vertical-bufferline')
+local vbl = require('buffer-nexus')
 vbl.setup({
     edit_mode = {
         picker = "auto",
     },
 })
 
-local edit_mode = require('vertical-bufferline.edit_mode')
+local edit_mode = require('buffer-nexus.edit_mode')
 
 local function find_mapping(buf_id)
     local targets = { "<C-p>", "<C-P>" }

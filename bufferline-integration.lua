@@ -3,12 +3,12 @@
 
 local M = {}
 
-local groups = require('vertical-bufferline.groups')
-local logger = require('vertical-bufferline.logger')
-local utils = require('vertical-bufferline.utils')
+local groups = require('buffer-nexus.groups')
+local logger = require('buffer-nexus.logger')
+local utils = require('buffer-nexus.utils')
 
 local profile_state = {
-    enabled = vim.g.vbl_sync_profile == true or vim.g.vbl_sync_profile == 1,
+    enabled = vim.g.bn_sync_profile == true or vim.g.bn_sync_profile == 1,
     stats = {}
 }
 
@@ -55,11 +55,11 @@ local bufferline_refresh_delay_ms = 30
 -- No longer need global cache - position info is stored in each group
 
 -- Prevent reload protection
-if _G._vertical_bufferline_integration_loaded then
-    return _G._vertical_bufferline_integration_instance
+if _G._buffer_nexus_integration_loaded then
+    return _G._buffer_nexus_integration_instance
 end
 
-_G._vertical_bufferline_integration_loaded = true
+_G._buffer_nexus_integration_loaded = true
 
 local function is_bufferline_available()
     local ok_state, _ = pcall(require, 'bufferline.state')
@@ -184,7 +184,7 @@ end
 --- Update position info for current active group when cursor is in a normal file buffer
 local function update_active_group_position_info()
     local current_buf = vim.api.nvim_get_current_buf()
-    local state_module = require('vertical-bufferline.state')
+    local state_module = require('buffer-nexus.state')
     
     -- Only update when current buffer is not sidebar and is a normal file buffer
     if state_module.get_buf_id and current_buf ~= state_module.get_buf_id() and not is_special_buffer(current_buf) then
@@ -213,7 +213,7 @@ local function sync_bufferline_to_group()
         return
     end
 
-    local state_module = require('vertical-bufferline.state')
+    local state_module = require('buffer-nexus.state')
     if state_module.is_session_loading() then
         return
     end
@@ -304,7 +304,7 @@ local function sync_bufferline_to_group()
             end
 
             -- Use only bufferline buffers for strict synchronization
-            -- If user removes buffer from bufferline, it should also be removed from VBL
+            -- If user removes buffer from bufferline, it should also be removed from BN
 
             -- Update buffers and automatically sync history
             local t_update = profile_start()
@@ -324,10 +324,10 @@ local function sync_bufferline_to_group()
             })
 
             -- Actively refresh sidebar display
-            local vbl = require('vertical-bufferline')
+            local vbl = require('buffer-nexus')
             if vbl.state and vbl.state.is_sidebar_open and vbl.refresh then
                 local t_refresh = profile_start()
-                logger.info("sync", "triggering VBL refresh", {
+                logger.info("sync", "triggering BN refresh", {
                     reason = "bufferline_sync",
                     sidebar_open = vbl.state.is_sidebar_open,
                     current_buffer_in_group = current_buffer_in_group
@@ -335,7 +335,7 @@ local function sync_bufferline_to_group()
                 vbl.refresh("bufferline_sync")
                 profile_end("sync.refresh_sidebar", t_refresh)
             else
-                logger.warn("sync", "VBL refresh not available", {
+                logger.warn("sync", "BN refresh not available", {
                     vbl_exists = vbl ~= nil,
                     state_exists = vbl and vbl.state ~= nil,
                     sidebar_open = vbl and vbl.state and vbl.state.is_sidebar_open,
@@ -489,7 +489,7 @@ function M.manual_sync()
         end
     end
 
-    local vbl = require('vertical-bufferline')
+    local vbl = require('buffer-nexus')
     if vbl.state and vbl.state.is_sidebar_open and vbl.refresh then
         vbl.refresh("manual_sync")
     end
@@ -647,7 +647,7 @@ function M.force_refresh()
         end
 
         -- Refresh our sidebar
-        local vbl = require('vertical-bufferline')
+        local vbl = require('buffer-nexus')
         if vbl.state and vbl.state.is_sidebar_open and vbl.refresh then
             vbl.refresh("force_refresh")
         end
@@ -693,7 +693,7 @@ function M.smart_close_buffer(target_buf)
     -- CRITICAL: Check if there are other buffers in the CURRENT GROUP
     -- Don't just check global listed_buffers count, as some group buffers
     -- might be temporarily unlisted by set_bufferline_buffers()
-    local groups = require('vertical-bufferline.groups')
+    local groups = require('buffer-nexus.groups')
     local current_group = groups.get_active_group()
     local group_has_other_buffers = false
     local next_buf_in_group = nil
@@ -858,6 +858,6 @@ function M.sync_once()
 end
 
 -- Save global instance
-_G._vertical_bufferline_integration_instance = M
+_G._buffer_nexus_integration_instance = M
 
 return M

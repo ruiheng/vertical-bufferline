@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(bash scripts/run_checks.sh:*)",
+      "Bash(timeout 60 bash scripts/run_checks.sh:*)"
     ]
   }
 }

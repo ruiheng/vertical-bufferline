@@ -19,7 +19,7 @@ end
 
 add_rtp_root()
 
-local vbl = require('vertical-bufferline')
+local vbl = require('buffer-nexus')
 vbl.setup({
     floating = true,
     position = "right",
@@ -28,7 +28,7 @@ vbl.setup({
     auto_add_new_buffers = true,
 })
 
-local state = require('vertical-bufferline.state')
+local state = require('buffer-nexus.state')
 
 local file1 = write_temp_file({ "one" })
 vim.cmd("edit " .. vim.fn.fnameescape(file1))

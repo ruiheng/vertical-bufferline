@@ -4,8 +4,8 @@
 local M = {}
 
 local function switch_to_buffer_in_main_window(buffer_id)
-    local state_module = require('vertical-bufferline.state')
-    local groups = require('vertical-bufferline.groups')
+    local state_module = require('buffer-nexus.state')
+    local groups = require('buffer-nexus.groups')
     local sidebar_win = state_module.get_win_id()
     local target_win = nil
 
@@ -46,7 +46,7 @@ end
 function M.current_group(opts)
     opts = opts or {}
 
-    local groups = require('vertical-bufferline.groups')
+    local groups = require('buffer-nexus.groups')
     local active_group = groups.get_active_group()
     if not active_group then
         vim.notify("No active group found", vim.log.levels.WARN)
@@ -96,7 +96,7 @@ function M.current_group(opts)
     end
 
     pickers.new(opts, {
-        prompt_title = "VBL: Current Group",
+        prompt_title = "BN: Current Group",
         finder = finders.new_table({
             results = entries,
             entry_maker = opts.entry_maker or make_entry.gen_from_buffer(opts),

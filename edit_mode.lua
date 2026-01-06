@@ -5,10 +5,10 @@ local M = {}
 
 local api = vim.api
 
-local groups = require('vertical-bufferline.groups')
-local bufferline_integration = require('vertical-bufferline.bufferline-integration')
-local config_module = require('vertical-bufferline.config')
-local state_module = require('vertical-bufferline.state')
+local groups = require('buffer-nexus.groups')
+local bufferline_integration = require('buffer-nexus.bufferline-integration')
+local config_module = require('buffer-nexus.config')
+local state_module = require('buffer-nexus.state')
 
 local edit_state = {
     buf_id = nil,
@@ -32,7 +32,7 @@ function M.apply_and_close(buf_id)
 end
 
 local function in_edit_buffer()
-    return vim.bo.filetype == "vertical-bufferline-edit"
+    return vim.bo.filetype == "buffer-nexus-edit"
 end
 
 local function close_modal_windows()
@@ -370,8 +370,8 @@ local function apply_insert_path_keymap(buf_id)
         and config_module.settings.edit_mode.insert_path_key
     if insert_path_key and insert_path_key ~= "" then
         vim.keymap.set({ "n", "i" }, insert_path_key, function()
-            require('vertical-bufferline.edit_mode').telescope_insert_paths()
-        end, { buffer = buf_id, silent = true, nowait = true, desc = "Insert file path (VBL edit)" })
+            require('buffer-nexus.edit_mode').telescope_insert_paths()
+        end, { buffer = buf_id, silent = true, nowait = true, desc = "Insert file path (BN edit)" })
     end
 end
 
@@ -385,7 +385,7 @@ local function open_snacks_picker(target_buf)
     local picker_util = snacks.picker.util
     snacks.picker("files", {
         cwd = cwd,
-        title = "VBL edit: insert file (Tab to mark, Enter to insert)",
+        title = "BN edit: insert file (Tab to mark, Enter to insert)",
         confirm = function(picker)
             local selected = picker:selected({ fallback = true })
             local paths = {}
@@ -425,7 +425,7 @@ local function open_fzf_lua_picker(target_buf)
 
     fzf_lua.files({
         cwd = cwd,
-        prompt = "VBL edit> ",
+        prompt = "BN edit> ",
         fzf_opts = { ["--multi"] = "" },
         actions = {
             ["default"] = function(selected)
@@ -447,7 +447,7 @@ end
 
 function M.telescope_insert_paths()
     if not in_edit_buffer() then
-        vim.notify("VBL edit mode is not active", vim.log.levels.WARN)
+        vim.notify("BN edit mode is not active", vim.log.levels.WARN)
         return
     end
 
@@ -467,7 +467,7 @@ function M.telescope_insert_paths()
             local prev_smartcase = vim.o.smartcase
             vim.o.ignorecase = true
             vim.o.smartcase = false
-            local restore_group = api.nvim_create_augroup("VBufferLineEditMiniPick", { clear = true })
+            local restore_group = api.nvim_create_augroup("BNEditMiniPick", { clear = true })
             api.nvim_create_autocmd("User", {
                 group = restore_group,
                 pattern = "MiniPickStop",
@@ -488,7 +488,7 @@ function M.telescope_insert_paths()
             end
             pick.start({
                 source = {
-                    name = "VBL edit: insert file (Tab to mark, Enter to insert)",
+                    name = "BN edit: insert file (Tab to mark, Enter to insert)",
                     items = items,
                     choose = function(item)
                         insert_paths_in_edit_buffer(build_paths({ item }), target_buf)
@@ -540,7 +540,7 @@ function M.telescope_insert_paths()
 
     local cwd = vim.fn.getcwd()
     builtin.find_files({
-        prompt_title = "VBL edit: insert file (Tab to multi-select, Enter to insert)",
+        prompt_title = "BN edit: insert file (Tab to multi-select, Enter to insert)",
         attach_mappings = function(prompt_bufnr, _)
             local function build_paths(entries)
                 local paths = {}
@@ -797,7 +797,7 @@ local function enforce_modified_buffers(group_specs, warnings)
                 goto continue
             end
             local ft = api.nvim_get_option_value("filetype", { buf = buf_id })
-            if ft == "vertical-bufferline-edit" then
+            if ft == "buffer-nexus-edit" then
                 goto continue
             end
             table.insert(group_specs[1].buffers, buf_id)
@@ -928,11 +928,11 @@ local function setup_edit_buffer(buf_id)
     vim.bo[buf_id].swapfile = false
     vim.bo[buf_id].undofile = false
     vim.bo[buf_id].modifiable = true
-    vim.bo[buf_id].filetype = "vertical-bufferline-edit"
+    vim.bo[buf_id].filetype = "buffer-nexus-edit"
     vim.bo[buf_id].buflisted = false
     apply_insert_path_keymap(buf_id)
 
-    local group = vim.api.nvim_create_augroup("VBufferLineEditModal", { clear = true })
+    local group = vim.api.nvim_create_augroup("BNEditModal", { clear = true })
     api.nvim_create_autocmd("BufEnter", {
         group = group,
         buffer = buf_id,
@@ -1054,7 +1054,7 @@ function M.open()
     api.nvim_win_set_option(edit_state.win_id, "wrap", false)
     api.nvim_win_set_option(edit_state.win_id, "foldmethod", "expr")
     api.nvim_win_set_option(edit_state.win_id, "foldexpr",
-        "v:lua.require('vertical-bufferline.edit_mode').foldexpr(v:lnum)")
+        "v:lua.require('buffer-nexus.edit_mode').foldexpr(v:lnum)")
     api.nvim_win_set_option(edit_state.win_id, "foldlevel", 99)
     api.nvim_win_set_option(edit_state.win_id, "foldenable", true)
 
