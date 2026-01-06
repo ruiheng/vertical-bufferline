@@ -9,7 +9,8 @@ These rules apply to all work in this repository.
 
 ## Git Commit Messages
 - Use Conventional Commits format: `type(scope): subject`.
-- Keep the subject imperative and concise; add body for context when needed.
+- Keep the subject imperative and concise.
+- For non-trivial changes, include a short body explaining the rationale or analysis (skip for very small edits).
 
 ## Safety
 - Do not revert or delete unrelated user changes unless explicitly asked.

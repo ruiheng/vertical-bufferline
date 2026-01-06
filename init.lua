@@ -3226,6 +3226,7 @@ end
 -- Render current group's history as a unified group
 -- @param current_components: Current bufferline components (for filtering history to match display)
 local function render_current_group_history(active_group, current_buffer_id, is_picking, lines_text, new_line_map, group_header_lines, line_types, all_components, line_components, line_group_context, line_infos, current_components, buffer_hints, pinned_set)
+    state_module.set_history_display_buffers({})
     if state_module.get_layout_mode() == "horizontal" then
         return
     end
@@ -3257,11 +3258,21 @@ local function render_current_group_history(active_group, current_buffer_id, is_
             table.insert(valid_history, buffer_id)
         end
     end
+
+    local display_history = {}
+    local history_display_limit = config_module.settings.history_display_count
+    for i, buffer_id in ipairs(valid_history) do
+        if i > history_display_limit then
+            break
+        end
+        table.insert(display_history, buffer_id)
+    end
+    state_module.set_history_display_buffers(display_history)
     
     -- Only render if we have valid history items
-    if #valid_history > 0 then
+    if #display_history > 0 then
         -- Render history group header with enhanced styling
-        local header_text = string.format(" %s %s (%d)", config_module.UI.VERTICAL_LABEL_RECENT, config_module.UI.VERTICAL_RECENT_TEXT, math.min(#valid_history, config_module.settings.history_display_count))
+        local header_text = string.format(" %s %s (%d)", config_module.UI.VERTICAL_LABEL_RECENT, config_module.UI.VERTICAL_RECENT_TEXT, #display_history)
         table.insert(lines_text, header_text)
         local header_line_num = #lines_text
         group_header_lines[header_line_num] = {
@@ -3274,10 +3285,8 @@ local function render_current_group_history(active_group, current_buffer_id, is_
         
         -- Generate minimal prefixes for history items (same logic as regular groups)
         local history_buffer_ids = {}
-        for i, buffer_id in ipairs(valid_history) do
-            if i <= config_module.settings.history_display_count then
-                table.insert(history_buffer_ids, buffer_id)
-            end
+        for _, buffer_id in ipairs(display_history) do
+            table.insert(history_buffer_ids, buffer_id)
         end
 
         local win_id = state_module.get_win_id()
@@ -3289,13 +3298,11 @@ local function render_current_group_history(active_group, current_buffer_id, is_
         local minimal_prefixes = filename_utils.generate_minimal_prefixes(history_buffer_ids, window_width)
 
         -- Render history items
-        for i, buffer_id in ipairs(valid_history) do
-            if i > config_module.settings.history_display_count then break end
-
+        for i, buffer_id in ipairs(display_history) do
             local buf_name = api.nvim_buf_get_name(buffer_id)
             local filename = buf_name == "" and "[No Name]" or vim.fn.fnamemodify(buf_name, ":t")
             local is_current = buffer_id == current_buffer_id
-            local is_last = (i == math.min(#valid_history, config_module.settings.history_display_count))
+            local is_last = (i == #display_history)
 
             -- Create component object for history buffer
             local history_component = {
@@ -3308,7 +3315,7 @@ local function render_current_group_history(active_group, current_buffer_id, is_
             
             -- Create buffer line - first item (current) has no number, rest have numbers
             local display_pos = (i == 1) and 0 or (i - 1)  -- First item has no number, rest are numbered 1, 2, 3...
-            local line_info = create_buffer_line(history_component, display_pos, #valid_history, current_buffer_id, is_picking, #lines_text + 1, "history", 1, 1, false, false, nil)
+            local line_info = create_buffer_line(history_component, display_pos, #display_history, current_buffer_id, is_picking, #lines_text + 1, "history", 1, 1, false, false, nil)
             table.insert(lines_text, line_info.text)
             local line_num = #lines_text
             
@@ -6232,7 +6239,10 @@ function M.switch_to_history_file(position)
         return false
     end
     
-    local history = groups.get_group_history(active_group.id)
+    local display_history = state_module.get_history_display_buffers()
+    local history = (type(display_history) == "table" and #display_history > 0)
+        and display_history
+        or groups.get_group_history(active_group.id)
     if not history or #history <= 1 then
         vim.notify("No history available in current group", vim.log.levels.WARN)
         return false

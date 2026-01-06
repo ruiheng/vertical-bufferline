@@ -19,6 +19,7 @@ local state = {
     line_group_context = {}, -- Maps a line number to the group ID it belongs to
     line_buffer_ranges = {}, -- Maps a line to buffer ranges for hit testing
     group_header_lines = {}, -- Maps line numbers to group header information
+    history_display_buffers = {}, -- Buffers shown in the history section (ordered)
     line_offset = 0, -- Cursor alignment offset for rendered lines
     was_picking = false, -- Track picking mode state to avoid spam
     session_loading = false, -- Flag to prevent interference during session loading
@@ -214,6 +215,22 @@ end
 
 function M.clear_line_buffer_ranges()
     state.line_buffer_ranges = {}
+end
+
+-- History display buffer tracking
+function M.get_history_display_buffers()
+    return state.history_display_buffers
+end
+
+function M.set_history_display_buffers(buffers)
+    if type(buffers) ~= "table" then
+        error("history_display_buffers must be table, got: " .. type(buffers))
+    end
+    state.history_display_buffers = buffers
+end
+
+function M.clear_history_display_buffers()
+    state.history_display_buffers = {}
 end
 
 -- Hint to buffer mapping
