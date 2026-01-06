@@ -184,6 +184,8 @@ M.DEFAULTS = {
     show_path = "auto", -- "yes", "no", "auto"
     path_style = "relative", -- "relative", "absolute", "smart"
     path_max_length = M.UI.PATH_MAX_LENGTH,
+    filename_max_length = 20,
+    filename_ellipsis = "…",
 
     -- Cursor alignment settings
     align_with_cursor = true,  -- Align VBL content with main window cursor position

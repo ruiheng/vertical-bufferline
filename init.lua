@@ -1844,6 +1844,15 @@ local function build_horizontal_item_parts(component, number_index, max_digits, 
         final_name = prefix_info.prefix .. prefix_info.filename
     end
 
+    local filename_utils = require('vertical-bufferline.filename_utils')
+    local max_filename_len = config_module.settings.filename_max_length
+    local filename_ellipsis = config_module.settings.filename_ellipsis
+    if prefix_info and prefix_info.filename then
+        prefix_info.filename = filename_utils.truncate_filename_middle(prefix_info.filename, max_filename_len, filename_ellipsis)
+    else
+        final_name = filename_utils.truncate_filename_middle(final_name, max_filename_len, filename_ellipsis)
+    end
+
     local filename_parts = components.create_filename(prefix_info, final_name, is_current, is_visible)
     for _, part in ipairs(filename_parts) do
         if is_current then
@@ -2571,6 +2580,15 @@ local function create_buffer_line(component, j, total_components, current_buffer
             filename = component.minimal_prefix.filename
         }
         final_name = prefix_info.prefix .. prefix_info.filename
+    end
+
+    local filename_utils = require('vertical-bufferline.filename_utils')
+    local max_filename_len = config_module.settings.filename_max_length
+    local filename_ellipsis = config_module.settings.filename_ellipsis
+    if prefix_info and prefix_info.filename then
+        prefix_info.filename = filename_utils.truncate_filename_middle(prefix_info.filename, max_filename_len, filename_ellipsis)
+    else
+        final_name = filename_utils.truncate_filename_middle(final_name, max_filename_len, filename_ellipsis)
     end
     
     local filename_parts = components.create_filename(prefix_info, final_name, is_current, is_visible)
@@ -6128,6 +6146,8 @@ M.cycle_show_history = M.cycle_show_history_setting
 --- @field user_config.show_path? "yes"|"no"|"auto" Path display mode (default: "auto")
 --- @field user_config.path_style? "relative"|"absolute"|"smart" Path display style (default: "relative")
 --- @field user_config.path_max_length? number Maximum path display length (default: 50)
+--- @field user_config.filename_max_length? number Maximum filename display length (default: 20)
+--- @field user_config.filename_ellipsis? string Ellipsis for truncated filenames (default: "…")
 --- @field user_config.align_with_cursor? boolean Align content with cursor position (default: true)
 --- @field user_config.show_history? "yes"|"no"|"auto" History display mode (default: "auto")
 --- @field user_config.history_size? number Maximum files to track per group (default: 10)

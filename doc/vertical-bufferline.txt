@@ -140,6 +140,8 @@ Default configuration:
       show_path = "auto",                 -- "yes", "no", "auto"
       path_style = "relative",            -- "relative", "absolute", "smart"
       path_max_length = 50,               -- Maximum path display length
+      filename_max_length = 20,           -- Maximum filename display length (0 to disable)
+      filename_ellipsis = "…",            -- Ellipsis used for truncated filenames
 
       -- Cursor alignment settings
       align_with_cursor = true,           -- Align content with cursor position
@@ -246,6 +248,8 @@ path_style              Path display style: "relative" (to cwd), "absolute"
 
                               *vertical-bufferline-config-path-max-length*
 path_max_length         Maximum length for displayed paths (characters).
+filename_max_length     Maximum length for displayed filenames (characters). Use 0 to disable.
+filename_ellipsis       Ellipsis used when truncating filenames.
                         Default: 50
 
                              *vertical-bufferline-config-align-with-cursor*

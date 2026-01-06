@@ -436,6 +436,8 @@ scripts/run_checks.sh
     show_path = "auto",             -- "yes", "no", "auto"
     path_style = "relative",        -- "relative", "absolute", "smart"
     path_max_length = 50,           -- Maximum path display length
+    filename_max_length = 20,       -- Maximum filename display length (0 to disable)
+    filename_ellipsis = "…",        -- Ellipsis used for truncated filenames
 
     -- Cursor alignment settings
     align_with_cursor = true,       -- Align VBL content with main window cursor position

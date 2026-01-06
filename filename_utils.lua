@@ -594,4 +594,36 @@ function M.compress_path_contextual(path, window_width, ui_context)
     return M.compress_path_smart(path, max_path_width, ui_context.preserve_segments or 1)
 end
 
+-- Truncate filename with middle ellipsis to preserve start/end segments
+function M.truncate_filename_middle(name, max_length, ellipsis)
+    if not name or name == "" or type(max_length) ~= "number" then
+        return name or ""
+    end
+
+    if max_length <= 0 then
+        return name
+    end
+
+    if #name <= max_length then
+        return name
+    end
+
+    ellipsis = (type(ellipsis) == "string" and ellipsis ~= "") and ellipsis or "…"
+    local ellipsis_len = #ellipsis
+
+    if max_length <= ellipsis_len then
+        return string.sub(name, 1, max_length)
+    end
+
+    local keep_total = max_length - ellipsis_len
+    local keep_start = math.ceil(keep_total / 2)
+    local keep_end = keep_total - keep_start
+
+    if keep_end <= 0 then
+        return string.sub(name, 1, keep_start) .. ellipsis
+    end
+
+    return string.sub(name, 1, keep_start) .. ellipsis .. string.sub(name, -keep_end)
+end
+
 return M
