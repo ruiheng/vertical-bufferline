@@ -6530,6 +6530,10 @@ function M.statusline_label()
     end
 
     if not local_pos then
+        if is_buffer_pinned(buf) then
+            local pin_icon = vim.trim(get_pin_icon())
+            return string.format("[%s] %s", label, pin_icon)
+        end
         return string.format("[%s]", label)
     end
 
