@@ -6551,6 +6551,12 @@ function M.statusline_label()
 
     if not local_pos then
         if is_buffer_pinned(buf) then
+            local group_buffers = groups.get_group_buffers(group.id) or {}
+            for _, id in ipairs(group_buffers) do
+                if id == buf then
+                    return string.format("[%s]", label)
+                end
+            end
             local pin_icon = vim.trim(get_pin_icon())
             return string.format("[%s] %s", label, pin_icon)
         end
