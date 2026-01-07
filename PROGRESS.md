@@ -183,7 +183,7 @@ local component = all_components[buffer_id]  -- 包含所有分组
 
 ## 使用方法
 
-1. **打开/关闭侧边栏**: `<leader>vb`
+1. **打开/关闭侧边栏**: `<leader>bs`
 2. **在侧边栏中**:
    - `j/k`: 上下移动
    - `<CR>`: 切换到光标所在的 buffer

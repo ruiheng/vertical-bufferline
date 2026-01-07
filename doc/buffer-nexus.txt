@@ -56,10 +56,12 @@ Using lazy.nvim (recommended):
         position = "left",
       },
       keys = {
-        { "<leader>vb", "<cmd>lua require('buffernexus').toggle()<cr>",
-          desc = "Toggle vertical bufferline" },
-        { "<leader>ve", "<cmd>lua require('buffernexus').toggle_expand_all()<cr>",
+        { "<leader>bs", "<cmd>lua require('buffernexus').toggle()<cr>",
+          desc = "Toggle Buffer Nexus sidebar" },
+        { "<leader>be", "<cmd>lua require('buffernexus').toggle_expand_all()<cr>",
           desc = "Toggle expand all groups" },
+        { "<leader>bm", "<cmd>lua require('buffernexus.edit_mode').open()<cr>",
+          desc = "Edit buffer groups" },
         { "<leader>gc", "<cmd>lua require('buffernexus').create_group()<cr>",
           desc = "Create new group" },
       }
@@ -292,7 +294,7 @@ history_display_count   Maximum number of history items to display in sidebar.
 5. USAGE                                           *buffernexus-usage*
 
 Basic workflow:
-1. Open the sidebar with `<leader>vb`
+1. Open the sidebar with `<leader>bs`
 2. Create groups with `<leader>gc` 
 3. Organize buffers into groups automatically or manually
 4. Navigate between groups with `<leader>g1`, `<leader>g2`, etc.
@@ -384,9 +386,9 @@ Customize prefixes:
 <
 
 Sidebar Control:
-<leader>vb                            Toggle vertical bufferline sidebar
-<leader>ve                            Toggle expand all groups mode
-<leader>vi                            Toggle showing inactive groups
+<leader>bs                            Toggle Buffer Nexus sidebar
+<leader>be                            Toggle expand all groups mode
+<leader>bm                            Edit buffer groups
 
 Group Management:
 <leader>gc                            Create new unnamed group
@@ -429,8 +431,8 @@ Example configuration with both plugins:
 >lua
     -- Buffer Nexus keymaps (using lazy.nvim)
     keys = {
-      { "<leader>vb", "<cmd>lua require('buffernexus').toggle()<cr>",
-        desc = "Toggle vertical bufferline" },
+      { "<leader>bs", "<cmd>lua require('buffernexus').toggle()<cr>",
+        desc = "Toggle Buffer Nexus sidebar" },
       { "<leader>gc", "<cmd>lua require('buffernexus').create_group()<cr>",
         desc = "Create new group" },
       { "<leader>gn", "<cmd>lua require('buffernexus').switch_to_next_group()<cr>",

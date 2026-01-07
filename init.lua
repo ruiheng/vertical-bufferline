@@ -322,7 +322,7 @@ vim.api.nvim_create_autocmd("ColorScheme", {
     callback = function()
         setup_highlights()
     end,
-    desc = "Refresh vertical-bufferline highlights on colorscheme change"
+    desc = "Refresh Buffer Nexus highlights on colorscheme change"
 })
 
 -- Auto-refresh when buffer modification state changes
@@ -6708,9 +6708,9 @@ function M.keymap_preset(opts)
     end
 
     if include_section("basic") then
-        add(leader .. "vb", function() M.toggle() end, "Toggle vertical bufferline")
-        add(leader .. "ve", function() M.toggle_expand_all() end, "Toggle expand all groups")
-        add(leader .. "vi", function() require('buffer-nexus.edit_mode').open() end, "Edit buffer groups")
+        add(leader .. "bs", function() M.toggle() end, "Toggle Buffer Nexus sidebar")
+        add(leader .. "be", function() M.toggle_expand_all() end, "Toggle expand all groups")
+        add(leader .. "bm", function() require('buffer-nexus.edit_mode').open() end, "Edit buffer groups")
         add(leader .. "gn", function() M.switch_to_next_group() end, "Switch to next group")
         add(leader .. "gp", function() M.switch_to_prev_group() end, "Switch to previous group")
         add(leader .. "G", function() require('buffer-nexus.groups').switch_to_previous_group() end, "Switch to last-used group")

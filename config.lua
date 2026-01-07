@@ -1,5 +1,5 @@
 -- /home/ruiheng/config_files/nvim/lua/vertical-bufferline/config.lua
--- Configuration and constants for vertical-bufferline
+-- Configuration and constants for Buffer Nexus
 
 local M = {}
 

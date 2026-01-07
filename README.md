@@ -462,8 +462,9 @@ scripts/run_checks.sh
   },
   keys = {
     -- Example keymaps (define your own)
-    { "<leader>vb", "<cmd>lua require('buffer-nexus').toggle()<cr>", desc = "Toggle vertical bufferline" },
-    { "<leader>ve", "<cmd>lua require('buffer-nexus').toggle_show_inactive_group_buffers()<cr>", desc = "Toggle showing inactive group buffers" },
+    { "<leader>bs", "<cmd>lua require('buffer-nexus').toggle()<cr>", desc = "Toggle Buffer Nexus sidebar" },
+    { "<leader>be", "<cmd>lua require('buffer-nexus').toggle_show_inactive_group_buffers()<cr>", desc = "Toggle showing inactive group buffers" },
+    { "<leader>bm", "<cmd>lua require('buffer-nexus.edit_mode').open()<cr>", desc = "Edit buffer groups" },
     { "<leader>gc", "<cmd>lua require('buffer-nexus').create_group()<cr>", desc = "Create new group" },
     { "<leader>gn", "<cmd>lua require('buffer-nexus').switch_to_next_group()<cr>", desc = "Next group" },
     { "<leader>gp", "<cmd>lua require('buffer-nexus').switch_to_prev_group()<cr>", desc = "Previous group" },
@@ -542,8 +543,9 @@ Add to your lazy.nvim configuration:
   },
   keys = {
     -- Example keymaps (define your own)
-    { "<leader>vb", "<cmd>lua require('buffer-nexus').toggle()<cr>", desc = "Toggle vertical bufferline" },
-    { "<leader>ve", "<cmd>lua require('buffer-nexus').toggle_show_inactive_group_buffers()<cr>", desc = "Toggle showing inactive group buffers" },
+    { "<leader>bs", "<cmd>lua require('buffer-nexus').toggle()<cr>", desc = "Toggle Buffer Nexus sidebar" },
+    { "<leader>be", "<cmd>lua require('buffer-nexus').toggle_show_inactive_group_buffers()<cr>", desc = "Toggle showing inactive group buffers" },
+    { "<leader>bm", "<cmd>lua require('buffer-nexus.edit_mode').open()<cr>", desc = "Edit buffer groups" },
     { "<leader>gc", "<cmd>lua require('buffer-nexus').create_group()<cr>", desc = "Create new group" },
     { "<leader>gn", "<cmd>lua require('buffer-nexus').switch_to_next_group()<cr>", desc = "Next group" },
     { "<leader>gp", "<cmd>lua require('buffer-nexus').switch_to_prev_group()<cr>", desc = "Previous group" },
