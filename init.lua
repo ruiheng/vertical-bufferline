@@ -211,7 +211,7 @@ local function setup_highlights()
         bg = bar_bg
     })
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.PLACEHOLDER, {
-        bg = config_module.COLORS.RED
+        link = config_module.HIGHLIGHTS.BAR
     })
     
     -- Path highlights - should be subtle and low-key
@@ -3861,7 +3861,16 @@ local function configure_sidebar_window(win_id, is_horizontal, opts)
     api.nvim_win_set_option(win_id, 'cursorline', false)
     api.nvim_win_set_option(win_id, 'cursorcolumn', false)
     api.nvim_win_set_option(win_id, 'statuscolumn', '')
-    api.nvim_win_set_option(win_id, 'statusline', ' ')
+    
+    -- Only set statusline for normal windows (placeholder), NEVER for floating windows.
+    -- Setting statusline on a float creates an extra row (black bar) inside the float.
+    local config = api.nvim_win_get_config(win_id)
+    if config.relative == "" then
+        api.nvim_win_set_option(win_id, 'statusline', ' ')
+    else
+        api.nvim_win_set_option(win_id, 'statusline', '')
+    end
+
     if opts.placeholder then
         api.nvim_win_set_option(win_id, 'winhl', 'Normal:' .. config_module.HIGHLIGHTS.PLACEHOLDER)
     elseif is_horizontal then
@@ -3869,10 +3878,16 @@ local function configure_sidebar_window(win_id, is_horizontal, opts)
     end
 end
 
-local function create_horizontal_overlay(placeholder_win_id, buf_id, placeholder_height, statusline_height)
+local function create_horizontal_overlay(placeholder_win_id, buf_id, placeholder_height, visual_gap)
     local row, col = unpack(api.nvim_win_get_position(placeholder_win_id))
     local width = api.nvim_win_get_width(placeholder_win_id)
-    local float_height = placeholder_height + statusline_height
+    
+    -- Dynamically calculate height based on available visual gap
+    local float_height = placeholder_height
+    if visual_gap and visual_gap > 0 then
+        float_height = float_height + visual_gap
+    end
+
     local new_win_id = api.nvim_open_win(buf_id, false, {
         relative = 'editor',
         width = width,
@@ -3882,10 +3897,64 @@ local function create_horizontal_overlay(placeholder_win_id, buf_id, placeholder
         style = 'minimal',
         border = 'none',
         focusable = false,
+        zindex = 50,
         mouse = true,
     })
     configure_sidebar_window(new_win_id, true)
     return new_win_id
+end
+
+-- Helper to calculate the actual visual gap between the placeholder and the window below it
+local function get_window_visual_gap(win_id)
+    if not api.nvim_win_is_valid(win_id) then return 0 end
+    
+    local pos = api.nvim_win_get_position(win_id)
+    local row = pos[1]
+    local col = pos[2]
+    local height = api.nvim_win_get_height(win_id)
+    local width = api.nvim_win_get_width(win_id)
+    local bottom_row = row + height
+    
+    local next_row = nil
+    
+    for _, other_win in ipairs(api.nvim_list_wins()) do
+        if other_win ~= win_id and api.nvim_win_is_valid(other_win) then
+            local config = api.nvim_win_get_config(other_win)
+            if config.relative == "" then -- Only check normal windows
+                local other_pos = api.nvim_win_get_position(other_win)
+                local other_row = other_pos[1]
+                local other_col = other_pos[2]
+                local other_width = api.nvim_win_get_width(other_win)
+                
+                -- Check if other_win is physically below the placeholder
+                if other_row >= bottom_row then
+                     -- Check for horizontal overlap (columns)
+                     local overlap = math.min(col + width, other_col + other_width) - math.max(col, other_col)
+                     if overlap > 0 then
+                         if next_row == nil or other_row < next_row then
+                             next_row = other_row
+                         end
+                     end
+                end
+            end
+        end
+    end
+    
+    if next_row then
+        return math.max(0, next_row - bottom_row)
+    end
+    
+    -- If no window detected below, we might be at the bottom of the editor.
+    -- In that case, check if there's space for a statusline/cmdline
+    local total_lines = vim.o.lines
+    local cmdheight = vim.o.cmdheight
+    local limit = total_lines - cmdheight
+    
+    if bottom_row < limit then
+        return 1 -- Assume 1 line gap (statusline) if we aren't at the very bottom
+    end
+    
+    return 0
 end
 
 local function apply_horizontal_height(content_height)
@@ -3900,7 +3969,21 @@ local function apply_horizontal_height(content_height)
 
     pcall(api.nvim_win_set_option, placeholder_win_id, 'winfixheight', false)
     pcall(api.nvim_win_set_height, placeholder_win_id, placeholder_height)
-    pcall(api.nvim_win_set_option, placeholder_win_id, 'winhl', 'Normal:' .. config_module.HIGHLIGHTS.PLACEHOLDER)
+    
+    -- Update placeholder_height with actual height (in case of winminheight constraint)
+    if api.nvim_win_is_valid(placeholder_win_id) then
+        placeholder_height = api.nvim_win_get_height(placeholder_win_id)
+    end
+    
+    -- Detect actual gap
+    local visual_gap = get_window_visual_gap(placeholder_win_id)
+    
+    -- Seamless highlight for placeholder and its UI elements
+    local ph_hl = config_module.HIGHLIGHTS.PLACEHOLDER
+    local winhl = string.format('Normal:%s,StatusLine:%s,StatusLineNC:%s,WinSeparator:%s,EndOfBuffer:%s', 
+        ph_hl, ph_hl, ph_hl, ph_hl, ph_hl)
+    
+    pcall(api.nvim_win_set_option, placeholder_win_id, 'winhl', winhl)
     pcall(api.nvim_win_set_option, placeholder_win_id, 'statusline', ' ')
 
     local valid_float = win_id and api.nvim_win_is_valid(win_id)
@@ -3909,7 +3992,10 @@ local function apply_horizontal_height(content_height)
         if win_config and win_config.relative ~= "" then
             local row, col = unpack(api.nvim_win_get_position(placeholder_win_id))
             local width = api.nvim_win_get_width(placeholder_win_id)
-            local float_height = placeholder_height + statusline_height
+            
+            -- Extend float to cover the visual gap exactly
+            local float_height = placeholder_height + visual_gap
+            
             api.nvim_win_set_config(win_id, {
                 relative = 'editor',
                 width = width,
@@ -3919,6 +4005,7 @@ local function apply_horizontal_height(content_height)
                 style = 'minimal',
                 border = 'none',
                 focusable = false,
+                zindex = 50,
             })
             configure_sidebar_window(win_id, true)
             return
@@ -3926,7 +4013,7 @@ local function apply_horizontal_height(content_height)
     end
 
     if buf_id and api.nvim_buf_is_valid(buf_id) then
-        local new_win_id = create_horizontal_overlay(placeholder_win_id, buf_id, placeholder_height, statusline_height)
+        local new_win_id = create_horizontal_overlay(placeholder_win_id, buf_id, placeholder_height, visual_gap)
         state_module.set_win_id(new_win_id)
     end
 end

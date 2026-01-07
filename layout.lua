@@ -61,6 +61,9 @@ function M.statusline_height(laststatus, normal_window_count)
 end
 
 function M.placeholder_height(content_height, statusline_height)
+    -- Subtract statusline_height (usually 1) from the placeholder content height.
+    -- This makes the placeholder's TOTAL visual space (content + statusline) 
+    -- exactly equal to the desired content height.
     return math.max(1, content_height - statusline_height)
 end
 
