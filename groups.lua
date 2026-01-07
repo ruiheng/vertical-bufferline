@@ -695,6 +695,14 @@ function M.set_active_group(group_id, target_buffer_id)
         end
     end
 
+    if #group.buffers == 0 then
+        local new_buffer = vim.api.nvim_create_buf(true, false)
+        if new_buffer then
+            M.add_buffer_to_group(new_buffer, group.id)
+            target_buffer_id = new_buffer
+        end
+    end
+
     -- disable copying bufferline buffer list to group
     if bufferline_integration.is_available() then
         bufferline_integration.set_sync_target(nil)
@@ -756,7 +764,7 @@ function M.set_active_group(group_id, target_buffer_id)
             end)
         end
     end
-    -- If group is empty, switch to dedicated empty buffer to avoid carrying old context
+    -- If group is still empty, switch to dedicated empty buffer to avoid carrying old context
     if #group.buffers == 0 then
         group.current_buffer = nil
         M.switch_to_empty_group_buffer()
