@@ -139,6 +139,9 @@ local function setup_highlights()
     local current_bg = pmenusel_attrs.bg or cursorline_attrs.bg
 
     local function normalize_hex(color)
+        if type(color) == "number" then
+            return string.format("#%06x", color)
+        end
         if type(color) ~= "string" then
             return nil
         end
@@ -170,26 +173,24 @@ local function setup_highlights()
     end
 
     local normalized_current_bg = normalize_hex(current_bg)
+    local normal_bg = normalize_hex(normal_attrs.bg)
     local bar_bg = nil
-    local candidates = {
-        pmenu_attrs.bg,
-        statusline_attrs.bg,
-        cursorline_attrs.bg,
-        normal_attrs.bg,
-    }
-    for _, bg in ipairs(candidates) do
-        local normalized = normalize_hex(bg)
-        if normalized and normalized ~= normalized_current_bg then
-            bar_bg = normalized
-            break
-        end
-    end
-    if not bar_bg then
-        if normalized_current_bg then
-            bar_bg = tweak_hex(normalized_current_bg, -20)
+
+    -- Strategy: Create a background that is distinctly separate from the main window (Normal)
+    if normal_bg then
+        -- Try to darken the normal background first
+        local dark_try = tweak_hex(normal_bg, -30)
+        -- Allow black if normal is not black (creates distinct black sidebar)
+        -- Only lighten if normal is already pure black
+        if dark_try ~= normal_bg and (dark_try ~= "#000000" or normal_bg ~= "#000000") then
+            bar_bg = dark_try
         else
-            bar_bg = config_module.COLORS.DARK_GRAY
+            -- If normal is already pitch black, lighten it instead (dark grey sidebar)
+            bar_bg = tweak_hex(normal_bg, 20)
         end
+    else
+        -- Fallback if Normal bg not found
+        bar_bg = config_module.COLORS.DARK_GRAY
     end
 
     -- Buffer state highlights using semantic nvim highlight groups for theme compatibility
@@ -3883,6 +3884,7 @@ local function create_horizontal_overlay(placeholder_win_id, buf_id, placeholder
     local width = api.nvim_win_get_width(placeholder_win_id)
     
     -- Dynamically calculate height based on available visual gap
+    -- We extend the floating window to cover the placeholder's statusline/gap.
     local float_height = placeholder_height
     if visual_gap and visual_gap > 0 then
         float_height = float_height + visual_gap
@@ -3900,6 +3902,7 @@ local function create_horizontal_overlay(placeholder_win_id, buf_id, placeholder
         zindex = 50,
         mouse = true,
     })
+    
     configure_sidebar_window(new_win_id, true)
     return new_win_id
 end
@@ -3994,7 +3997,10 @@ local function apply_horizontal_height(content_height)
             local width = api.nvim_win_get_width(placeholder_win_id)
             
             -- Extend float to cover the visual gap exactly
-            local float_height = placeholder_height + visual_gap
+            local float_height = placeholder_height
+            if visual_gap and visual_gap > 0 then
+                float_height = float_height + visual_gap
+            end
             
             api.nvim_win_set_config(win_id, {
                 relative = 'editor',
