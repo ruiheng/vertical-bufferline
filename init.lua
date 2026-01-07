@@ -5393,6 +5393,55 @@ local function open_sidebar(position_override)
     -- Buffer protection and floating window management
     local group_name = "BufferNexusSidebarProtection"
     api.nvim_create_augroup(group_name, { clear = true })
+
+    local function redirect_from_sidebar()
+        -- Wait a short delay to allow mouse click processing
+        vim.defer_fn(function()
+            local check_win = api.nvim_get_current_win()
+            if check_win ~= new_win_id and check_win ~= placeholder_win_id then
+                return
+            end
+
+            -- Find best non-sidebar window
+            local all_wins = api.nvim_list_wins()
+            local best_win = nil
+            local best_priority = -1
+
+            for _, win_id in ipairs(all_wins) do
+                if win_id ~= new_win_id and win_id ~= placeholder_win_id and api.nvim_win_is_valid(win_id) then
+                    local win_buf = api.nvim_win_get_buf(win_id)
+                    local buf_type = api.nvim_buf_get_option(win_buf, 'buftype')
+                    local buf_name = api.nvim_buf_get_name(win_buf)
+                    local priority = 0
+
+                    -- Prefer normal editing buffers
+                    if buf_type == '' and buf_name ~= '' then
+                        priority = priority + 100
+                    end
+
+                    -- Prefer readable files
+                    if buf_name ~= '' and vim.fn.filereadable(buf_name) == 1 then
+                        priority = priority + 50
+                    end
+
+                    -- Avoid special buffers
+                    if buf_name:match('^fugitive://') or buf_type ~= '' then
+                        priority = priority - 50
+                    end
+
+                    if priority > best_priority then
+                        best_priority = priority
+                        best_win = win_id
+                    end
+                end
+            end
+
+            -- Redirect to the best window found
+            if best_win then
+                api.nvim_set_current_win(best_win)
+            end
+        end, 500)  -- 500ms delay
+    end
     
     -- Handle window resize for floating sidebar (only needed in floating mode)
     if use_floating then
@@ -5432,6 +5481,17 @@ local function open_sidebar(position_override)
             end,
             desc = "Resize horizontal floating overlay when window is resized"
         })
+
+        api.nvim_create_autocmd("WinEnter", {
+            group = group_name,
+            callback = function()
+                local current_win = api.nvim_get_current_win()
+                if current_win == placeholder_win_id then
+                    redirect_from_sidebar()
+                end
+            end,
+            desc = "Redirect focus away from horizontal placeholder window"
+        })
     else
         -- For split windows, add WinEnter redirect with delay for mouse clicks
         api.nvim_create_autocmd("WinEnter", {
@@ -5439,51 +5499,7 @@ local function open_sidebar(position_override)
             callback = function()
                 local current_win = api.nvim_get_current_win()
                 if current_win == new_win_id or current_win == placeholder_win_id then
-                    -- Wait a short delay to allow mouse click processing
-                    vim.defer_fn(function()
-                        -- Check if we're still in the sidebar window
-                        local check_win = api.nvim_get_current_win()
-                        if check_win == new_win_id or check_win == placeholder_win_id then
-                            -- Find best non-sidebar window
-                            local all_wins = api.nvim_list_wins()
-                            local best_win = nil
-                            local best_priority = -1
-                            
-                            for _, win_id in ipairs(all_wins) do
-                                if win_id ~= new_win_id and api.nvim_win_is_valid(win_id) then
-                                    local win_buf = api.nvim_win_get_buf(win_id)
-                                    local buf_type = api.nvim_buf_get_option(win_buf, 'buftype')
-                                    local buf_name = api.nvim_buf_get_name(win_buf)
-                                    local priority = 0
-                                    
-                                    -- Prefer normal editing buffers
-                                    if buf_type == '' and buf_name ~= '' then
-                                        priority = priority + 100
-                                    end
-                                    
-                                    -- Prefer readable files
-                                    if buf_name ~= '' and vim.fn.filereadable(buf_name) == 1 then
-                                        priority = priority + 50
-                                    end
-                                    
-                                    -- Avoid special buffers
-                                    if buf_name:match('^fugitive://') or buf_type ~= '' then
-                                        priority = priority - 50
-                                    end
-                                    
-                                    if priority > best_priority then
-                                        best_priority = priority
-                                        best_win = win_id
-                                    end
-                                end
-                            end
-                            
-                            -- Redirect to the best window found
-                            if best_win then
-                                api.nvim_set_current_win(best_win)
-                            end
-                        end
-                    end, 500)  -- 500ms delay
+                    redirect_from_sidebar()
                 end
             end,
             desc = "Redirect keyboard navigation away from sidebar with delay for mouse clicks"
