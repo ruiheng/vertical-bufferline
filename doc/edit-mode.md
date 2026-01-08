@@ -14,7 +14,7 @@ buffer groups by editing a temporary text buffer and applying the result.
 ## User Flow
 
 1. User runs a command (TBD) to open an editable buffer.
-2. BN opens a new buffer (e.g. filetype `buffernexus-edit`).
+2. BN opens a new buffer (e.g. filetype `buffer-nexus-edit`).
 3. The buffer contains a minimal, editable representation of groups plus brief
    header comments (e.g. current cwd and a short hint).
 4. User edits the text using any Vim commands.
@@ -117,7 +117,7 @@ Rules:
 - `swapfile=false`, `undofile=false` (ephemeral buffer).
 - `bufhidden=wipe` so closing discards the temp buffer.
 - `modifiable=true` during edit.
-- `filetype=buffernexus-edit` for optional syntax highlighting.
+- `filetype=buffer-nexus-edit` for optional syntax highlighting.
 
 ## Proposed Command Name
 

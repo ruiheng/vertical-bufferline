@@ -2,23 +2,23 @@
 
 ## Important Directory Information
 
-- **Working Directory**: `/home/ruiheng/config_files/nvim/lua/buffernexus`
-- **Git Repository**: `/home/ruiheng/config_files/nvim/lua/buffernexus` (THIS is the git repo)
-- **Plugin Code Location**: `/home/ruiheng/config_files/nvim/lua/buffernexus/`
+- **Working Directory**: `/home/ruiheng/config_files/nvim/lua/buffer-nexus`
+- **Git Repository**: `/home/ruiheng/config_files/nvim/lua/buffer-nexus` (THIS is the git repo)
+- **Plugin Code Location**: `/home/ruiheng/config_files/nvim/lua/buffer-nexus/`
 
-**IMPORTANT**: Git operations should be performed directly in `/home/ruiheng/config_files/nvim/lua/buffernexus/` - this is NOT a submodule, it's the actual git repository.
+**IMPORTANT**: Git operations should be performed directly in `/home/ruiheng/config_files/nvim/lua/buffer-nexus/` - this is NOT a submodule, it's the actual git repository.
 
 ## Git Operations
 
-Git repository is directly at: `/home/ruiheng/config_files/nvim/lua/buffernexus/`
+Git repository is directly at: `/home/ruiheng/config_files/nvim/lua/buffer-nexus/`
 
 ```bash
-# Work directly in the buffernexus directory
+# Work directly in the buffer-nexus directory
 git add .
 git commit -m "message"
 ```
 
-**DO NOT** manage other directories like `/home/ruiheng/config_files/` - only manage the buffernexus plugin directory.
+**DO NOT** manage other directories like `/home/ruiheng/config_files/` - only manage the buffer-nexus plugin directory.
 
 ## Key Files
 

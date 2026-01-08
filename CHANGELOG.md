@@ -25,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Multiple installation methods documented (lazy.nvim, packer, vim-plug, manual)
   - Individual help tags for all configuration options
   - Proper Neovim help file conventions with tag completion
-  - Accessible via `:help buffernexus`
+  - Accessible via `:help buffer-nexus`
 - History feature with per-group tracking of recent files
 - Sidebar hotkeys `h` and `p` for toggling display modes
 - `:BNClearHistory` command for history management
@@ -70,7 +70,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Clarified keymaps documentation** - separated built-in vs user-configured vs bufferline keymaps
 - **Added comprehensive session management explanation** - how auto-serialization works
 - **Clear BufferLine integration section** - shows recommended bufferline keymaps with examples
-- **New help tag**: `*buffernexus-bufferline-keymaps*` for BufferLine integration
+- **New help tag**: `*buffer-nexus-bufferline-keymaps*` for BufferLine integration
 - **Updated all examples** to show correct usage of `:mksession` instead of manual commands
 
 ## [1.1.0] - 2024-XX-XX
@@ -145,7 +145,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - History feature is enabled by default with "auto" mode
 - Existing keymaps are preserved, new sidebar hotkeys added (`h`, `p`)
 - EmmyLua annotations provide LSP autocompletion (no action needed)
-- Enhanced help file accessible via `:help buffernexus`
+- Enhanced help file accessible via `:help buffer-nexus`
 
 ## Support
 

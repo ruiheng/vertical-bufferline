@@ -9,7 +9,7 @@ The BN sidebar now supports adaptive width that automatically adjusts based on t
 ### New Options
 
 ```lua
-require('buffernexus').setup({
+require('buffer-nexus').setup({
     min_width = 15,          -- Minimum width (default: 15)
     max_width = 60,          -- Maximum width (default: 60)
     adaptive_width = true,   -- Enable adaptive width (default: true)
@@ -84,7 +84,7 @@ end
 ### Example 1: Conservative Range
 ```lua
 -- Keep sidebar compact
-require('buffernexus').setup({
+require('buffer-nexus').setup({
     min_width = 20,
     max_width = 40,
     adaptive_width = true,
@@ -94,7 +94,7 @@ require('buffernexus').setup({
 ### Example 2: Wide Range
 ```lua
 -- Allow sidebar to grow with content
-require('buffernexus').setup({
+require('buffer-nexus').setup({
     min_width = 15,
     max_width = 80,
     adaptive_width = true,
@@ -104,7 +104,7 @@ require('buffernexus').setup({
 ### Example 3: Disable Adaptive Width
 ```lua
 -- Fixed width (traditional behavior)
-require('buffernexus').setup({
+require('buffer-nexus').setup({
     min_width = 40,
     adaptive_width = false,
 })
@@ -122,7 +122,7 @@ require('buffernexus').setup({
 Run the test script to verify the implementation:
 
 ```bash
-cd /home/ruiheng/config_files/nvim/lua/buffernexus
+cd /home/ruiheng/config_files/nvim/lua/buffer-nexus
 nvim --headless -c "luafile test_adaptive_width.lua" -c "quit"
 ```
 

@@ -496,13 +496,13 @@ For a minimal setup, `require("buffer-nexus").setup()` is enough.
 
 ### Telescope.nvim
 - Provides a picker for buffers in the current group
-- Use `:Telescope buffernexus current_group` to open the picker
+- Use `:Telescope buffer_nexus current_group` to open the picker
 - While the picker is open, use `Alt-1`..`Alt-9` to switch groups in the picker
 - Prefer `:BNPickGroup` to open the current-group picker with your available picker
   (Telescope/snacks/fzf-lua/mini.pick)
 
 ### Filetype Support
-The sidebar buffer uses the `buffernexus` filetype, making it easy to:
+The sidebar buffer uses the `buffer-nexus` filetype, making it easy to:
 - Set buffer-specific configurations and keymaps
 - Integrate with other plugins that check buffer filetype
 - Apply custom syntax highlighting or statusline behavior
@@ -510,9 +510,9 @@ The sidebar buffer uses the `buffernexus` filetype, making it easy to:
 
 Example configuration for the sidebar buffer:
 ```lua
--- Custom configuration for buffernexus buffers
+-- Custom configuration for buffer-nexus buffers
 vim.api.nvim_create_autocmd("FileType", {
-    pattern = "buffernexus",
+    pattern = "buffer-nexus",
     callback = function()
         -- Custom settings for sidebar buffer
         vim.opt_local.wrap = false
@@ -609,7 +609,7 @@ EOF
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/ruiheng/buffer-nexus.git ~/.local/share/nvim/site/pack/plugins/start/buffernexus
+git clone https://github.com/ruiheng/buffer-nexus.git ~/.local/share/nvim/site/pack/plugins/start/buffer-nexus
 ```
 
 2. Add to your init.lua:

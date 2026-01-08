@@ -38,8 +38,8 @@ This project follows a standard code of conduct. Be respectful, inclusive, and c
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/your-username/buffernexus.git
-cd buffernexus
+git clone https://github.com/your-username/buffer-nexus.git
+cd buffer-nexus
 ```
 
 2. Create a test environment:
@@ -54,7 +54,7 @@ mkdir -p test-config/lua
 vim.opt.rtp:prepend(vim.fn.getcwd())
 
 -- Basic setup
-require('buffernexus').setup({
+require('buffer-nexus').setup({
   -- Your test configuration
 })
 ```
@@ -328,7 +328,7 @@ Brief description of changes
 
 2. **User Documentation**:
    - README.md updates for new features
-   - Help file updates (doc/buffernexus.txt)
+   - Help file updates (doc/buffer-nexus.txt)
    - Configuration examples
 
 3. **Developer Documentation**:

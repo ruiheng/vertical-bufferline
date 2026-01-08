@@ -1,24 +1,24 @@
-*buffernexus.txt*           Vertical sidebar for buffer group management
+*buffer-nexus.txt*           Vertical sidebar for buffer group management
 
 ==============================================================================
-CONTENTS                                           *buffernexus-contents*
+CONTENTS                                           *buffer-nexus-contents*
 
-1. Introduction ...................... |buffernexus-introduction|
-2. Installation ...................... |buffernexus-installation|
-3. Requirements ...................... |buffernexus-requirements|
-4. Configuration ..................... |buffernexus-configuration|
-5. Usage ............................. |buffernexus-usage|
-6. Commands .......................... |buffernexus-commands|
-7. Keymaps ........................... |buffernexus-keymaps|
-8. Adaptive Width .................... |buffernexus-adaptive-width|
-9. History Feature ................... |buffernexus-history|
-10. Session Management ............... |buffernexus-sessions|
-11. Integration ...................... |buffernexus-integration|
-12. Troubleshooting .................. |buffernexus-troubleshooting|
-13. About ............................ |buffernexus-about|
+1. Introduction ...................... |buffer-nexus-introduction|
+2. Installation ...................... |buffer-nexus-installation|
+3. Requirements ...................... |buffer-nexus-requirements|
+4. Configuration ..................... |buffer-nexus-configuration|
+5. Usage ............................. |buffer-nexus-usage|
+6. Commands .......................... |buffer-nexus-commands|
+7. Keymaps ........................... |buffer-nexus-keymaps|
+8. Adaptive Width .................... |buffer-nexus-adaptive-width|
+9. History Feature ................... |buffer-nexus-history|
+10. Session Management ............... |buffer-nexus-sessions|
+11. Integration ...................... |buffer-nexus-integration|
+12. Troubleshooting .................. |buffer-nexus-troubleshooting|
+13. About ............................ |buffer-nexus-about|
 
 ==============================================================================
-1. INTRODUCTION                               *buffernexus-introduction*
+1. INTRODUCTION                               *buffer-nexus-introduction*
 
 Buffer Nexus provides a vertical sidebar displaying buffer groups with
 enhanced organization and navigation features for Neovim.
@@ -38,14 +38,14 @@ Key Features:
 - Configurable icons, tree lines, and visual styling
 
 ==============================================================================
-2. INSTALLATION                               *buffernexus-installation*
+2. INSTALLATION                               *buffer-nexus-installation*
 
 Using lazy.nvim (recommended):
 >lua
     {
-      "your-username/buffernexus",
+      "your-username/buffer-nexus",
       config = function()
-        local vbl = require("buffernexus")
+        local vbl = require("buffer-nexus")
         vbl.apply_keymaps(vbl.keymap_preset())
       end,
       opts = {
@@ -56,13 +56,13 @@ Using lazy.nvim (recommended):
         position = "left",
       },
       keys = {
-        { "<leader>bs", "<cmd>lua require('buffernexus').toggle()<cr>",
+        { "<leader>bs", "<cmd>lua require('buffer-nexus').toggle()<cr>",
           desc = "Toggle Buffer Nexus sidebar" },
-        { "<leader>be", "<cmd>lua require('buffernexus').toggle_expand_all()<cr>",
+        { "<leader>be", "<cmd>lua require('buffer-nexus').toggle_expand_all()<cr>",
           desc = "Toggle expand all groups" },
-        { "<leader>bm", "<cmd>lua require('buffernexus.edit_mode').open()<cr>",
+        { "<leader>bm", "<cmd>lua require('buffer-nexus.edit_mode').open()<cr>",
           desc = "Edit buffer groups" },
-        { "<leader>gc", "<cmd>lua require('buffernexus').create_group()<cr>",
+        { "<leader>gc", "<cmd>lua require('buffer-nexus').create_group()<cr>",
           desc = "Create new group" },
       }
     }
@@ -71,9 +71,9 @@ Using lazy.nvim (recommended):
 Using packer.nvim:
 >lua
     use {
-      'your-username/buffernexus',
+      'your-username/buffer-nexus',
       config = function()
-        require('buffernexus').setup({
+        require('buffer-nexus').setup({
           min_width = 15,
           max_width = 60,
           adaptive_width = true,
@@ -84,10 +84,10 @@ Using packer.nvim:
 
 Using vim-plug:
 >vim
-    Plug 'your-username/buffernexus'
+    Plug 'your-username/buffer-nexus'
 
     lua << EOF
-    require('buffernexus').setup({
+    require('buffer-nexus').setup({
       min_width = 15,
       adaptive_width = true,
     })
@@ -96,17 +96,17 @@ Using vim-plug:
 
 Manual installation:
 >bash
-    git clone https://github.com/your-username/buffernexus.git \
-      ~/.local/share/nvim/site/pack/plugins/start/buffernexus
+    git clone https://github.com/your-username/buffer-nexus.git \
+      ~/.local/share/nvim/site/pack/plugins/start/buffer-nexus
 <
 
 Then add to your init.lua:
 >lua
-    require('buffernexus').setup()
+    require('buffer-nexus').setup()
 <
 
 ==============================================================================
-3. REQUIREMENTS                               *buffernexus-requirements*
+3. REQUIREMENTS                               *buffer-nexus-requirements*
 
 - Neovim 0.8.0 or higher
 - Optional: bufferline.nvim for integration, visible ordinals, and shared picking mode
@@ -115,7 +115,7 @@ Then add to your init.lua:
 <
 
 ==============================================================================
-4. CONFIGURATION                             *buffernexus-configuration*
+4. CONFIGURATION                             *buffer-nexus-configuration*
 
 Default configuration:
 >lua
@@ -171,41 +171,41 @@ Default configuration:
 
 Configuration options explained:
 
-                                     *buffernexus-config-min-width*
+                                     *buffer-nexus-config-min-width*
 min_width               Minimum width for the sidebar. When adaptive_width is
                         enabled, this acts as the minimum width bound.
                         Default: 25
 
-                                     *buffernexus-config-max-width*
+                                     *buffer-nexus-config-max-width*
 max_width               Maximum width for the sidebar when adaptive_width is
                         enabled. The sidebar will never exceed this width.
                         Default: 60
 
-                                 *buffernexus-config-adaptive-width*
+                                 *buffer-nexus-config-adaptive-width*
 adaptive_width          Enable automatic width adjustment based on content.
                         When true, the sidebar dynamically resizes between
                         `min_width` and `max_width` to fit the displayed content.
                         Default: true
 
-                                    *buffernexus-config-min-height*
+                                    *buffer-nexus-config-min-height*
 min_height              Legacy setting for top/bottom height. No longer used.
                         Default: 3
 
-                                    *buffernexus-config-max-height*
+                                    *buffer-nexus-config-max-height*
 max_height              Legacy setting for top/bottom height. No longer used.
                         Default: 10
 
-                      *buffernexus-config-show-inactive-group-buffers*
+                      *buffer-nexus-config-show-inactive-group-buffers*
 show_inactive_group_buffers
                         Show buffer lists for inactive groups. When false,
                         only the active group's buffers are expanded.
                         Default: false
 
-                                    *buffernexus-config-show-icons*
+                                    *buffer-nexus-config-show-icons*
 show_icons              Show file type emoji icons next to filenames.
                         Default: false
 
-                                      *buffernexus-config-position*
+                                      *buffer-nexus-config-position*
 position                Sidebar position: "left", "right", "top", or "bottom".
                         Top/bottom use a compact, multi-item layout with
                         wrapping: History, then the active group file list,
@@ -213,85 +213,85 @@ position                Sidebar position: "left", "right", "top", or "bottom".
                         path lines are suppressed to save vertical space.
                         Default: "left"
 
-                                *buffernexus-config-show-tree-lines*
+                                *buffer-nexus-config-show-tree-lines*
 show_tree_lines         Show tree-style connection lines for visual hierarchy.
                         Default: false
 
-                                      *buffernexus-config-floating*
+                                      *buffer-nexus-config-floating*
 floating                Use a floating window instead of a split window.
                         Default: false
 
-                              *buffernexus-config-auto-create-groups*
+                              *buffer-nexus-config-auto-create-groups*
 auto_create_groups      Automatically create groups as needed.
                         Default: true
 
-                            *buffernexus-config-auto-add-new-buffers*
+                            *buffer-nexus-config-auto-add-new-buffers*
 auto_add_new_buffers    Automatically add new buffers to the active group.
                         Default: true
 
-                                  *buffernexus-config-group-scope*
+                                  *buffer-nexus-config-group-scope*
 group_scope             Scope for group data: "global" or "window". Window
                         scope is disabled when bufferline is active.
                         Default: "window"
 
-                            *buffernexus-config-inherit-on-new-window*
+                            *buffer-nexus-config-inherit-on-new-window*
 inherit_on_new_window   When using window scope, inherit groups from the
                         previous window on creation.
                         Default: false
 
-                                    *buffernexus-config-show-path*
+                                    *buffer-nexus-config-show-path*
 show_path               Control path display: "yes" (always), "no" (never),
                         or "auto" (only when needed for disambiguation).
                         Default: "auto"
 
-                                   *buffernexus-config-path-style*
+                                   *buffer-nexus-config-path-style*
 path_style              Path display style: "relative" (to cwd), "absolute"
                         (full path), or "smart" (context-aware).
                         Default: "relative"
 
-                              *buffernexus-config-path-max-length*
+                              *buffer-nexus-config-path-max-length*
 path_max_length         Maximum length for displayed paths (characters).
 filename_max_length     Maximum length for displayed filenames (characters). Use 0 to disable.
 filename_ellipsis       Ellipsis used when truncating filenames.
                         Default: 50
 
-                             *buffernexus-config-align-with-cursor*
+                             *buffer-nexus-config-align-with-cursor*
 align_with_cursor       Align sidebar content with main window cursor position.
                         Default: true
 
-                       *buffernexus-config-buffer-switch-flash-ms*
+                       *buffer-nexus-config-buffer-switch-flash-ms*
 buffer_switch_flash_ms  Flash the current filename briefly when switching buffers.
                         Set to 0 to disable.
                         Default: 500
 
-                                  *buffernexus-config-show-history*
+                                  *buffer-nexus-config-show-history*
 show_history            Control history display: "yes" (always), "no" (never),
                         or "auto" (show when group has enough files).
                         Default: "auto"
 
-                                  *buffernexus-config-history-size*
+                                  *buffer-nexus-config-history-size*
 history_size            Maximum number of recent files to track per group.
                         Default: 10
 
-                        *buffernexus-config-history-auto-threshold*
+                        *buffer-nexus-config-history-auto-threshold*
 history_auto_threshold  Minimum number of files in a group for auto mode to
                         display history.
                         Default: 6
 
-              *buffernexus-config-history-auto-threshold-horizontal*
+              *buffer-nexus-config-history-auto-threshold-horizontal*
 history_auto_threshold_horizontal
                         Minimum number of files in a group for auto mode when
                         the sidebar is positioned at top/bottom.
                         Default: 10
 
-                          *buffernexus-config-history-display-count*
+                          *buffer-nexus-config-history-display-count*
 history_display_count   Maximum number of history items to display in sidebar.
                         Default: 7
 
 <
 
 ==============================================================================
-5. USAGE                                           *buffernexus-usage*
+5. USAGE                                           *buffer-nexus-usage*
 
 Basic workflow:
 1. Open the sidebar with `<leader>bs`
@@ -311,7 +311,7 @@ Group Management:
 - Empty groups are automatically cleaned up
 
 ==============================================================================
-6. COMMANDS                                     *buffernexus-commands*
+6. COMMANDS                                     *buffer-nexus-commands*
 
 Group Operations:
 :BNCreateGroup [name]        Create new group with optional name
@@ -334,7 +334,7 @@ Group Reordering:
 :BNMoveGroupDown             Move current group down in the list
 :BNMoveGroupToPosition <pos> Move current group to specified position
 
-History Management:                            *buffernexus-history-commands*
+History Management:                            *buffer-nexus-history-commands*
 :BNClearHistory [group_name] Clear history for all groups or specific group
 
 Utilities:
@@ -343,16 +343,16 @@ Utilities:
 :BNToggleCursorAlign         Toggle cursor alignment feature
 :BNToggleAdaptiveWidth       Toggle adaptive width on/off
 :BNSetPosition <pos>         Set sidebar position: left/right/top/bottom
-Debug Commands:                                *buffernexus-debug-commands*
+Debug Commands:                                *buffer-nexus-debug-commands*
 :BNDebugEnable [file] [level] Enable debug logging to file
 :BNDebugDisable              Disable debug logging
 :BNDebugStatus               Show debug logging status
 :BNDebugLogs [count]         Show recent debug logs
 
 ==============================================================================
-7. KEYMAPS                                       *buffernexus-keymaps*
+7. KEYMAPS                                       *buffer-nexus-keymaps*
 
-Built-in Keymaps (Sidebar Internal):        *buffernexus-builtin-keys*
+Built-in Keymaps (Sidebar Internal):        *buffer-nexus-builtin-keys*
 These keymaps are hardcoded and work automatically when the sidebar is open:
 j/k                                   Navigate up/down in sidebar
 <CR>                                  Switch to selected buffer
@@ -364,18 +364,18 @@ p                                     Toggle path display mode
 Plugin Functions (User Configuration Required):
 
 NOTE: The following keymaps require user configuration. See examples below
-and |buffernexus-installation| for setup.
+and |buffer-nexus-installation| for setup.
 
 Opt-in Preset:
 Call the preset helper and apply the mappings:
 >lua
-    local vbl = require("buffernexus")
+    local vbl = require("buffer-nexus")
     vbl.apply_keymaps(vbl.keymap_preset())
 <
 
 Customize prefixes:
 >lua
-    local vbl = require("buffernexus")
+    local vbl = require("buffer-nexus")
     vbl.apply_keymaps(vbl.keymap_preset({
       history_prefix = "<leader>h",
       buffer_prefix = "<leader>",
@@ -401,7 +401,7 @@ Group Management:
 <leader>gU                            Move current group up in the list
 <leader>gD                            Move current group down in the list
 
-History Quick Access:                          *buffernexus-history-keymaps*
+History Quick Access:                          *buffer-nexus-history-keymaps*
 <leader>h1 to <leader>h9              Quick switch to recent files 1-9 in history
                                       (<leader>h1 = most recent, <leader>h2 = second most recent, etc.)
 
@@ -415,7 +415,7 @@ Popup Menus:
 <leader>gg                            Open popup menu for group selection
 <leader>hh                            Open popup menu for current group history
 
-Recommended BufferLine Integration (optional):     *buffernexus-bufferline-keymaps*
+Recommended BufferLine Integration (optional):     *buffer-nexus-bufferline-keymaps*
 
 This plugin can integrate with bufferline.nvim. The following keymaps
 are provided by bufferline.nvim (not this plugin) and complement the workflow:
@@ -433,13 +433,13 @@ Example configuration with both plugins:
 >lua
     -- Buffer Nexus keymaps (using lazy.nvim)
     keys = {
-      { "<leader>bs", "<cmd>lua require('buffernexus').toggle()<cr>",
+      { "<leader>bs", "<cmd>lua require('buffer-nexus').toggle()<cr>",
         desc = "Toggle Buffer Nexus sidebar" },
-      { "<leader>gc", "<cmd>lua require('buffernexus').create_group()<cr>",
+      { "<leader>gc", "<cmd>lua require('buffer-nexus').create_group()<cr>",
         desc = "Create new group" },
-      { "<leader>gn", "<cmd>lua require('buffernexus').switch_to_next_group()<cr>",
+      { "<leader>gn", "<cmd>lua require('buffer-nexus').switch_to_next_group()<cr>",
         desc = "Next group" },
-      -- Add more buffernexus keymaps as needed
+      -- Add more buffer-nexus keymaps as needed
     }
 
     -- BufferLine keymaps (add to your keymap configuration)
@@ -452,7 +452,7 @@ Example configuration with both plugins:
 <
 
 ==============================================================================
-8. ADAPTIVE WIDTH                         *buffernexus-adaptive-width*
+8. ADAPTIVE WIDTH                         *buffer-nexus-adaptive-width*
 
 The sidebar automatically adjusts its width based on content, providing an
 optimal balance between space efficiency and readability.
@@ -465,7 +465,7 @@ How It Works:
 
 Configuration:
 >lua
-    require('buffernexus').setup({
+    require('buffer-nexus').setup({
         min_width = 15,              -- Minimum width
         max_width = 60,          -- Maximum width
         adaptive_width = true,   -- Enable adaptive sizing (default: true)
@@ -499,14 +499,14 @@ Toggle adaptive width at runtime:
 
 Disable adaptive width for fixed width behavior:
 >lua
-    require('buffernexus').setup({
+    require('buffer-nexus').setup({
         min_width = 40,
         adaptive_width = false,  -- Fixed width mode
     })
 <
 
 ==============================================================================
-9. HISTORY FEATURE                             *buffernexus-history*
+9. HISTORY FEATURE                             *buffer-nexus-history*
 
 Each group maintains a history of recently accessed files, providing quick
 access to your most recent work within that group.
@@ -538,7 +538,7 @@ Example History Display:
 <
 
 ==============================================================================
-10. SESSION MANAGEMENT                         *buffernexus-sessions*
+10. SESSION MANAGEMENT                         *buffer-nexus-sessions*
 
 Sessions are automatically managed via Neovim's native :mksession command.
 No manual session commands are needed.
@@ -567,7 +567,7 @@ Integration:
 - Auto-restore prompt when session data changes (configurable)
 
 ==============================================================================
-11. INTEGRATION                              *buffernexus-integration*
+11. INTEGRATION                              *buffer-nexus-integration*
 
 BufferLine.nvim (optional):
 - Filters buffers to show only current group
@@ -584,7 +584,7 @@ Mini.sessions:
 - Session data is preserved across mini.sessions save/restore
 
 ==============================================================================
-12. TROUBLESHOOTING                        *buffernexus-troubleshooting*
+12. TROUBLESHOOTING                        *buffer-nexus-troubleshooting*
 
 Common Issues:
 
@@ -616,16 +616,16 @@ Use the debug commands to troubleshoot synchronization issues:
 <
 
 ==============================================================================
-13. ABOUT                                          *buffernexus-about*
+13. ABOUT                                          *buffer-nexus-about*
 
 Buffer Nexus is a Neovim plugin for organizing buffers into groups
 with a vertical sidebar interface.
 
-Repository: https://github.com/your-username/buffernexus
+Repository: https://github.com/your-username/buffer-nexus
 License: MIT
 Author: Your Name
 
-Report issues at: https://github.com/your-username/buffernexus/issues
+Report issues at: https://github.com/your-username/buffer-nexus/issues
 
 ==============================================================================
 vim:tw=78:ts=8:ft=help:norl:
