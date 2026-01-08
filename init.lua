@@ -5395,6 +5395,7 @@ local function open_sidebar(position_override)
     local group_name = "BufferNexusSidebarProtection"
     api.nvim_create_augroup(group_name, { clear = true })
 
+    local is_repositioning = false
     local function redirect_from_sidebar()
         -- Wait a short delay to allow mouse click processing
         vim.defer_fn(function()
@@ -5443,6 +5444,74 @@ local function open_sidebar(position_override)
             end
         end, 500)  -- 500ms delay
     end
+
+    local function ensure_placeholder_at_edge()
+        if not is_horizontal then
+            return
+        end
+        if not placeholder_win_id or not api.nvim_win_is_valid(placeholder_win_id) then
+            return
+        end
+
+        local position = position_override or config_module.settings.position
+        if position ~= "top" and position ~= "bottom" then
+            return
+        end
+
+        local row, col = unpack(api.nvim_win_get_position(placeholder_win_id))
+        local width = api.nvim_win_get_width(placeholder_win_id)
+        local height = api.nvim_win_get_height(placeholder_win_id)
+        local bottom = row + height
+        local min_row = row
+        local max_bottom = bottom
+
+        for _, win_id in ipairs(api.nvim_list_wins()) do
+            if win_id ~= placeholder_win_id and api.nvim_win_is_valid(win_id) then
+                local win_config = api.nvim_win_get_config(win_id)
+                if win_config.relative == "" then
+                    local other_row, other_col = unpack(api.nvim_win_get_position(win_id))
+                    local other_width = api.nvim_win_get_width(win_id)
+                    local other_height = api.nvim_win_get_height(win_id)
+                    local overlap = math.min(col + width, other_col + other_width) - math.max(col, other_col)
+                    if overlap > 0 then
+                        if other_row < min_row then
+                            min_row = other_row
+                        end
+                        local other_bottom = other_row + other_height
+                        if other_bottom > max_bottom then
+                            max_bottom = other_bottom
+                        end
+                    end
+                end
+            end
+        end
+
+        local move_cmd = nil
+        if position == "top" and row > min_row then
+            move_cmd = "wincmd K"
+        elseif position == "bottom" and bottom < max_bottom then
+            move_cmd = "wincmd J"
+        end
+
+        if not move_cmd then
+            return
+        end
+
+        is_repositioning = true
+        local current_win = api.nvim_get_current_win()
+        pcall(api.nvim_set_current_win, placeholder_win_id)
+        pcall(vim.cmd, move_cmd)
+        if current_win and api.nvim_win_is_valid(current_win) then
+            pcall(api.nvim_set_current_win, current_win)
+        end
+        is_repositioning = false
+
+        local sidebar_buf = state_module.get_buf_id()
+        if sidebar_buf and api.nvim_buf_is_valid(sidebar_buf) then
+            local line_count = api.nvim_buf_line_count(sidebar_buf)
+            apply_horizontal_height(line_count)
+        end
+    end
     
     -- Handle window resize for floating sidebar (only needed in floating mode)
     if use_floating then
@@ -5487,11 +5556,19 @@ local function open_sidebar(position_override)
             group = group_name,
             callback = function()
                 local current_win = api.nvim_get_current_win()
-                if current_win == placeholder_win_id then
+                if current_win == placeholder_win_id and not is_repositioning then
                     redirect_from_sidebar()
                 end
             end,
             desc = "Redirect focus away from horizontal placeholder window"
+        })
+
+        api.nvim_create_autocmd({"WinEnter", "WinNew", "WinClosed"}, {
+            group = group_name,
+            callback = function()
+                ensure_placeholder_at_edge()
+            end,
+            desc = "Keep horizontal placeholder anchored to the edge"
         })
     else
         -- For split windows, add WinEnter redirect with delay for mouse clicks
