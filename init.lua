@@ -297,7 +297,7 @@ local function setup_highlights()
     })
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.HORIZONTAL_NUMBER, { link = "Number", default = true })
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.HORIZONTAL_NUMBER_CURRENT, {
-        fg = pmenusel_attrs.fg or title_attrs.fg,
+        fg = number_attrs.fg or pmenusel_attrs.fg or title_attrs.fg,
         bold = true,
         default = true
     })
