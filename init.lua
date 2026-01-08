@@ -3126,7 +3126,7 @@ local function render_section(label_text, label_highlight, item_entries, group_i
             renderer.create_part(label_text, label_highlight),
             renderer.create_part(" ", nil)
         }
-        local label_len = #label_text + 1
+        local label_len = vim.fn.strdisplaywidth(label_text) + 1
         continuation_prefix = {
             renderer.create_part(string.rep(" ", label_len), nil)
         }
@@ -3263,7 +3263,7 @@ local function render_section(label_text, label_highlight, item_entries, group_i
             renderer.create_part(label_text, config_module.HIGHLIGHTS.SECTION_LABEL_INACTIVE),
             renderer.create_part(" ", nil)
         }
-        local label_len = #label_text + 1
+        local label_len = vim.fn.strdisplaywidth(label_text) + 1
         continuation_prefix = {
             renderer.create_part(string.rep(" ", label_len), nil)
         }
