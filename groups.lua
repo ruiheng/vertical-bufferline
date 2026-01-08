@@ -8,6 +8,7 @@ end
 
 local config_module = require('buffer-nexus.config')
 local state_module = require('buffer-nexus.state')
+local utils = require('buffer-nexus.utils')
 
 local M = {}
 
@@ -96,8 +97,7 @@ local function seed_default_group_buffer(buf_id)
         return
     end
 
-    local buftype = api.nvim_buf_get_option(buf_id, 'buftype')
-    if buftype ~= '' then
+    if not utils.should_track_buffer(buf_id) then
         return
     end
 
@@ -821,7 +821,7 @@ end
 --- @param group_id string Group ID to add buffer to
 --- @return boolean success
 function M.add_buffer_to_group(buffer_id, group_id)
-    if not api.nvim_buf_is_valid(buffer_id) then
+    if not utils.should_track_buffer(buffer_id) then
         return false
     end
 
@@ -1237,10 +1237,7 @@ function M.setup(opts)
             end
 
             -- Skip special buffers
-            if not vim.api.nvim_buf_is_valid(buf_id) then return end
-
-            local buftype = vim.api.nvim_buf_get_option(buf_id, 'buftype')
-            if buftype ~= '' then return end  -- Skip special buffers
+            if not utils.should_track_buffer(buf_id) then return end
 
             local bufname = vim.api.nvim_buf_get_name(buf_id)
             if bufname == '' then return end  -- Skip unnamed buffers

@@ -6505,6 +6505,7 @@ M.cycle_show_history = M.cycle_show_history_setting
 --- @field user_config.auto_add_new_buffers? boolean Auto-add new buffers to active group (default: true)
 --- @field user_config.group_scope? "global"|"window" Group scope for BN groups (default: "global")
 --- @field user_config.inherit_on_new_window? boolean Inherit groups when a new window is created (default: false)
+--- @field user_config.buffer_filter? function|table Buffer filter (function or { filetypes = { "netrw" } })
 --- @field user_config.show_path? "yes"|"no"|"auto" Path display mode (default: "auto")
 --- @field user_config.path_style? "relative"|"absolute"|"smart" Path display style (default: "relative")
 --- @field user_config.path_max_length? number Maximum path display length (default: 50)
