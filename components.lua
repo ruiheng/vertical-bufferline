@@ -252,4 +252,72 @@ function M.create_space(count)
     end
 end
 
+-- Get Git status for a buffer
+---@param buf_id number
+---@return table|nil {added=number, removed=number, changed=number}
+function M.get_git_status(buf_id)
+    if not vim.b[buf_id] then return nil end
+    local gitsigns = vim.b[buf_id].gitsigns_status_dict
+    if gitsigns then
+        return {
+            added = gitsigns.added,
+            removed = gitsigns.removed,
+            changed = gitsigns.changed,
+        }
+    end
+    return nil
+end
+
+-- Get LSP status for a buffer
+---@param buf_id number
+---@return table {error=number, warning=number, info=number, hint=number}
+function M.get_lsp_status(buf_id)
+    local status = { error = 0, warning = 0, info = 0, hint = 0 }
+    local diagnostics = vim.diagnostic.get(buf_id)
+    for _, d in ipairs(diagnostics) do
+        if d.severity == vim.diagnostic.severity.ERROR then
+            status.error = status.error + 1
+        elseif d.severity == vim.diagnostic.severity.WARN then
+            status.warning = status.warning + 1
+        elseif d.severity == vim.diagnostic.severity.INFO then
+            status.info = status.info + 1
+        elseif d.severity == vim.diagnostic.severity.HINT then
+            status.hint = status.hint + 1
+        end
+    end
+    return status
+end
+
+-- Create Git status component
+---@param status table|nil {added=number, removed=number, changed=number}
+---@return LinePart[]
+function M.create_git_indicator(status)
+    if not status then return {} end
+    local parts = {}
+    if status.added and status.added > 0 then
+        table.insert(parts, renderer.create_part(" +" .. status.added, "DiffAdd"))
+    end
+    if status.changed and status.changed > 0 then
+        table.insert(parts, renderer.create_part(" ~" .. status.changed, "DiffChange"))
+    end
+    if status.removed and status.removed > 0 then
+        table.insert(parts, renderer.create_part(" -" .. status.removed, "DiffDelete"))
+    end
+    return parts
+end
+
+-- Create LSP status component
+---@param status table {error=number, warning=number, info=number, hint=number}
+---@return LinePart[]
+function M.create_lsp_indicator(status)
+    local parts = {}
+    if status.error > 0 then
+        table.insert(parts, renderer.create_part(" E" .. status.error, "DiagnosticError"))
+    end
+    if status.warning > 0 then
+        table.insert(parts, renderer.create_part(" W" .. status.warning, "DiagnosticWarn"))
+    end
+    return parts
+end
+
 return M

@@ -2193,6 +2193,20 @@ local function build_menu_modified_text(item)
     return rendered and rendered.text or ""
 end
 
+local function build_menu_git_text(item)
+    if not item or not item.git_status then return "" end
+    local parts = components.create_git_indicator(item.git_status)
+    local rendered = renderer.render_line(parts)
+    return rendered and rendered.text or ""
+end
+
+local function build_menu_lsp_text(item)
+    if not item or not item.lsp_status then return "" end
+    local parts = components.create_lsp_indicator(item.lsp_status)
+    local rendered = renderer.render_line(parts)
+    return rendered and rendered.text or ""
+end
+
 local function build_menu_lines(items, include_hint, max_digits)
     local lines = {}
     local digits = max_digits or #tostring(#items)
@@ -2200,17 +2214,48 @@ local function build_menu_lines(items, include_hint, max_digits)
     -- Get input prefix for hint display
     local input_prefix = state_module.get_extended_picking_state().input_prefix or ""
     local max_hint_len = get_menu_max_hint_len(items)
+    local show_git = config_module.settings.show_menu_git
+    local show_lsp = config_module.settings.show_menu_lsp
+
+    -- Calculate max filename length for alignment
+    local max_name_len = 0
+    for _, item in ipairs(items) do
+        local name = item.name or "[No Name]"
+        if #name > max_name_len then
+            max_name_len = #name
+        end
+    end
 
     for i, item in ipairs(items) do
         local menu_index = item.menu_index or i
         item.menu_index = menu_index
         local num = tostring(menu_index)
-        local padding = string.rep(" ", digits - #num)
+        local num_padding = string.rep(" ", digits - #num)
 
         local hint = build_menu_hint_text(item, include_hint, input_prefix, max_hint_len)
         local name = item.name or "[No Name]"
+        local name_padding = string.rep(" ", max_name_len - #name)
+        
         local modified_text = build_menu_modified_text(item)
-        table.insert(lines, string.format("%s%s %s%s%s", padding, num, hint, name, modified_text))
+        local git_text = show_git and build_menu_git_text(item) or ""
+        local lsp_text = show_lsp and build_menu_lsp_text(item) or ""
+
+        local status_part = ""
+        if modified_text ~= "" or git_text ~= "" or lsp_text ~= "" then
+             status_part = "  " .. modified_text .. git_text .. lsp_text
+        end
+
+        table.insert(lines, string.format("%s%s %s%s%s%s", num_padding, num, hint, name, name_padding, status_part))
+        
+        -- Store alignment info for highlights
+        item.render_info = {
+            num_len = #num,
+            num_padding_len = #num_padding,
+            hint_len = #hint,
+            name_len = #name,
+            name_padding_len = #name_padding,
+            status_start_offset = 2 -- "  " padding
+        }
     end
     return lines
 end
@@ -2402,15 +2447,25 @@ local function apply_menu_highlights(items, include_hint, title_offset, max_digi
     local line_offset = title_offset or 0
     local input = menu_state.input_buffer or ""
     local input_mode = menu_state.input_mode
-    local input_prefix = state_module.get_extended_picking_state().input_prefix or ""
-    local max_hint_len = get_menu_max_hint_len(items)
+    local show_git = config_module.settings.show_menu_git
+    local show_lsp = config_module.settings.show_menu_lsp
+
     for i, item in ipairs(items) do
         local menu_index = item.menu_index or i
         local num = tostring(menu_index)
-        local padding = digits - #num
+        -- Fallback if render_info missing (e.g. tests)
+        local r = item.render_info or {
+            num_padding_len = digits - #num,
+            hint_len = 0, -- Approximation
+            name_len = #(item.name or "[No Name]"),
+            name_padding_len = 0,
+            status_start_offset = 2
+        }
+        
         local line = line_offset + (i - 1)
-        local num_start = padding
-        local num_end = padding + #num
+        local num_start = r.num_padding_len
+        local num_end = num_start + #num
+        
         api.nvim_buf_add_highlight(buf_id, 0, "Number", line, num_start, num_end)
         if input ~= "" and input_mode == "index" and num:sub(1, #input) == input then
             local prefix_end = num_start + #input
@@ -2418,7 +2473,7 @@ local function apply_menu_highlights(items, include_hint, title_offset, max_digi
         end
 
         if include_hint and item.hint then
-            local hint_start = padding + #num + 1
+            local hint_start = num_end + 1
             local hint_end = hint_start + #item.hint
             api.nvim_buf_add_highlight(buf_id, 0, "Special", line, hint_start, hint_end)
             if input ~= "" and input_mode == "hint" and item.hint:sub(1, #input) == input then
@@ -2427,17 +2482,43 @@ local function apply_menu_highlights(items, include_hint, title_offset, max_digi
             end
         end
 
+        -- Calculate start of status section
+        -- num_padding + num + space + hint + name + name_padding + status_padding
+        local current_col = r.num_padding_len + #num + 1 + r.hint_len + r.name_len + r.name_padding_len + r.status_start_offset
+
         if item.is_modified then
             local modified_text = build_menu_modified_text(item)
             if modified_text ~= "" then
-                local hint = build_menu_hint_text(item, include_hint, input_prefix, max_hint_len)
-                local name = item.name or "[No Name]"
-                local modified_start = padding + #num + 1 + #hint + #name
-                local modified_end = modified_start + #modified_text
+                local modified_end = current_col + #modified_text
                 local hl_group = (current_buffer_id and item.id == current_buffer_id)
                     and config_module.HIGHLIGHTS.MODIFIED_CURRENT
                     or config_module.HIGHLIGHTS.MODIFIED
-                api.nvim_buf_add_highlight(buf_id, 0, hl_group, line, modified_start, modified_end)
+                api.nvim_buf_add_highlight(buf_id, 0, hl_group, line, current_col, modified_end)
+                current_col = modified_end
+            end
+        end
+
+        if show_git and item.git_status then
+            local parts = components.create_git_indicator(item.git_status)
+            for _, part in ipairs(parts) do
+                local text = part.text
+                local end_col = current_col + #text
+                if part.highlight then
+                    api.nvim_buf_add_highlight(buf_id, 0, part.highlight, line, current_col, end_col)
+                end
+                current_col = end_col
+            end
+        end
+
+        if show_lsp and item.lsp_status then
+            local parts = components.create_lsp_indicator(item.lsp_status)
+            for _, part in ipairs(parts) do
+                local text = part.text
+                local end_col = current_col + #text
+                if part.highlight then
+                    api.nvim_buf_add_highlight(buf_id, 0, part.highlight, line, current_col, end_col)
+                end
+                current_col = end_col
             end
         end
     end
@@ -5048,6 +5129,8 @@ function M.open_buffer_menu()
             id = buf_id,
             name = filename,
             is_modified = is_buffer_actually_modified(buf_id),
+            git_status = components.get_git_status(buf_id),
+            lsp_status = components.get_lsp_status(buf_id),
         })
     end
 
@@ -5174,6 +5257,8 @@ function M.open_history_menu()
             id = buf_id,
             name = filename,
             is_modified = is_buffer_actually_modified(buf_id),
+            git_status = components.get_git_status(buf_id),
+            lsp_status = components.get_lsp_status(buf_id),
         })
     end
 

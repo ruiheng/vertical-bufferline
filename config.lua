@@ -214,6 +214,10 @@ M.DEFAULTS = {
         insert_path_key = "<C-p>",
         picker = "auto",
     },
+    
+    -- Menu display settings
+    show_menu_git = true,      -- Show Git status details in popup menu
+    show_menu_lsp = true,      -- Show LSP status details in popup menu
 }
 
 -- Runtime settings (mutable)
