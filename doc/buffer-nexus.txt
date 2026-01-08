@@ -515,6 +515,7 @@ History Display:
 - *Auto mode*: History shown when group has enough files (left/right: 6+, top/bottom: 10+)
 - *Manual toggle*: Use `h` key in sidebar to cycle yes/no/auto modes
 - *Visual feedback*: History entries appear below regular buffers
+Note: Top/bottom layouts track history but do not display it to keep the UI compact.
 
 History Management:
 - History automatically updates when switching between files in a group

@@ -3163,7 +3163,7 @@ local function render_section(label_text, label_highlight, item_entries, group_i
     end
 
     -- History section (active group only)
-    if groups.should_show_history(active_group.id) then
+    if state_module.get_layout_mode() ~= "horizontal" and groups.should_show_history(active_group.id) then
         local history = groups.get_group_history(active_group.id)
         local history_entries = {}
         local buffer_ids = {}

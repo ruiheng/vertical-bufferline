@@ -246,6 +246,7 @@ Use commands directly, or map them to your own keys.
 ## History
 
 Each group maintains its own history of recently accessed files. The current active group's history is displayed as a special group at the top of the sidebar.
+For top/bottom layouts (horizontal), history is still tracked but not displayed to keep the UI compact.
 
 ### History Display
 - **Current Group History**: Shows recent files from the currently active group at the top
