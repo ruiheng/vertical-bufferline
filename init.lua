@@ -5339,7 +5339,7 @@ local function open_sidebar(position_override)
             api.nvim_buf_set_option(placeholder_buf_id, 'buftype', 'nofile')
             api.nvim_buf_set_option(placeholder_buf_id, 'buflisted', false)
             api.nvim_buf_set_option(placeholder_buf_id, 'swapfile', false)
-            api.nvim_buf_set_option(placeholder_buf_id, 'filetype', 'vertical-bufferline-placeholder')
+            api.nvim_buf_set_option(placeholder_buf_id, 'filetype', 'buffer-nexus-placeholder')
             if position == "top" then
                 vim.cmd("topleft split")
             else
