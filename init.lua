@@ -2051,12 +2051,22 @@ local function open_menu(lines, title)
     api.nvim_buf_set_lines(buf_id, 0, -1, false, final_lines)
     api.nvim_buf_set_option(buf_id, 'modifiable', false)
 
+    -- Calculate center position in main window
+    local main_win = api.nvim_get_current_win()
+    local win_width = api.nvim_win_get_width(main_win)
+    local win_height = api.nvim_win_get_height(main_win)
+    local popup_width = width + 2
+    local popup_height = height
+    local row = math.max(0, math.floor((win_height - popup_height) / 2))
+    local col = math.max(0, math.floor((win_width - popup_width) / 2))
+
     local win_id = api.nvim_open_win(buf_id, false, {
-        relative = 'cursor',
-        row = 1,
-        col = 0,
-        width = width + 2,
-        height = height,
+        relative = 'win',
+        win = main_win,
+        row = row,
+        col = col,
+        width = popup_width,
+        height = popup_height,
         style = 'minimal',
         border = 'single',
         focusable = true,
@@ -2086,6 +2096,18 @@ local function open_menu(lines, title)
     local keymap_opts = { noremap = true, silent = true, nowait = true }
     api.nvim_buf_set_keymap(buf_id, "n", "<Esc>", ":lua require('buffer-nexus').close_menu()<CR>", keymap_opts)
     api.nvim_buf_set_keymap(buf_id, "n", "q", ":lua require('buffer-nexus').close_menu()<CR>", keymap_opts)
+
+    -- Redirect command-line mode to the main window
+    api.nvim_buf_set_keymap(buf_id, "n", ":", "", {
+        callback = function()
+            require('buffer-nexus').close_menu()
+            api.nvim_feedkeys(":", "n", false)
+        end,
+        noremap = true,
+        silent = true,
+        nowait = true,
+    })
+
     api.nvim_buf_set_keymap(buf_id, "n", "<CR>", ":lua require('buffer-nexus').menu_confirm_input()<CR>", keymap_opts)
     api.nvim_buf_set_keymap(buf_id, "n", "j", "j", keymap_opts)
     api.nvim_buf_set_keymap(buf_id, "n", "k", "k", keymap_opts)
