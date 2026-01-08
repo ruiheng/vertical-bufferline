@@ -7,14 +7,20 @@ local function switch_to_buffer_in_main_window(buffer_id)
     local state_module = require('buffer-nexus.state')
     local groups = require('buffer-nexus.groups')
     local sidebar_win = state_module.get_win_id()
+    local placeholder_win = state_module.get_placeholder_win_id()
     local target_win = nil
 
     for _, win_id in ipairs(vim.api.nvim_list_wins()) do
-        if win_id ~= sidebar_win and vim.api.nvim_win_is_valid(win_id) then
+        if win_id ~= sidebar_win and win_id ~= placeholder_win and vim.api.nvim_win_is_valid(win_id) then
             local win_config = vim.api.nvim_win_get_config(win_id)
             if win_config.relative == "" then
-                target_win = win_id
-                break
+                local win_buf = vim.api.nvim_win_get_buf(win_id)
+                local buf_type = vim.api.nvim_buf_get_option(win_buf, 'buftype')
+                local filetype = vim.api.nvim_buf_get_option(win_buf, 'filetype')
+                if buf_type == '' and filetype ~= 'vertical-bufferline-placeholder' then
+                    target_win = win_id
+                    break
+                end
             end
         end
     end
@@ -92,6 +98,57 @@ local function set_picker_statusline(picker, group)
     pcall(vim.api.nvim_win_set_option, picker.results_win, "statusline", statusline)
 end
 
+local function find_main_window_id()
+    local state_module = require('buffer-nexus.state')
+    local sidebar_win = state_module.get_win_id()
+    local placeholder_win = state_module.get_placeholder_win_id()
+
+    for _, win_id in ipairs(vim.api.nvim_list_wins()) do
+        if win_id ~= sidebar_win and win_id ~= placeholder_win and vim.api.nvim_win_is_valid(win_id) then
+            local win_config = vim.api.nvim_win_get_config(win_id)
+            if win_config.relative == "" then
+                local win_buf = vim.api.nvim_win_get_buf(win_id)
+                local buf_type = vim.api.nvim_buf_get_option(win_buf, 'buftype')
+                local filetype = vim.api.nvim_buf_get_option(win_buf, 'filetype')
+                if buf_type == '' and filetype ~= 'vertical-bufferline-placeholder' then
+                    return win_id
+                end
+            end
+        end
+    end
+
+    return nil
+end
+
+local function get_group_snapshot_by_id(groups, group_id)
+    for _, group in ipairs(groups.get_all_groups()) do
+        if group.id == group_id then
+            return group
+        end
+    end
+    return nil
+end
+
+local function get_group_snapshot_by_display_number(groups, display_number)
+    local all = groups.get_all_groups()
+    return all[display_number]
+end
+
+local function apply_selection(groups, group_id, buffer_id)
+    local active_group = groups.get_active_group()
+    local target_win_id = find_main_window_id()
+
+    if active_group and active_group.id == group_id then
+        switch_to_buffer_in_main_window(buffer_id)
+        return
+    end
+
+    local ok = groups.set_active_group(group_id, buffer_id, { target_win_id = target_win_id })
+    if not ok then
+        switch_to_buffer_in_main_window(buffer_id)
+    end
+end
+
 function M.current_group(opts)
     opts = opts or {}
 
@@ -135,6 +192,9 @@ function M.current_group(opts)
     opts.bufnr_width = opts.bufnr_width or #tostring(max_bufnr)
     local entries = build_entries(valid_buffers)
 
+    local selected_group_id = active_group.id
+    local selected_group_snapshot = get_group_snapshot_by_id(groups, selected_group_id) or active_group
+
     pickers.new(opts, {
         prompt_title = "BN: Current Group",
         finder = finders.new_table({
@@ -145,10 +205,10 @@ function M.current_group(opts)
         sorter = conf.generic_sorter(opts),
         attach_mappings = function(prompt_bufnr)
             local picker = action_state.get_current_picker(prompt_bufnr)
-            set_picker_statusline(picker, active_group)
+            set_picker_statusline(picker, selected_group_snapshot)
 
-            local function refresh_picker_for_active_group()
-                local current_group = groups.get_active_group()
+            local function refresh_picker_for_selected_group()
+                local current_group = get_group_snapshot_by_id(groups, selected_group_id)
                 if not current_group then
                     return false
                 end
@@ -178,12 +238,16 @@ function M.current_group(opts)
             end
 
             local function switch_group(display_number)
-                if groups.switch_to_group_by_display_number(display_number) then
-                    local refreshed = refresh_picker_for_active_group()
-                    if not refreshed then
-                        actions.close(prompt_bufnr)
-                        M.current_group(opts)
-                    end
+                local target_group = get_group_snapshot_by_display_number(groups, display_number)
+                if not target_group then
+                    return
+                end
+                selected_group_id = target_group.id
+                selected_group_snapshot = target_group
+                local refreshed = refresh_picker_for_selected_group()
+                if not refreshed then
+                    actions.close(prompt_bufnr)
+                    M.current_group(opts)
                 end
             end
 
@@ -197,7 +261,7 @@ function M.current_group(opts)
                 local selection = action_state.get_selected_entry()
                 actions.close(prompt_bufnr)
                 if selection and selection.bufnr then
-                    switch_to_buffer_in_main_window(selection.bufnr)
+                    apply_selection(groups, selected_group_id, selection.bufnr)
                 end
             end)
             return true

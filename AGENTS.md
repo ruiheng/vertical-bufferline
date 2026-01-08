@@ -19,3 +19,6 @@ These rules apply to all work in this repository.
 ## Communication
 - Keep responses concise.
 - Confirm when a requested action is completed.
+
+## Tests
+- Add new test scripts to `scripts/run_checks.sh` unless they are temporary.

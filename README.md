@@ -496,7 +496,9 @@ For a minimal setup, `require("buffer-nexus").setup()` is enough.
 ### Telescope.nvim
 - Provides a picker for buffers in the current group
 - Use `:Telescope buffernexus current_group` to open the picker
-- While the picker is open, use `Alt-1`..`Alt-9` to switch groups (statusline shows the active group)
+- While the picker is open, use `Alt-1`..`Alt-9` to switch groups in the picker
+- Prefer `:BNPickGroup` to open the current-group picker with your available picker
+  (Telescope/snacks/fzf-lua/mini.pick)
 
 ### Filetype Support
 The sidebar buffer uses the `buffernexus` filetype, making it easy to:

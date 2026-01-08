@@ -327,6 +327,7 @@ Navigation:
 :BNToggleExpandAll           Toggle expand all groups mode
 :BNPick                      Pick a buffer across groups
 :BNPickClose                 Pick a buffer across groups and close it
+:BNPickGroup                 Pick a buffer in the current group with a picker
 
 Group Reordering:
 :BNMoveGroupUp               Move current group up in the list
@@ -426,6 +427,7 @@ Buffer Quick Access (provided by bufferline.nvim):
 
 When bufferline.nvim is not installed, use:
 :BNPick                      Pick a buffer across groups
+:BNPickGroup                 Pick a buffer in the current group with a picker
 
 Example configuration with both plugins:
 >lua

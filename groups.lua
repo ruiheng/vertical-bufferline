@@ -634,7 +634,8 @@ end
 --- Set active group
 --- @param group_id string ID of group to activate
 --- @return boolean success
-function M.set_active_group(group_id, target_buffer_id)
+function M.set_active_group(group_id, target_buffer_id, opts)
+    opts = opts or {}
     -- Safety: Clear any lingering extended_picking state when switching groups
     -- This prevents issues where picking mode might interfere with group switching
     local state_module = require('buffer-nexus.state')
@@ -710,6 +711,9 @@ function M.set_active_group(group_id, target_buffer_id)
         bufferline_integration.set_bufferline_buffers(group.buffers)
     end
 
+    local target_win_id = opts.target_win_id
+    local skip_restore = opts.skip_restore
+
     -- Switch to group's remembered current buffer or fallback intelligently
     if #group.buffers > 0 then
         local target_buffer = nil
@@ -746,7 +750,12 @@ function M.set_active_group(group_id, target_buffer_id)
         if target_buffer then
             M.set_auto_add_disabled(true)
             M.set_history_sync_disabled(true)
-            local ok = pcall(vim.api.nvim_set_current_buf, target_buffer)
+            local ok
+            if target_win_id and api.nvim_win_is_valid(target_win_id) then
+                ok = pcall(api.nvim_win_set_buf, target_win_id, target_buffer)
+            else
+                ok = pcall(vim.api.nvim_set_current_buf, target_buffer)
+            end
             M.set_history_sync_disabled(false)
             if ok then
                 -- Update history with current buffer (ensure it's at the front)
@@ -755,7 +764,7 @@ function M.set_active_group(group_id, target_buffer_id)
             
             -- Restore saved window state for this buffer in this group
             vim.schedule(function()
-                if ok then
+                if ok and not skip_restore then
                     restore_buffer_state(group, target_buffer)
                 end
             end)
@@ -1346,7 +1355,7 @@ end
 --- Switch to group by display number (for quick switch shortcuts)
 --- @param display_number number Display number shown in UI (1, 2, 3, etc.)
 --- @return boolean success
-function M.switch_to_group_by_display_number(display_number)
+function M.switch_to_group_by_display_number(display_number, opts)
     local group = find_group_by_display_number(display_number)
     if not group then
         return false
@@ -1369,7 +1378,7 @@ function M.switch_to_group_by_display_number(display_number)
         return "Group"
     end
 
-    local switched = M.set_active_group(group.id)
+    local switched = M.set_active_group(group.id, nil, opts)
     if switched then
         local label = format_group_switch_label(group, display_number)
         vim.notify("Switched to group: " .. label, vim.log.levels.INFO)

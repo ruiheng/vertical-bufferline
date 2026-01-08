@@ -16,6 +16,7 @@
 ---@field copy_groups_to_register fun(): nil Copy current window's groups to default register
 ---@field switch_to_history_file fun(position: number): boolean Switch to a file from history
 ---@field switch_to_group_buffer fun(position: number): boolean Switch to a file by group position
+---@field pick_current_group fun(opts?: table): boolean Open a picker for buffers in the current group
 ---@field groups table Group management functions
 ---@field commands table Command functions
 ---@field session table Session management functions
@@ -5966,6 +5967,13 @@ end
 --- Pick a buffer to close (works with or without bufferline)
 function M.pick_close_buffer()
     start_extended_picking("close")
+end
+
+--- Pick a buffer from the current group using an available picker
+--- @param opts? table Picker-specific options
+--- @return boolean success
+function M.pick_current_group(opts)
+    return require('buffer-nexus.group_picker').pick_current_group(opts)
 end
 
 --- Close all buffers in the current group except the current buffer
