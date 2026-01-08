@@ -49,7 +49,7 @@ M.UI = {
     -- Horizontal layout labels
     HORIZONTAL_LABEL_HISTORY = "🕘",
     HORIZONTAL_LABEL_PINNED = "📌",
-    HORIZONTAL_LABEL_FILES = "📄",
+    HORIZONTAL_LABEL_FILES = "🗒",
     HORIZONTAL_LABEL_GROUPS = "🗂",
     VERTICAL_LABEL_RECENT = "🕘",
     VERTICAL_RECENT_TEXT = "Recent",
@@ -219,17 +219,17 @@ M.settings = vim.deepcopy(M.DEFAULTS)
 -- File extensions and icons mapping
 M.ICONS = {
     lua = "🌙",
-    js = "📄",
+    js = "📝",
     py = "🐍",
     go = "🟢",
     rs = "🦀",
     md = "📝",
-    txt = "📄",
-    json = "📋",
-    yaml = "📋",
-    yml = "📋",
+    txt = "📝",
+    json = "📝",
+    yaml = "📝",
+    yml = "📝",
     -- Fallback
-    default = "📄",
+    default = "📝",
 }
 
 -- System constants
