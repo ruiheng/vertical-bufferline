@@ -494,6 +494,13 @@ function M.setup()
         desc = "Pick a buffer across groups and close it"
     })
 
+    vim.api.nvim_create_user_command("BNPickGroup", function()
+        require('buffer-nexus').pick_current_group()
+    end, {
+        nargs = 0,
+        desc = "Pick a buffer in the current group with an external picker"
+    })
+
     -- Group reordering commands
     vim.api.nvim_create_user_command("BNMoveGroupUp", move_group_up_command, {
         nargs = 0,
