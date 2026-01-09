@@ -508,9 +508,7 @@ For a minimal setup, `require("buffer-nexus").setup()` is enough.
 - Use `:Telescope buffer_nexus current_group` to open the picker
 - While the picker is open, use `Alt-1`..`Alt-9` to switch groups in the picker
 - Prefer `:BNPickGroup` to open the current-group picker with your available picker
-  (Telescope/snacks/fzf-lua/mini.pick)
-
-### Filetype Support
+  (Telescope/snacks/fzf-lua/mini.pick)### Filetype Support
 The sidebar buffer uses the `buffer-nexus` filetype, making it easy to:
 - Set buffer-specific configurations and keymaps
 - Integrate with other plugins that check buffer filetype
