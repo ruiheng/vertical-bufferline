@@ -6206,6 +6206,50 @@ function M.close_other_buffers_in_group()
     end)
 end
 
+--- Keep only the current buffer in the active group (remove others from group)
+--- @return nil
+function M.keep_only_current_buffer_in_group()
+    local active_group = groups.get_active_group()
+    if not active_group then
+        vim.notify("No active group found", vim.log.levels.ERROR)
+        return
+    end
+
+    local current_buf = api.nvim_get_current_buf()
+    local has_current_in_group = false
+    local buffers_to_remove = {}
+
+    for _, buf_id in ipairs(active_group.buffers) do
+        if buf_id == current_buf then
+            has_current_in_group = true
+        else
+            table.insert(buffers_to_remove, buf_id)
+        end
+    end
+
+    if not has_current_in_group then
+        vim.notify("Current buffer is not in the active group", vim.log.levels.WARN)
+        return
+    end
+
+    if #buffers_to_remove == 0 then
+        vim.notify("No other buffers to remove in the current group", vim.log.levels.INFO)
+        return
+    end
+
+    for _, buf_id in ipairs(buffers_to_remove) do
+        groups.remove_buffer_from_group(buf_id, active_group.id)
+    end
+
+    vim.notify(string.format("Removed %d buffer(s) from group '%s'",
+        #buffers_to_remove, active_group.name), vim.log.levels.INFO)
+
+    vim.schedule(function()
+        groups.cleanup_invalid_buffers()
+        M.refresh("keep_only_current_buffer")
+    end)
+end
+
 --- Toggle between showing all groups expanded vs only active group
 --- When enabled, all groups show their buffer lists
 --- When disabled, only the active group shows its buffer list
@@ -6957,6 +7001,8 @@ function M.keymap_preset(opts)
     end
 
     if include_section("buffer_management") then
+        add(leader .. "bo", function() M.keep_only_current_buffer_in_group() end,
+            "Keep only current buffer in group")
         add(leader .. "Bo", function() M.close_other_buffers_in_group() end, "Close other buffers in group")
         add(leader .. "BO", function() M.close_other_buffers_in_group() end, "Close other buffers in group")
     end

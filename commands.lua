@@ -712,6 +712,14 @@ function M.setup()
         desc = "Remove current buffer from current group only (soft delete)"
     })
 
+    -- Keep only current buffer in group (remove others from group)
+    vim.api.nvim_create_user_command("BNKeepOnlyCurrentInGroup", function()
+        require('buffer-nexus').keep_only_current_buffer_in_group()
+    end, {
+        nargs = 0,
+        desc = "Keep only current buffer in active group (remove others from group)"
+    })
+
     -- Manually refresh buffer list
     vim.api.nvim_create_user_command("BNRefreshBuffers", function()
         local active_group = groups.get_active_group()

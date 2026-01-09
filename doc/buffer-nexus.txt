@@ -340,6 +340,7 @@ History Management:                            *buffer-nexus-history-commands*
 Utilities:
 :BNDebug                     Show debug information
 :BNRefreshBuffers            Manually refresh and add current buffers
+:BNKeepOnlyCurrentInGroup    Keep only current buffer in active group (remove others from group)
 :BNToggleCursorAlign         Toggle cursor alignment feature
 :BNToggleAdaptiveWidth       Toggle adaptive width on/off
 :BNSetPosition <pos>         Set sidebar position: left/right/top/bottom
@@ -407,6 +408,7 @@ History Quick Access:                          *buffer-nexus-history-keymaps*
 
 Group Buffer Quick Access:
 <leader>1 to <leader>9                Switch to buffers 1-9 in current group
+<leader>bo                            Keep only current buffer in current group
 <leader>Bo                            Close other buffers in current group
 <leader>BO                            Close other buffers in current group
 
