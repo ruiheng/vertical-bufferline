@@ -229,6 +229,17 @@ local function build_edit_lines()
     return lines, initial_cursor_line
 end
 
+local function build_edit_content_lines()
+    local lines = build_edit_lines()
+    local filtered = {}
+    for _, line in ipairs(lines) do
+        if not line:match("^%s*#") then
+            table.insert(filtered, line)
+        end
+    end
+    return filtered
+end
+
 function M.foldexpr(lnum)
     local line = vim.fn.getline(lnum)
     if line:match("^%[Group%]") then
@@ -814,14 +825,8 @@ local function notify_warnings(warnings)
     end
 end
 
-local function apply_edit_buffer(buf_id)
-    if edit_state.applying then
-        return
-    end
-    edit_state.applying = true
-
-    local lines = api.nvim_buf_get_lines(buf_id, 0, -1, false)
-    local group_specs, warnings = parse_lines(lines)
+local function apply_edit_lines(lines, context)
+    local group_specs, warnings = parse_lines(lines or {})
 
     if #group_specs == 0 then
         table.insert(warnings, "No groups found; created a Default group")
@@ -871,14 +876,8 @@ local function apply_edit_buffer(buf_id)
         end
     end
 
-    local ok_prev_buf, prev_buf = pcall(api.nvim_buf_get_var, buf_id, "vbl_edit_prev_buf")
-    local ok_prev_win, prev_win = pcall(api.nvim_buf_get_var, buf_id, "vbl_edit_prev_win")
-    if not ok_prev_buf then
-        prev_buf = nil
-    end
-    if not ok_prev_win then
-        prev_win = nil
-    end
+    local prev_buf = context and context.prev_buf_id or nil
+    local prev_win = context and context.prev_win_id or nil
 
     local target_group_id = nil
     local prev_buf_valid = prev_buf and api.nvim_buf_is_valid(prev_buf)
@@ -915,8 +914,28 @@ local function apply_edit_buffer(buf_id)
         end
     end)
 
-    api.nvim_buf_set_option(buf_id, "modified", false)
     notify_warnings(warnings)
+end
+
+local function apply_edit_buffer(buf_id)
+    if edit_state.applying then
+        return
+    end
+    edit_state.applying = true
+
+    local ok_prev_buf, prev_buf = pcall(api.nvim_buf_get_var, buf_id, "vbl_edit_prev_buf")
+    local ok_prev_win, prev_win = pcall(api.nvim_buf_get_var, buf_id, "vbl_edit_prev_win")
+    if not ok_prev_buf then
+        prev_buf = nil
+    end
+    if not ok_prev_win then
+        prev_win = nil
+    end
+
+    local lines = api.nvim_buf_get_lines(buf_id, 0, -1, false)
+    apply_edit_lines(lines, { prev_buf_id = prev_buf, prev_win_id = prev_win })
+
+    api.nvim_buf_set_option(buf_id, "modified", false)
 
     edit_state.applying = false
 end
@@ -1064,14 +1083,16 @@ end
 
 function M.copy_to_register(register)
     local target_register = register and register ~= "" and register or '"'
-    local lines = build_edit_lines()
-    local filtered = {}
-    for _, line in ipairs(lines) do
-        if not line:match("^%s*#") then
-            table.insert(filtered, line)
-        end
-    end
-    vim.fn.setreg(target_register, table.concat(filtered, "\n"))
+    local lines = build_edit_content_lines()
+    vim.fn.setreg(target_register, table.concat(lines, "\n"))
+end
+
+function M.build_edit_content_lines()
+    return build_edit_content_lines()
+end
+
+function M.apply_lines(lines, context)
+    apply_edit_lines(lines, context)
 end
 
 M.apply = apply_edit_buffer

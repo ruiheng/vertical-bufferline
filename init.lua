@@ -6632,6 +6632,23 @@ function M.copy_groups_to_register(register)
     require('buffer-nexus.edit_mode').copy_to_register(register)
 end
 
+--- Save current groups to a file (edit-mode format, no header comments)
+--- @param path string Target file path
+function M.save_groups_to_file(path)
+    local lines = require('buffer-nexus.edit_mode').build_edit_content_lines()
+    return vim.fn.writefile(lines, vim.fn.expand(path))
+end
+
+--- Load groups from a file (edit-mode format)
+--- @param path string Source file path
+function M.load_groups_from_file(path)
+    local lines = vim.fn.readfile(vim.fn.expand(path))
+    require('buffer-nexus.edit_mode').apply_lines(lines, {
+        prev_buf_id = vim.api.nvim_get_current_buf(),
+        prev_win_id = vim.api.nvim_get_current_win(),
+    })
+end
+
 --- Cycle through path display modes (yes/no/auto)
 --- @return nil
 M.cycle_show_path = M.cycle_show_path_setting

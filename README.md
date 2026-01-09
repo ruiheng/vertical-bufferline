@@ -104,6 +104,8 @@ The following functions are available for you to map to your preferred keybindin
 - `require('buffer-nexus').move_group_up()` - Move current group up in the list
 - `require('buffer-nexus').move_group_down()` - Move current group down in the list
 - `require('buffer-nexus').copy_groups_to_register()` - Copy current window groups to default register (edit-mode format)
+- `require('buffer-nexus').save_groups_to_file(path)` - Save groups to a file (edit-mode format, no header comments)
+- `require('buffer-nexus').load_groups_from_file(path)` - Load groups from a file (edit-mode format)
 - `require('buffer-nexus').groups.switch_to_group_by_display_number(n)` - Switch directly to group n by display number
 
 **History Quick Access:**
@@ -127,6 +129,8 @@ Note: `BufferLineGoToBuffer` and `BufferLinePick` are provided by bufferline.nvi
 - `:BNSwitchGroup [name_or_id]` - Switch to specified group
 - `:BNAddToGroup <name_or_id>` - Add current buffer to specified group
 - `:BNCopyGroups [register]` - Copy groups to a register (edit-mode format)
+- `:BNSaveGroups <file>` - Save groups to a file (edit-mode format, no header comments)
+- `:BNLoadGroups <file>` - Load groups from a file (edit-mode format)
 
 ### Navigation
 - `:BNNextGroup` - Switch to next group
