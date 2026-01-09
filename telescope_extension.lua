@@ -274,8 +274,13 @@ if not ok_telescope then
     return M
 end
 
-return telescope.register_extension({
+local extension_config = {
     exports = {
         current_group = M.current_group,
     },
-})
+}
+
+-- Allow direct access to functions when required directly
+extension_config.current_group = M.current_group
+
+return telescope.register_extension(extension_config)
