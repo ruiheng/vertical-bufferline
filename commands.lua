@@ -408,39 +408,95 @@ local function copy_groups_command(args)
     vim.notify("Copied BN groups to register " .. (register ~= "" and register or '"'), vim.log.levels.INFO)
 end
 
+local group_file_extension = ".bngroups"
+
+local function normalize_group_file_path(path)
+    if not path or path == "" then
+        return nil
+    end
+    local expanded = vim.fn.expand(path)
+    if expanded:sub(-#group_file_extension) ~= group_file_extension then
+        expanded = expanded .. group_file_extension
+    end
+    return expanded
+end
+
+local function prompt_group_file_path(kind, callback)
+    local defaults = {
+        save = "Session.bngroups",
+        load = "Session.bngroups",
+    }
+    local prompts = {
+        save = "Save buffer-nexus groups definition to file: ",
+        load = "Load buffer-nexus groups definition from file: ",
+    }
+    vim.ui.input({
+        prompt = prompts[kind] or "Buffer-nexus groups file: ",
+        default = defaults[kind] or "bn-groups",
+        completion = "file",
+    }, function(input)
+        if not input or input == "" then
+            vim.notify("BN " .. kind .. " groups canceled", vim.log.levels.INFO)
+            return
+        end
+        local target = normalize_group_file_path(input)
+        if not target then
+            vim.notify("BN " .. kind .. " groups canceled", vim.log.levels.INFO)
+            return
+        end
+        callback(target)
+    end)
+end
+
 local function save_groups_command(args)
     local path = args and args.args or ""
+    local function do_save(target)
+        local lines = require('buffer-nexus.edit_mode').build_edit_content_lines()
+        local ok, result = pcall(vim.fn.writefile, lines, target)
+        if not ok or result ~= 0 then
+            vim.notify("Failed to save BN groups to " .. target, vim.log.levels.ERROR)
+            return
+        end
+        vim.cmd("redraw")
+        vim.notify("Saved BN groups to " .. target, vim.log.levels.INFO)
+    end
     if path == "" then
-        vim.notify("Usage: BNSaveGroups {file}", vim.log.levels.ERROR)
+        prompt_group_file_path("save", do_save)
         return
     end
-    local target = vim.fn.expand(path)
-    local lines = require('buffer-nexus.edit_mode').build_edit_content_lines()
-    local ok, result = pcall(vim.fn.writefile, lines, target)
-    if not ok or result ~= 0 then
-        vim.notify("Failed to save BN groups to " .. target, vim.log.levels.ERROR)
+    local target = normalize_group_file_path(path)
+    if not target then
+        vim.notify("Usage: BNSaveGroups [name]", vim.log.levels.ERROR)
         return
     end
-    vim.notify("Saved BN groups to " .. target, vim.log.levels.INFO)
+    do_save(target)
 end
 
 local function load_groups_command(args)
     local path = args and args.args or ""
+    local function do_load(target)
+        local ok, lines = pcall(vim.fn.readfile, target)
+        if not ok then
+            vim.notify("Failed to read BN groups from " .. target, vim.log.levels.ERROR)
+            return
+        end
+        require('buffer-nexus.edit_mode').apply_lines(lines, {
+            prev_buf_id = vim.api.nvim_get_current_buf(),
+            prev_win_id = vim.api.nvim_get_current_win(),
+        })
+        vim.cmd("redraw")
+        vim.notify("Loaded BN groups from " .. target, vim.log.levels.INFO)
+    end
     if path == "" then
-        vim.notify("Usage: BNLoadGroups {file}", vim.log.levels.ERROR)
+        prompt_group_file_path("load", do_load)
         return
     end
-    local target = vim.fn.expand(path)
-    local ok, lines = pcall(vim.fn.readfile, target)
-    if not ok then
-        vim.notify("Failed to read BN groups from " .. target, vim.log.levels.ERROR)
+    local target = normalize_group_file_path(path)
+    if not target then
+        vim.notify("Usage: BNLoadGroups [name]", vim.log.levels.ERROR)
         return
     end
-    require('buffer-nexus.edit_mode').apply_lines(lines, {
-        prev_buf_id = vim.api.nvim_get_current_buf(),
-        prev_win_id = vim.api.nvim_get_current_win(),
-    })
-    vim.notify("Loaded BN groups from " .. target, vim.log.levels.INFO)
+    do_load(target)
 end
 
 --- Set up all user commands
@@ -463,13 +519,13 @@ function M.setup()
     })
 
     vim.api.nvim_create_user_command("BNSaveGroups", save_groups_command, {
-        nargs = 1,
+        nargs = "?",
         complete = "file",
         desc = "Save groups to a file (edit-mode format)"
     })
 
     vim.api.nvim_create_user_command("BNLoadGroups", load_groups_command, {
-        nargs = 1,
+        nargs = "?",
         complete = "file",
         desc = "Load groups from a file (edit-mode format)"
     })

@@ -5,3 +5,5 @@
 " when creating sidebar buffers. This file serves as a placeholder for
 " proper plugin structure and could be used for additional detection logic
 " if needed in the future.
+
+au BufNewFile,BufRead *.bngroups setfiletype buffer-nexus-groups
