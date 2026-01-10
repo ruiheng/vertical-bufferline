@@ -6470,16 +6470,19 @@ function M.check_quit_condition()
         local all_windows = api.nvim_list_wins()
         local non_sidebar_windows = 0
         local sidebar_win_id = state_module.get_win_id()
+        local placeholder_win_id = state_module.get_placeholder_win_id()
 
         -- Count non-sidebar windows
         for _, win_id in ipairs(all_windows) do
-            if api.nvim_win_is_valid(win_id) and win_id ~= sidebar_win_id then
+            if api.nvim_win_is_valid(win_id)
+                and win_id ~= sidebar_win_id
+                and win_id ~= placeholder_win_id then
                 non_sidebar_windows = non_sidebar_windows + 1
             end
         end
 
         -- If only sidebar window remains, auto-exit nvim
-        if non_sidebar_windows == 0 and #all_windows == 1 then
+        if non_sidebar_windows == 0 then
             vim.cmd("qall")
         end
     end)
