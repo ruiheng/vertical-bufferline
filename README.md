@@ -427,7 +427,7 @@ scripts/run_checks.sh
     max_height = 10,                -- Legacy: retained for compatibility (not used for top/bottom)
     show_inactive_group_buffers = false,  -- Show buffer lists for inactive groups (default: only active group)
     show_icons = false,             -- Show file type emoji icons
-    position = "left",              -- Sidebar position: "left", "right", "top", "bottom"
+    position = "top",              -- Sidebar position: "left", "right", "top", "bottom"
     show_tree_lines = false,        -- Show tree-style connection lines
     floating = false,               -- Use floating window (right side, focusable=false) instead of split
     

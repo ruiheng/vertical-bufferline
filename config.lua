@@ -173,7 +173,7 @@ M.DEFAULTS = {
     show_inactive_group_buffers = false,  -- Show buffer list for inactive groups (default: only show active group)
     show_icons = false,  -- Show file type icons (emoji)
     pick_chars = "asdfjklghqwertyuiopzxcvbnmASDFJKLGHQWERTYUIOPZXCVBNM",  -- Pick hint characters (first char never numeric)
-    position = "left",  -- Sidebar position: "left", "right", "top", "bottom"
+    position = "top",  -- Sidebar position: "left", "right", "top", "bottom"
     show_tree_lines = false,  -- Show tree-style connection lines
     floating = false,  -- Use floating window (right side, focusable=false) instead of split window
     
