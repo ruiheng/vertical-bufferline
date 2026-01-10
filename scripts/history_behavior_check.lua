@@ -30,6 +30,7 @@ vbl.setup({
     auto_create_groups = true,
     auto_add_new_buffers = true,
     group_scope = "global",
+    position = "left",
     show_history = "auto",
     history_size = 2,
     history_auto_threshold = 2,

@@ -3,7 +3,18 @@ set -eu
 
 run_check() {
     printf "Running %s...\n" "$1"
-    nvim --headless -u NONE -i NONE -n "+lua dofile('$1')"
+    if command -v timeout >/dev/null 2>&1; then
+        if ! timeout "${BN_CHECK_TIMEOUT:-60s}" nvim --headless -u NONE -i NONE -n "+lua dofile('$1')"; then
+            status=$?
+            if [ "$status" -eq 124 ]; then
+                printf "Timeout running %s (set BN_CHECK_TIMEOUT to adjust)\n" "$1" >&2
+            fi
+            exit "$status"
+        fi
+    else
+        nvim --headless -u NONE -i NONE -n "+lua dofile('$1')"
+    fi
+    printf "\n"
 }
 
 run_check "scripts/window_scope_check.lua"
@@ -31,6 +42,7 @@ run_check "scripts/edit_mode_picker_backends_test.lua"
 run_check "scripts/empty_group_switch_check.lua"
 run_check "scripts/horizontal_height_test.lua"
 run_check "scripts/horizontal_focus_redirect_check.lua"
+run_check "scripts/quit_condition_check.lua"
 run_check "scripts/pick_highlight_smoke_check.lua"
 run_check "scripts/menu_pick_overflow_test.lua"
 run_check "scripts/menu_modified_indicator_test.lua"
