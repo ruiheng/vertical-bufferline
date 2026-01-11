@@ -1020,20 +1020,10 @@ local function start_extended_picking(mode_type)
             -- Convert char code to string
             local char = type(char_code) == "number" and vim.fn.nr2char(char_code) or char_code
 
-            -- Handle ESC (char code 27)
-            if char_code == 27 then
-                exit_extended_picking()
-                vim.schedule(function()
-                    M.refresh("vbl_pick_mode_end")
-                    vim.api.nvim_echo({{"", "Normal"}}, false, {})  -- Clear prompt
-                    vim.defer_fn(function()
-                        M.refresh_cursor_alignment()
-                    end, 150)
-                end)
-                break
-            end
+            local key_trans = type(char) == "string" and vim.fn.keytrans(char) or nil
 
-            if char == "\027" then
+            -- Handle ESC (char code 27)
+            if char_code == 27 or char == "\027" or key_trans == "<Esc>" then
                 exit_extended_picking()
                 vim.schedule(function()
                     M.refresh("vbl_pick_mode_end")
@@ -1046,7 +1036,7 @@ local function start_extended_picking(mode_type)
             end
 
             -- Handle Ctrl-C (char code 3)
-            if char_code == 3 or char == "\003" then
+            if char_code == 3 or char == "\003" or key_trans == "<C-c>" then
                 exit_extended_picking()
                 vim.schedule(function()
                     M.refresh("vbl_pick_mode_end")
