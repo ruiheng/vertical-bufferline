@@ -295,9 +295,15 @@ local function setup_highlights()
         fg = comment_attrs.fg or pmenu_attrs.fg,
         default = true
     })
-    api.nvim_set_hl(0, config_module.HIGHLIGHTS.HORIZONTAL_NUMBER, { link = "Number", default = true })
+    local horizontal_number_bg = pmenu_attrs.bg or bar_bg or current_bg
+    api.nvim_set_hl(0, config_module.HIGHLIGHTS.HORIZONTAL_NUMBER, {
+        fg = number_attrs.fg or pmenu_attrs.fg or title_attrs.fg,
+        bg = horizontal_number_bg,
+        default = true
+    })
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.HORIZONTAL_NUMBER_CURRENT, {
         fg = number_attrs.fg or pmenusel_attrs.fg or title_attrs.fg,
+        bg = pmenusel_attrs.bg or horizontal_number_bg or current_bg,
         bold = true,
         default = true
     })
@@ -1915,17 +1921,49 @@ local function build_horizontal_item_parts(component, number_index, max_digits, 
         end
     end
 
-    if number_index then
-        local num_str = tostring(number_index)
-        local padding = (max_digits or 1) - #num_str
-        local padded_num = string.rep(" ", padding) .. num_str
-        local num_hl = is_current and config_module.HIGHLIGHTS.HORIZONTAL_NUMBER_CURRENT
-            or config_module.HIGHLIGHTS.HORIZONTAL_NUMBER
-        append_part(renderer.create_part(padded_num, num_hl))
-        append_part(renderer.create_part(" ", nil))
+    local function resolve_pick_highlight(override)
+        if override then
+            return override
+        end
+        if is_current then
+            return config_module.HIGHLIGHTS.PICK_SELECTED
+        elseif is_visible then
+            return config_module.HIGHLIGHTS.PICK_VISIBLE
+        end
+        return config_module.HIGHLIGHTS.PICK
     end
 
-    if is_picking or force_pick_letter or reserve_pick_space then
+    if number_index then
+        local slot_width = max_digits or 1
+        if is_picking then
+            local letter = component.letter
+            if letter then
+                local display_letter = letter
+                local extended_picking = state_module.get_extended_picking_state()
+                if extended_picking and extended_picking.is_active and type(display_letter) == "string" then
+                    local max_len = extended_picking.max_hint_len or 1
+                    if #display_letter < max_len then
+                        display_letter = display_letter .. string.rep(" ", max_len - #display_letter)
+                    end
+                end
+                if #display_letter < slot_width then
+                    display_letter = string.rep(" ", slot_width - #display_letter) .. display_letter
+                end
+                append_part(renderer.create_part(display_letter, resolve_pick_highlight(nil)))
+            else
+                append_part(renderer.create_part(string.rep(" ", slot_width), nil))
+            end
+        else
+            local num_str = tostring(number_index)
+            local padding = slot_width - #num_str
+            local padded_num = string.rep(" ", padding) .. num_str
+            local num_hl = is_current and config_module.HIGHLIGHTS.HORIZONTAL_NUMBER_CURRENT
+                or config_module.HIGHLIGHTS.HORIZONTAL_NUMBER
+            append_part(renderer.create_part(padded_num, num_hl))
+        end
+    end
+
+    if not is_picking and (force_pick_letter or reserve_pick_space) then
         local letter = component.letter
         if letter then
             local pick_parts = build_pick_parts(letter, is_current, is_visible, force_pick_letter and config_module.HIGHLIGHTS.PICK or nil)
