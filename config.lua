@@ -95,6 +95,8 @@ M.HIGHLIGHTS = {
     GROUP_MARKER = "BufferNexusGroupMarker",
     GROUP_TAB_ACTIVE = "BufferNexusGroupTabActive",
     GROUP_TAB_INACTIVE = "BufferNexusGroupTabInactive",
+    GROUP_TAB_NUMBER_ACTIVE = "BufferNexusGroupTabNumberActive",
+    GROUP_TAB_NUMBER_INACTIVE = "BufferNexusGroupTabNumberInactive",
     SECTION_LABEL_ACTIVE = "BufferNexusSectionLabelActive",
     SECTION_LABEL_INACTIVE = "BufferNexusSectionLabelInactive",
 

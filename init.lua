@@ -241,23 +241,34 @@ local function setup_highlights()
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.FILENAME_VISIBLE, { link = "String", bold = true })
 
     -- Buffer numbering highlights - keep distinct from filenames
-    api.nvim_set_hl(0, config_module.HIGHLIGHTS.BUFFER_NUMBER, { link = "Number" })
-    api.nvim_set_hl(0, config_module.HIGHLIGHTS.BUFFER_NUMBER_VISIBLE, { link = "Number", bold = true })
+    api.nvim_set_hl(0, config_module.HIGHLIGHTS.BUFFER_NUMBER, {
+        fg = number_attrs.fg or title_attrs.fg or config_module.COLORS.WHITE,
+        italic = true,
+        default = true
+    })
+    api.nvim_set_hl(0, config_module.HIGHLIGHTS.BUFFER_NUMBER_VISIBLE, {
+        fg = number_attrs.fg or title_attrs.fg or config_module.COLORS.WHITE,
+        bold = true,
+        italic = true,
+        default = true
+    })
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.BUFFER_NUMBER_CURRENT, {
         fg = number_attrs.fg or title_attrs.fg or config_module.COLORS.WHITE,
         bg = current_bg,
-        bold = true
+        bold = true,
+        italic = true
     })
     
     -- Dual numbering highlights - different styles for easy distinction
-    api.nvim_set_hl(0, config_module.HIGHLIGHTS.NUMBER_LOCAL, { link = "Number", bold = true })      -- Local: bright, bold
-    api.nvim_set_hl(0, config_module.HIGHLIGHTS.NUMBER_GLOBAL, { link = "Comment" })                -- Global: subdued
-    api.nvim_set_hl(0, config_module.HIGHLIGHTS.NUMBER_SEPARATOR, { link = "Operator" })            -- Separator: distinct
+    api.nvim_set_hl(0, config_module.HIGHLIGHTS.NUMBER_LOCAL, { link = "Number", bold = true, italic = true })      -- Local: bright, bold
+    api.nvim_set_hl(0, config_module.HIGHLIGHTS.NUMBER_GLOBAL, { link = "Comment", italic = true })                -- Global: subdued
+    api.nvim_set_hl(0, config_module.HIGHLIGHTS.NUMBER_SEPARATOR, { link = "Operator", italic = true })            -- Separator: distinct
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.NUMBER_SEPARATOR_CURRENT, {
         fg = operator_attrs.fg or comment_attrs.fg,
-        bg = current_bg
+        bg = current_bg,
+        italic = true
     })
-    api.nvim_set_hl(0, config_module.HIGHLIGHTS.NUMBER_HIDDEN, { link = "NonText" })                -- Hidden: very subtle
+    api.nvim_set_hl(0, config_module.HIGHLIGHTS.NUMBER_HIDDEN, { link = "NonText", italic = true })                -- Hidden: very subtle
     
     -- Group header highlights - use semantic colors for theme compatibility
     -- Get background from PmenuSel/Pmenu but foreground/style from Title/Comment
@@ -272,7 +283,12 @@ local function setup_highlights()
         fg = comment_attrs.fg or pmenu_attrs.fg,
         default = true
     })
-    api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_NUMBER, { link = "Number", bold = true, default = true })
+    api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_NUMBER, {
+        fg = number_attrs.fg or title_attrs.fg or config_module.COLORS.WHITE,
+        bold = true,
+        italic = true,
+        default = true
+    })
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_SEPARATOR, { link = "Comment", default = true })
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_MARKER, { link = "Special", bold = true, default = true })
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_TAB_ACTIVE, {
@@ -284,6 +300,19 @@ local function setup_highlights()
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_TAB_INACTIVE, {
         fg = pmenu_attrs.fg or comment_attrs.fg,
         bg = pmenu_attrs.bg,
+        default = true
+    })
+    api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_TAB_NUMBER_ACTIVE, {
+        fg = pmenusel_attrs.fg or title_attrs.fg,
+        bg = pmenusel_attrs.bg,
+        bold = true,
+        italic = true,
+        default = true
+    })
+    api.nvim_set_hl(0, config_module.HIGHLIGHTS.GROUP_TAB_NUMBER_INACTIVE, {
+        fg = pmenu_attrs.fg or comment_attrs.fg,
+        bg = pmenu_attrs.bg,
+        italic = true,
         default = true
     })
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.SECTION_LABEL_ACTIVE, {
@@ -299,12 +328,14 @@ local function setup_highlights()
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.HORIZONTAL_NUMBER, {
         fg = number_attrs.fg or pmenu_attrs.fg or title_attrs.fg,
         bg = horizontal_number_bg,
+        italic = true,
         default = true
     })
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.HORIZONTAL_NUMBER_CURRENT, {
         fg = number_attrs.fg or pmenusel_attrs.fg or title_attrs.fg,
         bg = pmenusel_attrs.bg or horizontal_number_bg or current_bg,
         bold = true,
+        italic = true,
         default = true
     })
     api.nvim_set_hl(0, config_module.HIGHLIGHTS.HORIZONTAL_CURRENT, {
@@ -954,11 +985,20 @@ local function setup_pick_highlights()
 
     local has_bufferline_hl = bufferline_pick and bufferline_pick.fg
 
+    local function with_italic(hl)
+        if not hl then
+            return { italic = true }
+        end
+        local merged = vim.tbl_extend("force", {}, hl)
+        merged.italic = true
+        return merged
+    end
+
     -- Set our highlights to match exactly, or use fallback red color
     if has_bufferline_hl then
-        api.nvim_set_hl(0, config_module.HIGHLIGHTS.PICK, bufferline_pick)
-        api.nvim_set_hl(0, config_module.HIGHLIGHTS.PICK_VISIBLE, bufferline_pick_visible)
-        api.nvim_set_hl(0, config_module.HIGHLIGHTS.PICK_SELECTED, bufferline_pick_selected)
+        api.nvim_set_hl(0, config_module.HIGHLIGHTS.PICK, with_italic(bufferline_pick))
+        api.nvim_set_hl(0, config_module.HIGHLIGHTS.PICK_VISIBLE, with_italic(bufferline_pick_visible))
+        api.nvim_set_hl(0, config_module.HIGHLIGHTS.PICK_SELECTED, with_italic(bufferline_pick_selected))
     else
         -- Fallback to red highlights when bufferline is not available
         api.nvim_set_hl(0, config_module.HIGHLIGHTS.PICK, { fg = config_module.COLORS.RED, bold = true, italic = true })
@@ -2034,12 +2074,14 @@ local function build_horizontal_group_parts(group, number_index, max_digits, is_
     local padding = max_digits - #num_str
     local padded_num = string.rep(" ", padding) .. num_str
     local name = group and group.name or ""
-    local label = padded_num .. (name ~= "" and (" " .. name) or "")
+    local label_suffix = name ~= "" and (" " .. name) or ""
     local tab_hl = is_active and config_module.HIGHLIGHTS.GROUP_TAB_ACTIVE or config_module.HIGHLIGHTS.GROUP_TAB_INACTIVE
+    local number_hl = is_active and config_module.HIGHLIGHTS.GROUP_TAB_NUMBER_ACTIVE or config_module.HIGHLIGHTS.GROUP_TAB_NUMBER_INACTIVE
 
     return {
         renderer.create_part("[", tab_hl),
-        renderer.create_part(label, tab_hl),
+        renderer.create_part(padded_num, number_hl),
+        renderer.create_part(label_suffix, tab_hl),
         renderer.create_part("]", tab_hl)
     }
 end
@@ -3815,8 +3857,15 @@ local function apply_group_highlights(group_header_lines, lines_text)
                 api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, group_highlight, header_info.line, 0, -1)
             end
 
-            -- Note: We no longer highlight individual parts (number, marker) to preserve the background color
-            -- The overall group highlight already provides the visual distinction
+            local line_text = lines_text and lines_text[header_info.line + 1]
+            if line_text then
+                local s, e = line_text:find("%[(%d+)%]")
+                if s and e then
+                    local start_col = s
+                    local end_col = e - 1
+                    api.nvim_buf_add_highlight(state_module.get_buf_id(), ns_id, config_module.HIGHLIGHTS.GROUP_NUMBER, header_info.line, start_col, end_col)
+                end
+            end
         elseif header_info.type == "separator_visual" then
             -- This type is no longer used since we removed visual separators
         end
