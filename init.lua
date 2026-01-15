@@ -6796,26 +6796,49 @@ end
 
 switch_to_buffer_in_main_window = function(buffer_id, error_prefix)
     local main_win_id = nil
+    local blocked_by_modified = false
     local placeholder_win_id = state_module.get_placeholder_win_id()
-    for _, win_id in ipairs(api.nvim_list_wins()) do
-        if win_id ~= state_module.get_win_id()
-            and win_id ~= placeholder_win_id
-            and api.nvim_win_is_valid(win_id) then
-            local win_config = api.nvim_win_get_config(win_id)
-            if win_config.relative == "" then
-                local win_buf = api.nvim_win_get_buf(win_id)
-                local buf_type = api.nvim_buf_get_option(win_buf, 'buftype')
-                local filetype = api.nvim_buf_get_option(win_buf, 'filetype')
-                if buf_type == '' and filetype ~= 'vertical-bufferline-placeholder' then
-                    main_win_id = win_id
-                    break
-                end
+    local current_win_id = api.nvim_get_current_win()
+    local function is_main_candidate(win_id)
+        if win_id == state_module.get_win_id()
+            or win_id == placeholder_win_id
+            or not api.nvim_win_is_valid(win_id) then
+            return false
+        end
+        local win_config = api.nvim_win_get_config(win_id)
+        if win_config.relative ~= "" then
+            return false
+        end
+        local win_buf = api.nvim_win_get_buf(win_id)
+        local buf_type = api.nvim_buf_get_option(win_buf, 'buftype')
+        local filetype = api.nvim_buf_get_option(win_buf, 'filetype')
+        if buf_type ~= '' or filetype == 'vertical-bufferline-placeholder' then
+            return false
+        end
+        if vim.bo[win_buf].modified and not vim.o.hidden then
+            blocked_by_modified = true
+            return false
+        end
+        return true
+    end
+
+    if is_main_candidate(current_win_id) then
+        main_win_id = current_win_id
+    else
+        for _, win_id in ipairs(api.nvim_list_wins()) do
+            if is_main_candidate(win_id) then
+                main_win_id = win_id
+                break
             end
         end
     end
 
     if not main_win_id then
-        vim.notify("No main window found", vim.log.levels.ERROR)
+        if blocked_by_modified then
+            vim.notify("Cannot switch buffers: unsaved changes and 'hidden' is off", vim.log.levels.WARN)
+        else
+            vim.notify("No main window found", vim.log.levels.ERROR)
+        end
         return false
     end
 
