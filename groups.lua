@@ -471,11 +471,6 @@ end
 --- @param group_id string ID of group to delete
 --- @return boolean success
 function M.delete_group(group_id)
-    if group_id == groups_data.default_group_id then
-        vim.notify("Cannot delete default group", vim.log.levels.WARN)
-        return false
-    end
-
     local group_index = find_group_index_by_id(group_id)
     if not group_index then
         vim.notify("Group not found: " .. group_id, vim.log.levels.ERROR)
@@ -483,17 +478,26 @@ function M.delete_group(group_id)
     end
 
     local group = groups_data.groups[group_index]
+    local was_active = groups_data.active_group_id == group_id
 
-    -- Only preserve unsaved (modified) buffers by moving them to default group
-    local default_group = find_group_by_id(groups_data.default_group_id)
-    if default_group then
+    -- Find a fallback group for modified buffers and active group switching
+    local fallback_group = nil
+    for _, other_group in ipairs(groups_data.groups) do
+        if other_group.id ~= group_id then
+            fallback_group = other_group
+            break
+        end
+    end
+
+    -- Only preserve unsaved (modified) buffers by moving them to fallback group
+    if fallback_group then
         for _, buffer_id in ipairs(group.buffers) do
             -- Check if buffer is modified (has unsaved changes)
             local is_modified = false
             if api.nvim_buf_is_valid(buffer_id) then
                 is_modified = api.nvim_buf_get_option(buffer_id, "modified")
             end
-            
+
             if is_modified then
                 -- Check if this unsaved buffer exists in any other group
                 local exists_in_other_groups = false
@@ -503,10 +507,10 @@ function M.delete_group(group_id)
                         break
                     end
                 end
-                
-                -- Only move to default group if it doesn't exist in other groups
-                if not exists_in_other_groups and not vim.tbl_contains(default_group.buffers, buffer_id) then
-                    table.insert(default_group.buffers, buffer_id)
+
+                -- Only move to fallback group if it doesn't exist in other groups
+                if not exists_in_other_groups and not vim.tbl_contains(fallback_group.buffers, buffer_id) then
+                    table.insert(fallback_group.buffers, buffer_id)
                 end
             end
             -- Saved buffers are simply discarded (not moved anywhere)
@@ -517,10 +521,23 @@ function M.delete_group(group_id)
     table.remove(groups_data.groups, group_index)
     reindex_groups()
 
-    -- If deleting current active group, switch to default group
-    if groups_data.active_group_id == group_id then
+    -- If deleting current active group, switch to fallback group
+    if was_active and fallback_group then
         -- Use proper group switching logic instead of direct assignment
-        M.set_active_group(groups_data.default_group_id)
+        M.set_active_group(fallback_group.id)
+    elseif was_active and not fallback_group then
+        -- No groups left, clear active group
+        groups_data.active_group_id = nil
+        groups_data.previous_group_id = nil
+    end
+
+    -- Update default_group_id if it was the deleted group
+    if groups_data.default_group_id == group_id then
+        if fallback_group then
+            groups_data.default_group_id = fallback_group.id
+        else
+            groups_data.default_group_id = nil
+        end
     end
 
     -- Trigger event
@@ -600,19 +617,21 @@ function M.replace_groups_from_edit(group_specs)
 
     groups_data.groups = new_groups
     reindex_groups()
-    if #groups_data.groups == 0 then
-        init_default_group()
-    end
 
-    local has_default = false
-    for _, group in ipairs(groups_data.groups) do
-        if group.id == groups_data.default_group_id then
-            has_default = true
-            break
+    -- Update default_group_id to point to first group if current default is gone
+    if #groups_data.groups > 0 then
+        local has_default = false
+        for _, group in ipairs(groups_data.groups) do
+            if group.id == groups_data.default_group_id then
+                has_default = true
+                break
+            end
         end
-    end
-    if not has_default and #groups_data.groups > 0 then
-        groups_data.default_group_id = groups_data.groups[1].id
+        if not has_default then
+            groups_data.default_group_id = groups_data.groups[1].id
+        end
+    else
+        groups_data.default_group_id = nil
     end
 
     groups_data.active_group_id = nil

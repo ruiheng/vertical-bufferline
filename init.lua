@@ -2063,9 +2063,6 @@ local function get_group_display_name(group)
     if group.name and group.name ~= "" then
         return group.name
     end
-    if group.id == "default" then
-        return "Default"
-    end
     return tostring(group.id or "Group")
 end
 

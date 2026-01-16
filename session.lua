@@ -351,8 +351,11 @@ local function finalize_session_restore(session_data, opened_count, total_groups
             })
         end
     else
-        -- Fallback: ensure sync is enabled even if no active group
-        bufferline_integration.set_sync_target("default")
+        -- Fallback: use first available group for sync target
+        local all_groups = groups.get_all_groups()
+        if #all_groups > 0 then
+            bufferline_integration.set_sync_target(all_groups[1].id)
+        end
     end
 
     -- Refresh UI
@@ -823,37 +826,18 @@ local function rebuild_groups_from_data(group_block, buffer_mappings)
     local group_list = group_block.groups or {}
     local active_group_id = group_block.active_group_id
 
-    -- Step 1: Clear existing groups using proper API
+    -- Step 1: Clear all existing groups using proper API
     local existing_groups = groups.get_all_groups()
     for _, group in ipairs(existing_groups) do
-        if group.id ~= "default" then
-            groups.delete_group(group.id)
-        end
+        groups.delete_group(group.id)
     end
 
-    -- Step 2: Clear default group buffers
-    local default_group = groups.find_group_by_id("default")
-    if default_group then
-        for _, buf_id in ipairs(vim.deepcopy(default_group.buffers)) do
-            groups.remove_buffer_from_group(buf_id, "default")
-        end
-    end
-
-    -- Step 3: Recreate groups from session data using proper API
+    -- Step 2: Recreate groups from session data using proper API
     local group_id_mapping = {}
 
     for _, group_data in ipairs(group_list) do
-        local new_group_id
-
-        if group_data.id == "default" then
-            new_group_id = "default"
-            if group_data.name and group_data.name ~= "" then
-                groups.rename_group("default", group_data.name)
-            end
-        else
-            new_group_id = groups.create_group(group_data.name, group_data.color)
-            group_id_mapping[group_data.id] = new_group_id
-        end
+        local new_group_id = groups.create_group(group_data.name, group_data.color)
+        group_id_mapping[group_data.id] = new_group_id
 
         for _, buffer_info in ipairs(group_data.buffers or {}) do
             local file_path = expand_buffer_path(buffer_info.path)
@@ -863,7 +847,7 @@ local function rebuild_groups_from_data(group_block, buffer_mappings)
                 groups.add_buffer_to_group(buf_id, new_group_id)
             end
         end
-        
+
         if group_data.current_buffer_path then
             local current_buffer_file_path = expand_buffer_path(group_data.current_buffer_path)
             local current_buf_id = buffer_mappings[current_buffer_file_path]
@@ -875,7 +859,7 @@ local function rebuild_groups_from_data(group_block, buffer_mappings)
                 end
             end
         end
-        
+
         local restored_group = groups.find_group_by_id(new_group_id)
         if restored_group and group_data.history then
             restored_group.history = {}
@@ -889,34 +873,46 @@ local function rebuild_groups_from_data(group_block, buffer_mappings)
         end
     end
 
-    -- Step 4: Set active group using proper API
-    local target_active_group_id = active_group_id or "default"
-    if target_active_group_id ~= "default" and group_id_mapping[target_active_group_id] then
+    -- Step 3: Set active group using proper API
+    local target_active_group_id = active_group_id
+    if target_active_group_id and group_id_mapping[target_active_group_id] then
         target_active_group_id = group_id_mapping[target_active_group_id]
     end
 
-    local target_group = groups.find_group_by_id(target_active_group_id)
+    local target_group = nil
+    if target_active_group_id then
+        target_group = groups.find_group_by_id(target_active_group_id)
+    end
+
+    -- Fallback to first available group if target not found
+    if not target_group then
+        local all_groups = groups.get_all_groups()
+        if #all_groups > 0 then
+            target_group = all_groups[1]
+            target_active_group_id = target_group.id
+        end
+    end
+
     if target_group then
         groups.set_active_group(target_active_group_id)
-        
+
         if target_group.current_buffer and vim.api.nvim_buf_is_valid(target_group.current_buffer)
            and vim.tbl_contains(target_group.buffers, target_group.current_buffer) then
             vim.schedule(function()
                 vim.api.nvim_set_current_buf(target_group.current_buffer)
             end)
         end
-    else
-        groups.set_active_group("default")
     end
-    
-    -- Step 5: Fallback for unmapped existing buffers - add them to default group
-    local fallback_group = groups.find_group_by_id("default")
-    if fallback_group then
+
+    -- Step 4: Fallback for unmapped existing buffers - add them to first available group
+    local all_groups = groups.get_all_groups()
+    if #all_groups > 0 then
+        local fallback_group = all_groups[1]
         for file_path, buf_id in pairs(buffer_mappings) do
             if vim.api.nvim_buf_is_valid(buf_id) then
                 local buffer_group = groups.find_buffer_group(buf_id)
                 if not buffer_group then
-                    groups.add_buffer_to_group(buf_id, "default")
+                    groups.add_buffer_to_group(buf_id, fallback_group.id)
                 end
             end
         end

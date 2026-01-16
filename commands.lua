@@ -80,12 +80,6 @@ local function delete_group_command(args)
         return
     end
 
-    -- Prevent deletion of default group
-    if target_group.id == "default" then
-        vim.notify("Cannot delete the default group", vim.log.levels.WARN)
-        return
-    end
-
     if groups.delete_group(target_group.id) then
         vim.notify("Deleted group: " .. target_group.name, vim.log.levels.INFO)
 
