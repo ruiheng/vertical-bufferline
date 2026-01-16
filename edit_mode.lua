@@ -17,7 +17,35 @@ local edit_state = {
     win_id = nil,
     backdrop_win_id = nil,
     applying = false,
+    original_zindex = nil,
+    backdrop_original_zindex = nil,
 }
+
+-- Lower z-index of edit-mode windows so pickers can appear on top
+local function lower_edit_mode_zindex()
+    if edit_state.win_id and api.nvim_win_is_valid(edit_state.win_id) then
+        local config = api.nvim_win_get_config(edit_state.win_id)
+        edit_state.original_zindex = config.zindex
+        api.nvim_win_set_config(edit_state.win_id, { zindex = 10 })
+    end
+    if edit_state.backdrop_win_id and api.nvim_win_is_valid(edit_state.backdrop_win_id) then
+        local config = api.nvim_win_get_config(edit_state.backdrop_win_id)
+        edit_state.backdrop_original_zindex = config.zindex
+        api.nvim_win_set_config(edit_state.backdrop_win_id, { zindex = 5 })
+    end
+end
+
+-- Restore z-index of edit-mode windows after picker closes
+local function restore_edit_mode_zindex()
+    if edit_state.win_id and api.nvim_win_is_valid(edit_state.win_id) and edit_state.original_zindex then
+        api.nvim_win_set_config(edit_state.win_id, { zindex = edit_state.original_zindex })
+        edit_state.original_zindex = nil
+    end
+    if edit_state.backdrop_win_id and api.nvim_win_is_valid(edit_state.backdrop_win_id) and edit_state.backdrop_original_zindex then
+        api.nvim_win_set_config(edit_state.backdrop_win_id, { zindex = edit_state.backdrop_original_zindex })
+        edit_state.backdrop_original_zindex = nil
+    end
+end
 
 function M.apply_and_close(buf_id)
     if edit_state.applying then
@@ -392,6 +420,9 @@ local function open_snacks_picker(target_buf)
         return false
     end
 
+    -- Lower z-index so picker can appear on top
+    lower_edit_mode_zindex()
+
     local cwd = vim.fn.getcwd()
     local picker_util = snacks.picker.util
     snacks.picker("files", {
@@ -407,6 +438,8 @@ local function open_snacks_picker(target_buf)
                 end
             end
             picker:close()
+            -- Restore z-index after picker closes
+            vim.schedule(restore_edit_mode_zindex)
             if #paths > 0 then
                 insert_paths_in_edit_buffer(paths, target_buf)
             end
@@ -420,6 +453,9 @@ local function open_fzf_lua_picker(target_buf)
     if not ok_fzf or not fzf_lua then
         return false
     end
+
+    -- Lower z-index so picker can appear on top
+    lower_edit_mode_zindex()
 
     local cwd = vim.fn.getcwd()
     local function normalize_entry(entry)
@@ -440,6 +476,8 @@ local function open_fzf_lua_picker(target_buf)
         fzf_opts = { ["--multi"] = "" },
         actions = {
             ["default"] = function(selected)
+                -- Restore z-index after picker closes
+                vim.schedule(restore_edit_mode_zindex)
                 local paths = {}
                 for _, entry in ipairs(selected or {}) do
                     local path = normalize_entry(entry)
@@ -486,6 +524,7 @@ function M.telescope_insert_paths()
                 callback = function()
                     vim.o.ignorecase = prev_ignorecase
                     vim.o.smartcase = prev_smartcase
+                    restore_edit_mode_zindex()
                 end,
             })
             local function build_paths(entries)
@@ -497,6 +536,8 @@ function M.telescope_insert_paths()
                 end
                 return paths
             end
+            -- Lower z-index so picker can appear on top
+            lower_edit_mode_zindex()
             pick.start({
                 source = {
                     name = "BN edit: insert file (Tab to mark, Enter to insert)",
@@ -549,6 +590,9 @@ function M.telescope_insert_paths()
         return
     end
 
+    -- Lower z-index so picker can appear on top
+    lower_edit_mode_zindex()
+
     local cwd = vim.fn.getcwd()
     builtin.find_files({
         prompt_title = "BN edit: insert file (Tab to multi-select, Enter to insert)",
@@ -578,6 +622,8 @@ function M.telescope_insert_paths()
                 end
 
                 actions.close(prompt_bufnr)
+                -- Restore z-index after picker closes
+                vim.schedule(restore_edit_mode_zindex)
                 local paths = build_paths(entries)
                 if #paths > 0 then
                     insert_paths_in_edit_buffer(paths, target_buf)
@@ -972,6 +1018,18 @@ local function setup_edit_buffer(buf_id)
                         api.nvim_set_current_win(win)
                     end
                 end)
+            end
+        end,
+    })
+
+    api.nvim_create_autocmd("WinEnter", {
+        group = group,
+        callback = function()
+            -- Restore z-index when returning to edit-mode window after picker closes
+            if edit_state.original_zindex or edit_state.backdrop_original_zindex then
+                if not has_picker_window() then
+                    restore_edit_mode_zindex()
+                end
             end
         end,
     })
