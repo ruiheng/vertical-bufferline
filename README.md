@@ -436,13 +436,15 @@ scripts/run_checks.sh
     auto_add_new_buffers = true,    -- Auto-add new buffers to active group
     group_scope = "window",         -- "global" or "window" (window-scope disabled when bufferline is active)
     inherit_on_new_window = false,  -- Copy groups from previous window when creating a new window context
-    buffer_filter = {               -- Buffer filter (function or { filetypes/buftypes = {...} })
-        filetypes = { "netrw" },    -- Default: ignore netrw buffers
+    buffer_filter = {               -- Buffer filter (function or { filetypes/buftypes/bufname_patterns = {...} })
+        filetypes = { "netrw", "gitcommit" }, -- Default: ignore netrw/gitcommit buffers
+        bufname_patterns = { "^fugitive://", "^git://" }, -- Default: ignore fugitive buffers
     },
     -- Or a function filter:
     -- buffer_filter = function(buf, info)
     --   if info.filetype == "netrw" then return false end
     --   if info.buftype ~= "" then return false end
+    --   if info.name:match("^fugitive://") then return false end
     --   return true
     -- end,
     

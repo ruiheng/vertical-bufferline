@@ -27,6 +27,13 @@ function M.should_track_buffer(buf_id)
             return result
         end
     elseif type(filter) == "table" then
+        if filter.bufname_patterns then
+            for _, pattern in ipairs(filter.bufname_patterns) do
+                if type(pattern) == "string" and info.name:match(pattern) then
+                    return false
+                end
+            end
+        end
         if filter.filetypes and vim.tbl_contains(filter.filetypes, info.filetype) then
             return false
         end

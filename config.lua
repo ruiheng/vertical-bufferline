@@ -163,7 +163,8 @@ M.DEFAULTS = {
     group_scope = "global",  -- "global" or "window" (window-scope disabled when bufferline is active)
     inherit_on_new_window = false,  -- Copy groups from previous window when creating a new window context
     buffer_filter = {
-        filetypes = { "netrw" },
+        filetypes = { "netrw", "gitcommit" },
+        bufname_patterns = { "^fugitive://", "^git://" },
     },
 
     -- UI settings

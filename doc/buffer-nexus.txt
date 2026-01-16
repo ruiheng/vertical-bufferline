@@ -137,6 +137,10 @@ Default configuration:
       auto_add_new_buffers = true,        -- Auto-add new buffers to active group
       group_scope = "window",             -- "global" or "window" (window-scope disabled with bufferline)
       inherit_on_new_window = false,      -- Copy groups from previous window when creating a new window context
+      buffer_filter = {                  -- Buffer filter (function or { filetypes/buftypes/bufname_patterns = {...} })
+        filetypes = { "netrw", "gitcommit" }, -- Ignore netrw/gitcommit buffers
+        bufname_patterns = { "^fugitive://", "^git://" }, -- Ignore fugitive buffers
+      },
 
       -- Path display settings
       show_path = "auto",                 -- "yes", "no", "auto"
