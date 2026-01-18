@@ -139,7 +139,7 @@ local function init_default_group()
     if #groups_data.groups == 0 then
         local default_group = {
             id = groups_data.default_group_id,
-            name = "Default",
+            name = "",
             buffers = {},
             created_at = os.time(),
             color = config_module.COLORS.BLUE,

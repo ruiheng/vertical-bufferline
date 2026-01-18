@@ -119,7 +119,7 @@ end
 
 local function add_missing_modified_buffers(group_list)
     if #group_list == 0 then
-        table.insert(group_list, { name = "Default", buffers = {} })
+        table.insert(group_list, { name = "", buffers = {} })
     end
 
     local present = {}
@@ -838,7 +838,7 @@ end
 
 local function enforce_modified_buffers(group_specs, warnings)
     if #group_specs == 0 then
-        table.insert(group_specs, { name = "Default", buffers = {} })
+        table.insert(group_specs, { name = "", buffers = {} })
     end
 
     local present = {}
@@ -875,8 +875,8 @@ local function apply_edit_lines(lines, context)
     local group_specs, warnings = parse_lines(lines or {})
 
     if #group_specs == 0 then
-        table.insert(warnings, "No groups found; created a Default group")
-        group_specs = { { name = "Default", entries = {} } }
+        table.insert(warnings, "No groups found; created an unnamed group")
+        group_specs = { { name = "", entries = {} } }
     end
 
     local group_buffers, parse_warnings, pin_set, pin_chars = build_group_buffers(group_specs)

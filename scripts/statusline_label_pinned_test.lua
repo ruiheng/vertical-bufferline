@@ -45,10 +45,10 @@ groups.add_buffer_to_group(buf3, "default")
 state.set_buffer_pinned(buf1, true)
 
 vim.api.nvim_set_current_buf(buf2)
-assert_eq(vbl.statusline_label(), "[Default] 1/2", "statusline label should skip pinned buffer")
+assert_eq(vbl.statusline_label(), "[1] 1/2", "statusline label should skip pinned buffer")
 
 vim.api.nvim_set_current_buf(buf1)
-assert_eq(vbl.statusline_label(), "[Default]", "pinned current buffer should omit position")
+assert_eq(vbl.statusline_label(), "[1]", "pinned current buffer should omit position")
 
 print("statusline label pinned test: ok")
 vim.cmd("qa")

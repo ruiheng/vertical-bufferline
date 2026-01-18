@@ -34,7 +34,7 @@ local buf3 = create_named_buffer(vim.fn.tempname() .. "_nopin.lua")
 local edit_buf = vim.api.nvim_create_buf(false, true)
 vim.bo[edit_buf].swapfile = false
 local lines = {
-    "[Group] Default",
+    "[Group]",
     vim.fn.fnamemodify(vim.api.nvim_buf_get_name(buf1), ":.") .. " [pin=a]",
     vim.fn.fnamemodify(vim.api.nvim_buf_get_name(buf2), ":.") .. " [pin]",
     vim.fn.fnamemodify(vim.api.nvim_buf_get_name(buf3), ":."),
